@@ -29,7 +29,8 @@ function rows(list) {
 }
 
 // extra: [[etiqueta, valor]] con datos técnicos que calcula el modo (dimensiones, espaciado…)
-export function renderInfo(container, { study, dataset, extra = [] }) {
+// allTags: incluir la lista completa de etiquetas DICOM (no en el visor de pacientes).
+export function renderInfo(container, { study, dataset, extra = [], allTags = true }) {
   const studyRows = rows([
     ['Paciente', study.patientName],
     ['Expediente', study.patientCode],
@@ -48,7 +49,7 @@ export function renderInfo(container, { study, dataset, extra = [] }) {
     }));
     const ts = dataset.transferSyntax;
     dicomRows += rows([['Codificación', UID_NAMES[ts] || ts]]);
-    all = dataset.describe().map((t) => `<tr><td class="mono">${t.tag}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.value)}</td></tr>`).join('');
+    if (allTags) all = dataset.describe().map((t) => `<tr><td class="mono">${t.tag}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.value)}</td></tr>`).join('');
   }
   container.innerHTML = `
     <section class="dv-sec"><h4>Estudio</h4>${studyRows}</section>

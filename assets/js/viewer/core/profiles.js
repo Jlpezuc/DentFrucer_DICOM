@@ -4,6 +4,22 @@
 
 const NAV = ['pan', 'zoom', 'wl', 'magnify'];
 
+// Visor de solo lectura (pacientes): navegar y ver, sin medir ni anotar.
+export const VIEW_ONLY = {
+  tools: new Set(['crosshair', 'pan', 'zoom', 'wl', 'magnify']),
+  actions: ['rotate', 'invert', 'fit', 'reset']
+};
+
+// Herramientas de un perfil que quedan en el visor de solo lectura (sin separadores sobrantes).
+export function viewOnlyTools(tools) {
+  const out = [];
+  for (const t of tools) {
+    if (t === '|') { if (out.length && out[out.length - 1] !== '|') out.push(t); } else if (VIEW_ONLY.tools.has(t)) out.push(t);
+  }
+  if (out[out.length - 1] === '|') out.pop();
+  return out;
+}
+
 // En un CBCT los valores de gris dependen del equipo, del campo de visión y de la
 // posición: no son unidades Hounsfield fiables para estimar densidad ósea.
 const CBCT_DENSITY_NOTE = 'En tomografía Cone Beam los valores de gris no son unidades Hounsfield calibradas: úselos para comparar zonas del mismo estudio, no como densidad absoluta.';

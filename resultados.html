@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mis resultados · DentFrucer</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" type="image/png" href="assets/img/logo-dentfrucer-circular.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="stylesheet" href="assets/css/viewer.css">
+</head>
+<!-- Resultados para pacientes: se abre con el enlace que llega por correo
+     (resultados.html?t=…). Acceso desactivado: ver config/patient-access.js. -->
+<body data-page="results" class="booking-page">
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html" aria-label="DentFrucer, inicio">
+        <img src="assets/img/logo-dentfrucer.png" alt="DentFrucer · Imagenología Dento Maxilo Facial" width="435" height="115">
+      </a>
+    </div>
+  </header>
+
+  <main class="booking">
+    <div class="container">
+      <div class="results-card" id="results" aria-live="polite">
+        <p class="muted">Cargando…</p>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

@@ -12,21 +12,25 @@
 //
 // Exportar e imprimir copian lo que se ve en el escenario (todos los paneles
 // visibles, con sus textos); para un solo panel, amplíelo con doble clic.
+//
+// viewOnly (visor de pacientes): solo herramientas para ver (profiles.VIEW_ONLY),
+// sin pestaña de mediciones ni etiquetas DICOM completas.
 
 import { escapeHtml } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { valueAt } from '../data/frame.js';
 import { AnnotationStore, IMPLANT_DIAMETERS, IMPLANT_LENGTHS, measure, normalizeImplant, TYPE_NAMES } from './annotations.js';
 import { composeExport, downloadCanvas, printCanvas, snapshotStage } from './export.js';
-import { applyPreset, PROFILES, windowPresets } from './profiles.js';
+import { applyPreset, PROFILES, VIEW_ONLY, viewOnlyTools, windowPresets } from './profiles.js';
 import { ToolController } from './tools.js';
 
 const TYPE_ICONS = { distance: 'ruler', angle: 'angle', roi: 'roi', probe: 'probe', arrow: 'note', implant: 'implant' };
 
 export class Workspace {
-  constructor(shell, { study, profileId, onDownload }) {
+  constructor(shell, { study, profileId, onDownload, viewOnly = false }) {
     this.shell = shell;
     this.study = study;
+    this.viewOnly = viewOnly;
     this.profile = PROFILES[profileId];
     this.onDownload = onDownload;
     this.viewports = [];
@@ -44,7 +48,8 @@ export class Workspace {
     this.showOverlays = true;
 
     shell.setModeLabel(this.profile.title);
-    shell.setTools(this.profile.tools);
+    if (viewOnly) shell.setTools(viewOnlyTools(this.profile.tools), VIEW_ONLY.actions);
+    else shell.setTools(this.profile.tools);
     shell.on('tool', (id) => this.setTool(id));
     shell.on('action', (id) => this.action(id));
     shell.on('header', (a) => this.header(a));
@@ -54,10 +59,11 @@ export class Workspace {
       return busy || (this.onCancel ? this.onCancel() : false);
     });
 
-    this.measureTab = shell.addTab('measure', 'Mediciones', 'ruler');
+    this.measureTab = viewOnly ? null : shell.addTab('measure', 'Mediciones', 'ruler');
     this.infoTab = shell.addTab('info', 'Información', 'info');
     this.store.onChange(() => { this.viewports.forEach((v) => v.render()); this.renderMeasurements(); });
     this.renderMeasurements();
+    if (viewOnly) return;
     // Las mediciones no se guardan: avisar antes de cerrar el visor.
     shell.setCloseGuard(() => {
       const n = this.store.items.length;
@@ -213,6 +219,7 @@ export class Workspace {
   }
 
   renderMeasurements() {
+    if (!this.measureTab) return;
     const items = this.store.items;
     this.shell.setTabCount('measure', items.length);
     if (!items.length) {

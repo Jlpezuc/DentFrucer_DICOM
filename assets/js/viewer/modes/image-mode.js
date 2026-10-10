@@ -15,9 +15,9 @@ const SPACING_TEXT = {
   calibrated: 'Escala: calibrada manualmente'
 };
 
-export function startImageMode(shell, { study, data, profileId, onDownload }) {
+export function startImageMode(shell, { study, data, profileId, onDownload, viewOnly }) {
   const images = data.images;
-  const ws = new Workspace(shell, { study, profileId, onDownload });
+  const ws = new Workspace(shell, { study, profileId, onDownload, viewOnly });
   const grid = document.createElement('div');
   grid.className = 'dv-grid';
   shell.stage.appendChild(grid);
@@ -155,6 +155,7 @@ export function startImageMode(shell, { study, data, profileId, onDownload }) {
   const first = images[0];
   renderInfo(ws.infoTab, {
     study,
+    allTags: !viewOnly,
     dataset: first.meta.dataset,
     extra: [
       ['Imágenes', images.length],
