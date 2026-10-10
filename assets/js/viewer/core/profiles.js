@@ -1,7 +1,12 @@
 // Perfil de visualización según el tipo de examen: título, herramientas,
 // herramienta inicial, preajustes de contraste y avisos para el médico.
+// hints: textos de ayuda propios del perfil que reemplazan a los de core/tools.js.
 
 const NAV = ['pan', 'zoom', 'wl', 'magnify'];
+
+// En un CBCT los valores de gris dependen del equipo, del campo de visión y de la
+// posición: no son unidades Hounsfield fiables para estimar densidad ósea.
+const CBCT_DENSITY_NOTE = 'En tomografía Cone Beam los valores de gris no son unidades Hounsfield calibradas: úselos para comparar zonas del mismo estudio, no como densidad absoluta.';
 
 // Preajustes de ventana. "auto" usa la ventana calculada para cada imagen.
 const HU_PRESETS = [
@@ -21,12 +26,17 @@ const RELATIVE_PRESETS = [
 export const PROFILES = {
   cbct: {
     title: 'Tomografía Cone Beam',
-    tools: ['crosshair', ...NAV, '|', 'distance', 'angle', 'roi', 'probe', 'arrow', '|', 'curve'],
-    defaultTool: 'crosshair'
+    tools: ['crosshair', ...NAV, '|', 'distance', 'angle', 'roi', 'probe', 'arrow', '|', 'curve', 'implant'],
+    defaultTool: 'crosshair',
+    hints: {
+      roi: 'Arrastre para dibujar una elipse: muestra el área y el valor medio. ' + CBCT_DENSITY_NOTE,
+      probe: 'Haga clic para fijar el valor en un punto. ' + CBCT_DENSITY_NOTE
+    },
+    densityNote: CBCT_DENSITY_NOTE
   },
   pano: {
     title: 'Radiografía panorámica',
-    tools: [...NAV, '|', 'distance', 'angle', 'roi', 'probe', 'arrow', 'calibrate'],
+    tools: [...NAV, '|', 'distance', 'angle', 'roi', 'probe', 'arrow', 'calibrate', 'implant'],
     defaultTool: 'pan',
     note: 'En una panorámica la magnificación no es uniforme: las medidas lineales son orientativas.'
   },
@@ -38,7 +48,7 @@ export const PROFILES = {
   },
   intraoral: {
     title: 'Radiografía intraoral',
-    tools: [...NAV, '|', 'distance', 'angle', 'roi', 'probe', 'arrow', 'calibrate'],
+    tools: [...NAV, '|', 'distance', 'angle', 'roi', 'probe', 'arrow', 'calibrate', 'implant'],
     defaultTool: 'pan'
   },
   image: {

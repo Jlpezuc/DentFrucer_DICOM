@@ -44,7 +44,8 @@ export class Viewport {
     this.isSelected = () => false;
     this.preview = null;           // anotación en construcción
     this.lens = null;              // lupa { x, y }
-    this.showOverlays = true;
+    this.showOverlays = true;      // textos de las esquinas (paciente, ventana, zoom)
+    this.showWindowInfo = true;    // líneas de ventana/nivel y zoom (se ocultan en paneles pequeños)
     this.controller = null;
     this.onChange = () => {};      // zoom/ventana cambió (para actualizar la interfaz)
 
@@ -226,7 +227,7 @@ export class Viewport {
     for (const a of this.annotations(this)) drawAnnotation(ctx, a, this, { selected: this.isSelected(a) });
     if (this.preview) drawAnnotation(ctx, this.preview, this, { selected: true, preview: true });
     if (this.lens) this.drawLens(ctx, dpr);
-    if (this.showOverlays) this.drawScaleBar(ctx);
+    this.drawScaleBar(ctx);
     this.updateOverlays();
   }
 
@@ -280,7 +281,7 @@ export class Viewport {
   updateOverlays() {
     const show = this.showOverlays && this.frame;
     const zoomPct = this.frame ? Math.round(this.view.scale * this.spacing()[0] * 100) : 0;
-    const dyn = this.frame ? [`V ${Math.round(this.wl.w)} · N ${Math.round(this.wl.c)}${this.invert ? ' · Inv.' : ''}`, `Zoom ${zoomPct}%`] : [];
+    const dyn = this.frame && this.showWindowInfo ? [`V ${Math.round(this.wl.w)} · N ${Math.round(this.wl.c)}${this.invert ? ' · Inv.' : ''}`, `Zoom ${zoomPct}%`] : [];
     const set = (k, lines) => {
       const html = show ? lines.filter(Boolean).map((l) => `<div>${l}</div>`).join('') : '';
       if (this.ov[k]._html !== html) { this.ov[k].innerHTML = html; this.ov[k]._html = html; }
@@ -290,7 +291,8 @@ export class Viewport {
     set('bl', [...this.info.bl, ...dyn]);
     set('br', this.info.br);
 
-    const o = show && this.orientation ? this.rotatedOrientation() : {};
+    // La orientación y la escala se mantienen aunque se oculten los textos.
+    const o = this.frame && this.orientation ? this.rotatedOrientation() : {};
     for (const side of ['t', 'b', 'l', 'r']) {
       const el = this.el.querySelector('.dv-orient-' + side);
       const txt = o[side] || '';

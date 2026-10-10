@@ -29,10 +29,13 @@ Con Firebase ya configurado, agregue `?demo=1` a la URL (por ejemplo `login.html
 
 Se abre con **Abrir** en el portal (o el ojo en el panel de administración) y elige el modo según el estudio:
 
-- **CBCT**: axial, coronal y sagital enlazados con cruz de navegación; espesor de corte (MIP); 3D (hueso, piel, rayos X); panorámica reconstruida trazando una curva sobre el arco; cortes transversales para planificación de implantes.
+- **CBCT**: axial, coronal y sagital enlazados con cruz de navegación; espesor de corte (MIP); 3D (hueso, piel, rayos X); panorámica reconstruida trazando una curva sobre el arco; cortes transversales.
+- **Distribución Implantes** (CBCT): axial con la curva, panorámica reconstruida y una tira de 5 cortes transversales consecutivos (cada 0,5/1/2/3 mm) con zoom sincronizado; la línea del corte axial se ve en la panorámica y en los cortes.
 - **Panorámica, cefalometría, intraorales**: visor 2D, mosaico de 1/2/4 imágenes, miniaturas.
-- **Herramientas**: mover, zoom, contraste (ventana/nivel con preajustes Hueso/Dental/Tejido blando/Vía aérea), lupa, distancia, ángulo, área con densidad media, densidad puntual (HU), notas con flecha, calibración, girar/voltear/invertir, deshacer.
-- **Entrega**: lista de mediciones (copiar resumen), exportar la vista a PNG con encabezado de la clínica, imprimir, descargar originales, información y etiquetas DICOM.
+- **Herramientas**: mover, zoom, contraste (ventana/nivel con preajustes Hueso/Dental/Tejido blando/Vía aérea), lupa, distancia, ángulo, área con densidad media, densidad puntual, notas con flecha, calibración, girar/voltear/invertir, ocultar datos del paciente (`O`), deshacer.
+- **Implante simulado** (`P`): se arrastra de la plataforma al ápice (longitud comercial más cercana), se inclina arrastrando un extremo y se cambia diámetro/longitud con doble clic; muestra el eje protésico y un margen de seguridad de 1,5 mm (2 mm en el ápice).
+- **Entrega**: lista de mediciones (copiar resumen), exportar a PNG lo que se ve en pantalla (todos los paneles, con orientación y escala) con encabezado de la clínica, imprimir, descargar originales, información y etiquetas DICOM. Al cerrar con mediciones, el visor pide confirmación (las mediciones no se guardan).
+- En CBCT los valores de gris no son unidades Hounsfield calibradas: el visor lo indica en las herramientas de densidad.
 - Atajos de teclado: pulse `?` dentro del visor.
 
 ## Probar en local

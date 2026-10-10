@@ -2,8 +2,11 @@
 //
 // Una anotación:
 //   { id, type, key, points: [[u, v], ...] (píxeles del frame), text?, frameLabel? }
-// type: 'distance' | 'angle' | 'roi' | 'probe' | 'arrow'
+// type: 'distance' | 'angle' | 'roi' | 'probe' | 'arrow' | 'implant'
 // key:  el frame al que pertenece (frame.key); solo se dibuja sobre ese frame.
+//
+// Implante: points = [plataforma, ápice], más diameter y length en mm. El ápice
+// se mantiene siempre a "length" mm de la plataforma (ver normalizeImplant).
 
 import { valueAt } from '../data/frame.js';
 
@@ -12,11 +15,19 @@ export const TYPE_NAMES = {
   angle: 'Ángulo',
   roi: 'Área',
   probe: 'Densidad',
-  arrow: 'Nota'
+  arrow: 'Nota',
+  implant: 'Implante'
 };
 
 const COLOR = '#b5dc6e';
 const COLOR_SELECTED = '#5cc2ea';
+const COLOR_IMPLANT = '#f0c05a';
+
+// Medidas comerciales habituales de implantes (mm).
+export const IMPLANT_DIAMETERS = [3, 3.3, 3.5, 3.75, 4, 4.3, 4.5, 5, 5.5, 6];
+export const IMPLANT_LENGTHS = [6, 7, 8, 8.5, 10, 11.5, 13, 15, 16];
+// Margen de seguridad que se dibuja alrededor del implante (mm).
+export const IMPLANT_MARGIN = { side: 1.5, apex: 2 };
 
 const fmt = (n, d = 1) => Number(n).toLocaleString('es', { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -54,6 +65,8 @@ export function measure(a, frame) {
     }
     case 'arrow':
       return { value: a.text || '', lines: [] };
+    case 'implant':
+      return { value: 'Ø ' + fmt(a.diameter) + ' × ' + fmt(a.length) + ' mm', number: a.length, lines: [] };
     default:
       return { value: '', lines: [] };
   }
@@ -80,6 +93,83 @@ function roiStats(a, frame) {
   }
   const mean = n ? sum / n : 0;
   return { n, mean, sd: n ? Math.sqrt(Math.max(0, sum2 / n - mean * mean)) : 0, min, max, rx, ry };
+}
+
+// --- Implantes -------------------------------------------------------------------
+// Eje del implante en mm: plataforma, dirección unitaria hacia el ápice y longitud trazada.
+function implantAxis(a, frame) {
+  const [sx, sy] = (frame && frame.spacing) || [1, 1];
+  const p0 = [a.points[0][0] * sx, a.points[0][1] * sy];
+  const p1 = [a.points[1][0] * sx, a.points[1][1] * sy];
+  let dx = p1[0] - p0[0], dy = p1[1] - p0[1];
+  const drawn = Math.hypot(dx, dy);
+  if (drawn < 1e-6) { dx = 0; dy = 1; } else { dx /= drawn; dy /= drawn; }
+  return { p0, p1, dir: [dx, dy], sx, sy, drawn };
+}
+
+// Longitud comercial más cercana a la trazada con el ratón.
+export function snapImplantLength(mm) {
+  return IMPLANT_LENGTHS.reduce((best, l) => (Math.abs(l - mm) < Math.abs(best - mm) ? l : best), IMPLANT_LENGTHS[0]);
+}
+
+export function implantDrawnLength(a, frame) { return implantAxis(a, frame).drawn; }
+
+// Coloca el ápice a "length" mm de la plataforma siguiendo el eje actual.
+// moved = 0 si se arrastró la plataforma (el ápice queda fijo y el implante gira
+// alrededor de él); 1 si se arrastró el ápice (gira alrededor de la plataforma).
+export function normalizeImplant(a, frame, moved = 1) {
+  if (!frame || !frame.spacing) return;
+  const { p0, p1, dir, sx, sy } = implantAxis(a, frame);
+  const L = a.length;
+  if (moved === 0) a.points[0] = [(p1[0] - dir[0] * L) / sx, (p1[1] - dir[1] * L) / sy];
+  else a.points[1] = [(p0[0] + dir[0] * L) / sx, (p0[1] + dir[1] * L) / sy];
+}
+
+function drawImplant(ctx, a, vp, color, m, selected) {
+  const { p0, dir, sx, sy } = implantAxis(a, vp.frame);
+  const n = [-dir[1], dir[0]];
+  const L = a.length;
+  const r = a.diameter / 2;
+  // Punto a "t" mm sobre el eje y "o" mm hacia el costado, en pantalla.
+  const at = (t, o) => vp.imageToScreen((p0[0] + dir[0] * t + n[0] * o) / sx, (p0[1] + dir[1] * t + n[1] * o) / sy);
+  const path = (pts, close = true) => { ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); if (close) ctx.closePath(); };
+
+  // Margen de seguridad (discontinuo).
+  const ms = r + IMPLANT_MARGIN.side, ma = L + IMPLANT_MARGIN.apex;
+  ctx.save();
+  ctx.setLineDash([5, 4]);
+  ctx.globalAlpha = selected ? 0.95 : 0.7;
+  stroke(ctx, () => path([at(0, ms), at(ma, ms), at(ma, -ms), at(0, -ms)]), '#f08a5a', 1.1);
+  ctx.restore();
+
+  // Eje protésico: prolongación del eje por encima de la plataforma.
+  ctx.save();
+  ctx.setLineDash([3, 4]);
+  stroke(ctx, () => { const a0 = at(0, 0), a1 = at(-7, 0); ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(a1.x, a1.y); }, color, 1.1);
+  ctx.restore();
+
+  // Cuerpo: cónico hacia el ápice, con espiras cada milímetro.
+  const neck = Math.max(0, L - a.diameter * 0.45);
+  const body = [at(0, r), at(neck, r * 0.86), at(L, r * 0.45), at(L, -r * 0.45), at(neck, -r * 0.86), at(0, -r)];
+  ctx.save();
+  path(body);
+  ctx.fillStyle = 'rgba(240, 192, 90, .28)';
+  ctx.fill();
+  ctx.restore();
+  stroke(ctx, () => path(body), color, 1.6);
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  stroke(ctx, () => {
+    ctx.beginPath();
+    for (let t = 1; t < L - 0.4; t += 1) {
+      const w = t <= neck ? r - (r * 0.14 * t) / Math.max(neck, 1e-6) : r * 0.86 - ((r * 0.41) * (t - neck)) / Math.max(L - neck, 1e-6);
+      const s0 = at(t, w), s1 = at(t + 0.35, -w);
+      ctx.moveTo(s0.x, s0.y); ctx.lineTo(s1.x, s1.y);
+    }
+  }, color, 0.9);
+  ctx.restore();
+  const top = at(0, r);
+  return label(ctx, top.x, top.y, [m.value], color);
 }
 
 // --- Dibujo ---------------------------------------------------------------------
@@ -134,7 +224,7 @@ function label(ctx, x, y, lines, color) {
 }
 
 export function drawAnnotation(ctx, a, vp, { selected = false, preview = false } = {}) {
-  const color = selected ? COLOR_SELECTED : COLOR;
+  const color = selected ? COLOR_SELECTED : a.type === 'implant' ? COLOR_IMPLANT : COLOR;
   const s = screenPoints(a, vp);
   const m = measure(a, vp.frame);
   a._labelRect = null;
@@ -175,6 +265,8 @@ export function drawAnnotation(ctx, a, vp, { selected = false, preview = false }
       for (const k of [-1, 1]) { ctx.moveTo(tip.x, tip.y); ctx.lineTo(tip.x - 12 * Math.cos(ang + k * 0.45), tip.y - 12 * Math.sin(ang + k * 0.45)); }
     }, color, 2);
     if (a.text) a._labelRect = label(ctx, tail.x - 10, tail.y + 26, [a.text], color);
+  } else if (a.type === 'implant') {
+    a._labelRect = drawImplant(ctx, a, vp, color, m, selected || preview);
   }
 
   if (selected && !preview) for (const p of s) handle(ctx, p, color);
@@ -204,11 +296,16 @@ export function hitTest(a, vp, x, y) {
   if ((a.type === 'distance' || a.type === 'arrow') && distToSegment(p, s[0], s[1]) < 6) return { body: true };
   if (a.type === 'angle' && (distToSegment(p, s[0], s[1]) < 6 || distToSegment(p, s[1], s[2]) < 6)) return { body: true };
   if (a.type === 'roi') {
-    const minx = Math.min(s[0].x, s[1].x), maxx = Math.max(s[0].x, s[1].x);
-    const miny = Math.min(s[0].y, s[1].y), maxy = Math.max(s[0].y, s[1].y);
-    if (x >= minx - 4 && x <= maxx + 4 && y >= miny - 4 && y <= maxy + 4) return { body: true };
+    // En coordenadas de imagen, para que funcione con la vista girada o volteada.
+    const q = vp.screenToImage(x, y);
+    const [[x0, y0], [x1, y1]] = a.points;
+    const tol = 4 / Math.max(1e-6, vp.pixelsPerMM() * vp.spacing()[0]);
+    const rx = Math.abs(x1 - x0) / 2 + tol, ry = Math.abs(y1 - y0) / 2 + tol;
+    const dx = (q.x - (x0 + x1) / 2) / rx, dy = (q.y - (y0 + y1) / 2) / ry;
+    if (dx * dx + dy * dy <= 1) return { body: true };
   }
   if (a.type === 'probe' && Math.hypot(s[0].x - x, s[0].y - y) < 12) return { body: true };
+  if (a.type === 'implant' && distToSegment(p, s[0], s[1]) < Math.max(6, (a.diameter / 2) * vp.pixelsPerMM())) return { body: true };
   return null;
 }
 

@@ -7,7 +7,7 @@
 //   Ctrl/⌘ + rueda, pellizco   -> zoom
 //   arrastrar un punto de una medición -> editarla
 
-import { hitTest } from './annotations.js';
+import { hitTest, implantDrawnLength, normalizeImplant, snapImplantLength } from './annotations.js';
 
 // Catálogo de herramientas. El modo decide cuáles se muestran.
 export const TOOLS = {
@@ -22,13 +22,15 @@ export const TOOLS = {
   probe:     { label: 'Densidad puntual', icon: 'probe', key: 'H', group: 'measure', hint: 'Haga clic para fijar el valor de densidad en un punto.' },
   arrow:     { label: 'Nota', icon: 'arrow', key: 'T', group: 'measure', hint: 'Arrastre desde el punto a señalar y escriba una nota.' },
   calibrate: { label: 'Calibrar', icon: 'calibrate', key: 'K', group: 'measure', hint: 'Trace una línea sobre un objeto de tamaño conocido e indique su medida real en mm.' },
+  implant:   { label: 'Implante', icon: 'implant', key: 'P', group: 'measure', hint: 'Arrastre desde la plataforma hacia el ápice. Arrastre un extremo para inclinarlo; doble clic para cambiar diámetro y longitud. Línea discontinua: margen de seguridad de 1,5 mm (2 mm en el ápice).' },
   curve:     { label: 'Curva panorámica', icon: 'curve', key: 'U', group: 'measure', hint: 'En la vista axial, haga clic a lo largo del arco dental de un extremo al otro. Doble clic o Enter para terminar.' }
 };
 
-const DRAW_TOOLS = new Set(['distance', 'roi', 'arrow', 'calibrate']);
+const DRAW_TOOLS = new Set(['distance', 'roi', 'arrow', 'calibrate', 'implant']);
 
 export class ToolController {
-  // hooks: { store, onActivate(vp), onCursor(vp, img|null), prompt(opts), onCalibrate(vp, ann), onToolUsed() }
+  // hooks: { store, onActivate(vp), onCursor(vp, img|null), prompt(opts), onCalibrate(vp, ann),
+  //          onEditImplant(vp, ann), toast(text), onToolUsed() }
   constructor(hooks) {
     this.h = hooks;
     this.store = hooks.store;
@@ -36,6 +38,7 @@ export class ToolController {
     this.op = null;
     this.pointers = new Map();
     this.angleDraft = null;
+    this.implantSize = { diameter: 4, length: 10 }; // último tamaño usado
   }
 
   setTool(name) {
@@ -96,12 +99,17 @@ export class ToolController {
       case 'pan': this.op = { type: 'pan', vp, last: p }; vp.canvas.style.cursor = 'grabbing'; break;
       case 'zoom': this.op = { type: 'zoom', vp, last: p }; break;
       case 'wl': this.op = { type: 'wl', vp, last: p }; break;
-      case 'crosshair': if (vp.onCrosshair) vp.onCrosshair(img); this.op = { type: 'crosshair', vp }; break;
+      case 'crosshair': if (vp.onCrosshair) vp.onCrosshair(img, true); this.op = { type: 'crosshair', vp }; break;
       case 'magnify': vp.lens = p; vp.render(); this.op = { type: 'lens', vp }; break;
       case 'probe': this.commit(vp, { type: 'probe', key, points: [pt] }); break;
       case 'angle':
         vp.preview = { type: 'angle', key, points: [pt, pt.slice(), pt.slice()] };
         this.op = { type: 'draw-angle', vp, start: p };
+        break;
+      case 'implant':
+        if (!vp.frame.spacing) { if (this.h.toast) this.h.toast('Calibre la imagen (herramienta Calibrar) antes de colocar un implante.'); break; }
+        vp.preview = { type: 'implant', key, points: [pt, pt.slice()], ...this.implantSize };
+        this.op = { type: 'draw', vp, start: p, tool: 'implant' };
         break;
       default:
         if (DRAW_TOOLS.has(this.tool)) {
@@ -153,13 +161,21 @@ export class ToolController {
         vp.setWindow(vp.wl.c - dy * k, vp.wl.w + dx * k);
         break;
       }
-      case 'crosshair': if (vp.onCrosshair) vp.onCrosshair(img); break;
+      case 'crosshair': if (vp.onCrosshair) vp.onCrosshair(img, false); break;
       case 'lens': vp.lens = p; vp.render(); break;
-      case 'draw': vp.preview.points[1] = pt; vp.render(); break;
+      case 'draw':
+        vp.preview.points[1] = pt;
+        // El implante toma la longitud comercial más cercana a la trazada.
+        if (op.tool === 'implant') vp.preview.length = snapImplantLength(implantDrawnLength(vp.preview, vp.frame));
+        vp.render();
+        break;
       case 'draw-angle': vp.preview.points[1] = pt; vp.preview.points[2] = pt.slice(); vp.render(); break;
       case 'handle':
         if (!op.snapped) { this.store.snapshot(); op.snapped = true; }
-        op.a.points[op.i] = pt; vp.render(); break;
+        op.a.points[op.i] = pt;
+        if (op.a.type === 'implant') normalizeImplant(op.a, vp.frame, op.i);
+        vp.render();
+        break;
       case 'move': {
         if (!op.snapped) { this.store.snapshot(); op.snapped = true; }
         const ox = pt[0] - op.start[0], oy = pt[1] - op.start[1];
@@ -198,6 +214,10 @@ export class ToolController {
           if (!text) { vp.render(); break; }
           a.text = text;
         }
+        if (op.tool === 'implant') {
+          normalizeImplant(a, vp.frame, 1);
+          this.implantSize.length = a.length;
+        }
         this.commit(vp, a);
         break;
       }
@@ -221,13 +241,17 @@ export class ToolController {
     }
   }
 
-  doubleClick(vp) {
+  doubleClick(vp, e, p) {
     if (this.tool === 'curve') { if (vp.onCurveFinish) vp.onCurveFinish(); return; }
+    // Doble clic sobre un implante: cambiar su tamaño.
+    const implant = vp.annotations(vp).find((a) => a.type === 'implant' && hitTest(a, vp, p.x, p.y));
+    if (implant && this.h.onEditImplant) { this.h.onEditImplant(vp, implant); return; }
     if (vp.onDoubleClick) vp.onDoubleClick();
   }
 
   commit(vp, a) {
-    this.store.add({ type: a.type, key: a.key, points: a.points.map((q) => q.slice()), text: a.text, frameLabel: vp.frameLabel ? vp.frameLabel() : '' });
+    const size = a.type === 'implant' ? { diameter: a.diameter, length: a.length } : {};
+    this.store.add({ type: a.type, key: a.key, points: a.points.map((q) => q.slice()), text: a.text, frameLabel: vp.frameLabel ? vp.frameLabel() : '', ...size });
     vp.render();
     this.h.onToolUsed && this.h.onToolUsed(a.type);
   }

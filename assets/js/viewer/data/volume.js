@@ -171,7 +171,9 @@ function sampleXY(vol, xmm, ymm, z) {
 
 // pointsVoxel: puntos [x, y] en coordenadas del corte axial.
 // thickness: grosor de la "capa focal" en mm. mode: 'avg' (como una radiografía) o 'mip'.
-export function reconstructPanoramic(vol, pointsVoxel, { thickness = 12, mode = 'avg' } = {}) {
+// key: identificador estable del frame (las mediciones se asocian a él y deben
+// sobrevivir a un cambio de grosor o de modo).
+export function reconstructPanoramic(vol, pointsVoxel, { thickness = 12, mode = 'avg', key = nextKey('pano') } = {}) {
   const [sx, sy, sz] = vol.spacing;
   const step = Math.min(sx, sy);
   // Convención de panorámica: el lado derecho del paciente (x menor) a la izquierda.
@@ -207,7 +209,7 @@ export function reconstructPanoramic(vol, pointsVoxel, { thickness = 12, mode = 
     }
   }
   const frame = createFrame({
-    key: nextKey('pano'),
+    key,
     width: w,
     height: h,
     data: out,
@@ -224,7 +226,8 @@ export function reconstructPanoramic(vol, pointsVoxel, { thickness = 12, mode = 
 }
 
 // Corte transversal (perpendicular a la curva) en la posición "index" de la ruta.
-export function crossSection(vol, path, index, halfWidth = 15) {
+// keyPrefix distingue los cortes de curvas distintas.
+export function crossSection(vol, path, index, { halfWidth = 15, keyPrefix = 'cross' } = {}) {
   const sz = vol.spacing[2];
   const step = path.step;
   index = Math.max(0, Math.min(path.points.length - 1, Math.round(index)));
@@ -242,7 +245,7 @@ export function crossSection(vol, path, index, halfWidth = 15) {
     }
   }
   return createFrame({
-    key: 'cross:' + index,
+    key: keyPrefix + ':' + index,
     width: w,
     height: h,
     data: out,
