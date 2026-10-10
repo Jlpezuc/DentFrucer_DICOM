@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mis pacientes · DentFrucer</title>
+  <link rel="icon" type="image/png" href="assets/img/logo-dentfrucer-circular.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="portal">
+  <div class="app doctor">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
+      <nav class="side-nav" aria-label="Portal del médico">
+        <span class="label">Mi consultorio</span>
+        <a href="#estudios" class="active"><i data-icon="folder"></i> Estudios</a>
+        <a href="#pacientes"><i data-icon="users"></i> Mis pacientes</a>
+        <span class="label">Cuenta</span>
+        <a href="#" data-soon="Perfil: próximamente."><i data-icon="user"></i> Mi perfil</a>
+      </nav>
+      <div class="side-user">
+        <span class="avatar" data-user-initials>LM</span>
+        <div class="who"><strong data-user-name>Médico</strong><span data-user-title>Odontólogo</span></div>
+        <button type="button" data-logout title="Cerrar sesión" aria-label="Cerrar sesión"><i data-icon="logout"></i></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h1>Hola, <span data-user-name>doctor</span></h1>
+          <p>Estos son los estudios de sus pacientes.</p>
+        </div>
+      </div>
+
+      <div class="stats three">
+        <div class="stat"><div class="k">Mis pacientes</div><div class="v" id="stat-my-patients">0</div></div>
+        <div class="stat"><div class="k">Estudios disponibles</div><div class="v" id="stat-my-studies">0</div></div>
+        <div class="stat"><div class="k">Nuevos sin revisar</div><div class="v" id="stat-my-new" style="color:var(--blue-700)">0</div></div>
+      </div>
+
+      <section class="panel" id="estudios" style="padding:0">
+        <div class="panel-head">
+          <h2>Estudios</h2>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <label class="search">
+              <span class="sr-only">Buscar</span>
+              <i data-icon="search"></i>
+              <input class="input" id="portal-search" type="search" placeholder="Buscar paciente o estudio">
+            </label>
+            <label class="sr-only" for="modality-filter">Modalidad</label>
+            <select class="input select" id="modality-filter" style="width:auto">
+              <option value="">Todas las modalidades</option>
+              <option>CBCT</option><option>Panorámica</option><option>Cefalometría</option><option>Periapical</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel-body"><div class="study-cards" id="study-grid"></div></div>
+      </section>
+
+      <section class="panel" id="pacientes" style="padding:0">
+        <div class="panel-head"><h2>Mis pacientes</h2></div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Paciente</th><th>Estudios</th><th>Último estudio</th></tr></thead>
+            <tbody id="patients-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="viewer-modal" role="dialog" aria-modal="true" aria-label="Visor DICOM">
+    <div class="modal">
+      <div class="modal-head"><h3>Visor</h3><button class="icon-btn" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <div class="modal-content"></div>
+    </div>
+  </div>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

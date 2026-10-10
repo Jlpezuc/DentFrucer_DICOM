@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administración · DentFrucer</title>
+  <link rel="icon" type="image/png" href="assets/img/logo-dentfrucer-circular.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="admin">
+  <div class="app admin">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
+      <nav class="side-nav" aria-label="Administración">
+        <span class="label">General</span>
+        <a href="#estudios" class="active"><i data-icon="folder"></i> Estudios</a>
+        <a href="#carga"><i data-icon="upload"></i> Cargar archivos</a>
+        <a href="#medicos"><i data-icon="stethoscope"></i> Médicos</a>
+        <a href="#" data-soon="Gestión de pacientes: próximamente."><i data-icon="users"></i> Pacientes</a>
+        <span class="label">Sistema</span>
+        <a href="#" data-soon="Registro de actividad: próximamente."><i data-icon="activity"></i> Actividad</a>
+        <a href="#" data-soon="Configuración: próximamente."><i data-icon="settings"></i> Configuración</a>
+      </nav>
+      <div class="side-user">
+        <span class="avatar" data-user-initials>AD</span>
+        <div class="who"><strong data-user-name>Administración</strong><span data-user-title>Administrador</span></div>
+        <button type="button" data-logout title="Cerrar sesión" aria-label="Cerrar sesión"><i data-icon="logout"></i></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h1>Panel de administración</h1>
+          <p>Gestione estudios DICOM, pacientes y médicos.</p>
+        </div>
+        <div class="actions">
+          <a class="btn btn-outline btn-sm" href="#" data-soon="Alta de médicos: próximamente."><i data-icon="plus"></i> Nuevo médico</a>
+          <a class="btn btn-primary btn-sm" href="#carga"><i data-icon="upload"></i> Cargar estudio</a>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Estudios</div><div class="v" id="stat-studies">0</div><div class="d">+3 esta semana</div></div>
+        <div class="stat"><div class="k">Pacientes</div><div class="v" id="stat-patients">0</div><div class="d">+2 esta semana</div></div>
+        <div class="stat"><div class="k">Médicos activos</div><div class="v" id="stat-doctors">0</div><div class="d">&nbsp;</div></div>
+        <div class="stat"><div class="k">Sin asignar</div><div class="v" id="stat-unassigned">0</div><div class="d" style="color:var(--warning)">Requieren atención</div></div>
+      </div>
+
+      <section class="panel" id="estudios" style="padding:0">
+        <div class="panel-head">
+          <div class="tabs" id="study-tabs" role="tablist">
+            <button type="button" data-filter="all" aria-selected="true">Todos</button>
+            <button type="button" data-filter="cbct" aria-selected="false">CBCT</button>
+            <button type="button" data-filter="unassigned" aria-selected="false">Sin asignar</button>
+          </div>
+          <label class="search">
+            <span class="sr-only">Buscar estudios</span>
+            <i data-icon="search"></i>
+            <input class="input" id="admin-search" type="search" placeholder="Buscar paciente, ID o médico">
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Paciente</th><th>ID estudio</th><th>Modalidad</th><th>Fecha</th><th>Médico</th><th>Tamaño</th><th></th></tr></thead>
+            <tbody id="studies-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="grid-2">
+        <section class="panel" id="carga" style="padding:0">
+          <div class="panel-head"><h2>Cargar archivos DICOM</h2><span class="badge gray">Placeholder</span></div>
+          <div class="panel-body">
+            <label class="dropzone" id="dropzone" for="file-input">
+              <i data-icon="cloud"></i>
+              <p style="margin:0"><strong>Arrastre aquí archivos .dcm o una carpeta</strong></p>
+              <p style="margin:4px 0 16px;font-size:14px">También se admiten archivos .zip con series completas</p>
+              <span class="btn btn-outline btn-sm">Seleccionar archivos</span>
+              <input id="file-input" type="file" multiple class="sr-only">
+            </label>
+            <div class="form-row" style="margin-top:20px">
+              <div class="field"><label for="u-patient">Paciente</label><input class="input" id="u-patient" placeholder="Nombre o ID del paciente"></div>
+              <div class="field">
+                <label for="u-doctor">Médico tratante</label>
+                <select class="input select" id="u-doctor">
+                  <option>Dra. Laura Méndez</option><option>Dr. Carlos Rivas</option><option>Dra. Ana Torres</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary" type="button" data-soon="La carga se habilitará al conectar el servidor."><i data-icon="upload"></i> Subir y asignar</button>
+          </div>
+        </section>
+
+        <section class="panel" id="medicos" style="padding:0">
+          <div class="panel-head"><h2>Médicos</h2><a href="#" class="btn btn-ghost btn-sm" data-soon="Gestión de médicos: próximamente.">Ver todos</a></div>
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>Médico</th><th>Especialidad</th><th>Pacientes</th><th>Estado</th></tr></thead>
+              <tbody id="doctors-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="viewer-modal" role="dialog" aria-modal="true" aria-label="Visor DICOM">
+    <div class="modal">
+      <div class="modal-head"><h3>Visor</h3><button class="icon-btn" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <div class="modal-content"></div>
+    </div>
+  </div>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
