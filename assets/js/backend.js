@@ -31,6 +31,7 @@ function friendlyAuthError(err) {
   if (code.includes('invalid-email')) return 'El correo no es válido.';
   if (code.includes('permission-denied')) return 'No tiene permiso para esta acción.';
   if (code.includes('api-key-not-valid') || code.includes('invalid-api-key')) return 'La configuración de Firebase no es válida (revise firebase-config.js).';
+  if (code.includes('configuration-not-found') || code.includes('operation-not-allowed')) return 'El inicio de sesión con correo no está activado en Firebase (Authentication → Método de acceso).';
   if (code.includes('network')) return 'Sin conexión. Revise su internet.';
   return (err && err.message) || 'Ocurrió un error inesperado.';
 }
