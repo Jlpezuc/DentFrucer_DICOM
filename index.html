@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DentFrucer · Imagenología Dento Maxilo Facial</title>
+  <meta name="description" content="Plataforma DentFrucer para consultar estudios DICOM de imagenología dento maxilo facial: tomografías Cone Beam, panorámicas y cefalometrías.">
+  <link rel="icon" type="image/png" href="assets/img/logo-dentfrucer-circular.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="landing">
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html" aria-label="DentFrucer, inicio">
+        <img src="assets/img/logo-dentfrucer.png" alt="DentFrucer · Imagenología Dento Maxilo Facial" width="435" height="115">
+      </a>
+      <nav class="nav" aria-label="Principal">
+        <a href="#servicios">Servicios</a>
+        <a href="#plataforma">Plataforma</a>
+        <a href="#visor">Visor</a>
+        <a href="#seguridad">Seguridad</a>
+        <a href="#contacto">Contacto</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-outline btn-sm" href="login.html?rol=admin">Administración</a>
+        <a class="btn btn-primary btn-sm" href="login.html">Iniciar sesión</a>
+        <button class="menu-toggle" aria-label="Abrir menú" aria-expanded="false"><i data-icon="menu"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div>
+          <span class="eyebrow"><span class="dot"></span> Portal de estudios DICOM</span>
+          <h1>Sus estudios <span class="hl-blue">dento maxilo faciales</span>, <span class="hl-green">disponibles al instante</span>.</h1>
+          <p class="lead">Consulte tomografías Cone Beam, radiografías panorámicas y cefalometrías de sus pacientes desde cualquier lugar, de forma segura y sin instalar software.</p>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="login.html">Acceso para médicos <i data-icon="arrowRight"></i></a>
+            <a class="btn btn-outline" href="#visor">Ver el visor</a>
+          </div>
+          <div class="hero-trust">
+            <div><strong>CBCT</strong>Cone Beam 3D</div>
+            <div><strong>DICOM</strong>Estándar médico</div>
+            <div><strong>24/7</strong>Acceso en línea</div>
+          </div>
+        </div>
+
+        <!-- Placeholder del visor -->
+        <div class="viewer-mock" role="img" aria-label="Vista previa del visor DICOM (marcador de posición)">
+          <div class="vm-toolbar">
+            <span class="vm-dots"><i></i><i></i><i></i></span>
+            <span class="vm-tool active"><i data-icon="move"></i></span>
+            <span class="vm-tool"><i data-icon="zoom"></i></span>
+            <span class="vm-tool"><i data-icon="contrast"></i></span>
+            <span class="vm-tool"><i data-icon="ruler"></i></span>
+            <span class="vm-title">CBCT · 0.2 mm</span>
+          </div>
+          <div class="vm-body">
+            <div class="vm-series"><div class="vm-thumb active"></div><div class="vm-thumb"></div><div class="vm-thumb"></div><div class="vm-thumb"></div></div>
+            <div class="vm-grid">
+              <div class="vm-pane"><span class="label">AXIAL</span><div class="vm-shape axial"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>
+              <div class="vm-pane"><span class="label">CORONAL</span><span class="label r">W 4000 / L 1000</span><div class="vm-shape"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>
+              <div class="vm-pane"><span class="label">PANORÁMICA</span><div class="vm-shape pano"></div></div>
+              <div class="vm-pane three-d"><span class="label">3D</span><div class="vm-shape"></div><span class="vm-placeholder-tag">Próximamente</span></div>
+            </div>
+          </div>
+          <div class="vm-status"><span>Paciente demo · P-0000</span><span>512 cortes</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Servicios -->
+    <section id="servicios">
+      <div class="container">
+        <div class="section-head">
+          <span class="kicker">Servicios</span>
+          <h2>Imagenología especializada para odontología</h2>
+          <p>Estudios de alta resolución pensados para diagnóstico, planificación de implantes, ortodoncia y cirugía maxilofacial.</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <span class="icon-badge blue"><i data-icon="cube"></i></span>
+            <h3>Tomografía Cone Beam</h3>
+            <p>Volúmenes 3D de maxilar, mandíbula, ATM y senos maxilares con reconstrucciones multiplanares.</p>
+          </article>
+          <article class="feature">
+            <span class="icon-badge green"><i data-icon="scan"></i></span>
+            <h3>Radiografía panorámica</h3>
+            <p>Ortopantomografía digital para la evaluación general de piezas dentales y estructuras óseas.</p>
+          </article>
+          <article class="feature">
+            <span class="icon-badge blue"><i data-icon="activity"></i></span>
+            <h3>Cefalometría</h3>
+            <p>Telerradiografías laterales y frontales de cráneo para análisis ortodóncico.</p>
+          </article>
+          <article class="feature">
+            <span class="icon-badge green"><i data-icon="grid"></i></span>
+            <h3>Periapicales y aleta</h3>
+            <p>Series intraorales digitales con detalle fino para endodoncia y control de caries.</p>
+          </article>
+          <article class="feature">
+            <span class="icon-badge blue"><i data-icon="stethoscope"></i></span>
+            <h3>Planificación de implantes</h3>
+            <p>Cortes transversales y mediciones para evaluar disponibilidad ósea antes de la cirugía.</p>
+          </article>
+          <article class="feature">
+            <span class="icon-badge green"><i data-icon="share"></i></span>
+            <h3>Entrega digital</h3>
+            <p>Sin discos ni impresiones: los estudios llegan directamente al portal del médico tratante.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Plataforma / roles -->
+    <section id="plataforma" class="bg-soft">
+      <div class="container">
+        <div class="section-head">
+          <span class="kicker">Plataforma</span>
+          <h2>Un acceso para cada perfil</h2>
+          <p>Cada médico ve únicamente los estudios de sus propios pacientes. El equipo de DentFrucer administra la carga y asignación de archivos.</p>
+        </div>
+        <div class="roles">
+          <article class="role-card doctor">
+            <span class="role-tag">Médicos</span>
+            <h3>Portal del médico</h3>
+            <p>Consulte y descargue los estudios de sus pacientes en cuanto están listos.</p>
+            <ul>
+              <li><i data-icon="check"></i> Listado de pacientes y estudios asignados</li>
+              <li><i data-icon="check"></i> Visor DICOM en el navegador</li>
+              <li><i data-icon="check"></i> Descarga de archivos originales</li>
+              <li><i data-icon="check"></i> Aviso de estudios nuevos</li>
+            </ul>
+            <a class="btn btn-accent" href="login.html">Ingresar como médico <i data-icon="arrowRight"></i></a>
+          </article>
+          <article class="role-card admin">
+            <span class="role-tag">Administración</span>
+            <h3>Panel de administración</h3>
+            <p>Gestione el archivo completo de estudios del centro de imagenología.</p>
+            <ul>
+              <li><i data-icon="check"></i> Carga de archivos DICOM y series</li>
+              <li><i data-icon="check"></i> Alta de pacientes y médicos</li>
+              <li><i data-icon="check"></i> Asignación de estudios a cada médico</li>
+              <li><i data-icon="check"></i> Control de accesos y actividad</li>
+            </ul>
+            <a class="btn btn-primary" href="login.html?rol=admin">Ingresar como administrador <i data-icon="arrowRight"></i></a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cómo funciona -->
+    <section>
+      <div class="container">
+        <div class="section-head">
+          <span class="kicker">Cómo funciona</span>
+          <h2>Del equipo de imagen a su consultorio</h2>
+        </div>
+        <div class="steps">
+          <div class="step"><h3>Adquisición</h3><p>El paciente realiza su estudio en DentFrucer con equipos de última generación.</p></div>
+          <div class="step"><h3>Carga</h3><p>Nuestro equipo sube los archivos DICOM y el informe a la plataforma.</p></div>
+          <div class="step"><h3>Asignación</h3><p>El estudio se vincula al paciente y a su médico tratante.</p></div>
+          <div class="step"><h3>Consulta</h3><p>El médico recibe el estudio en su portal y lo abre en el visor.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Visor -->
+    <section id="visor" class="viewer-section bg-soft">
+      <div class="container">
+        <div class="section-head">
+          <span class="kicker">Visor DICOM</span>
+          <h2>Diagnóstico desde el navegador</h2>
+          <p>Reconstrucción multiplanar, ajuste de ventana/nivel, mediciones y vista 3D sin instalar nada.</p>
+        </div>
+        <div class="viewer-mock" role="img" aria-label="Marcador de posición del visor DICOM">
+          <div class="vm-toolbar">
+            <span class="vm-dots"><i></i><i></i><i></i></span>
+            <span class="vm-tool active"><i data-icon="move"></i></span>
+            <span class="vm-tool"><i data-icon="zoom"></i></span>
+            <span class="vm-tool"><i data-icon="contrast"></i></span>
+            <span class="vm-tool"><i data-icon="ruler"></i></span>
+            <span class="vm-tool"><i data-icon="cube"></i></span>
+            <span class="vm-title">EST-DEMO · CBCT</span>
+          </div>
+          <div class="vm-body">
+            <div class="vm-series"><div class="vm-thumb active"></div><div class="vm-thumb"></div><div class="vm-thumb"></div><div class="vm-thumb"></div><div class="vm-thumb"></div></div>
+            <div class="vm-grid">
+              <div class="vm-pane"><span class="label">AXIAL · 214/512</span><div class="vm-shape axial"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>
+              <div class="vm-pane"><span class="label">CORONAL</span><span class="label r">W 4000 / L 1000</span><div class="vm-shape"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>
+              <div class="vm-pane"><span class="label">SAGITAL</span><div class="vm-shape"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>
+              <div class="vm-pane three-d"><span class="label">VOLUMEN 3D</span><div class="vm-shape"></div><span class="vm-placeholder-tag">Visor en desarrollo</span></div>
+            </div>
+          </div>
+          <div class="vm-status"><span>Paciente demo · P-0000</span><span>Grosor 0.2 mm · 512 cortes</span></div>
+        </div>
+        <p class="placeholder-note">Vista ilustrativa. El visor interactivo se integrará en una próxima etapa.</p>
+      </div>
+    </section>
+
+    <!-- Seguridad -->
+    <section id="seguridad">
+      <div class="container security">
+        <div>
+          <span class="kicker" style="color:var(--green-600);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase">Seguridad y privacidad</span>
+          <h2 style="font-size:clamp(28px,3.4vw,40px);font-weight:800;margin-top:12px">La información de sus pacientes, protegida</h2>
+          <p style="color:var(--ink-soft);font-size:18px">Los estudios médicos son datos sensibles. La plataforma está pensada para que cada archivo llegue solo a quien debe verlo.</p>
+        </div>
+        <div class="security-list">
+          <div class="security-item"><span class="icon-badge blue"><i data-icon="lock"></i></span><div><h4>Acceso por perfil</h4><p>Cada médico accede exclusivamente a los estudios de sus pacientes.</p></div></div>
+          <div class="security-item"><span class="icon-badge green"><i data-icon="shield"></i></span><div><h4>Conexión cifrada</h4><p>Toda la información viaja cifrada entre el servidor y su navegador.</p></div></div>
+          <div class="security-item"><span class="icon-badge blue"><i data-icon="key"></i></span><div><h4>Credenciales personales</h4><p>Usuarios individuales administrados por DentFrucer.</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section style="padding-top:0">
+      <div class="container">
+        <div class="cta-band">
+          <div>
+            <h2>¿Es médico y aún no tiene acceso?</h2>
+            <p>Solicite sus credenciales y empiece a recibir los estudios de sus pacientes en línea.</p>
+          </div>
+          <a class="btn btn-accent" href="#contacto">Solicitar acceso <i data-icon="arrowRight"></i></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contacto -->
+    <section id="contacto" class="bg-soft">
+      <div class="container contact-grid">
+        <div>
+          <div class="section-head" style="text-align:left;margin:0 0 32px">
+            <span class="kicker">Contacto</span>
+            <h2>Hablemos</h2>
+            <p>Agende un estudio o solicite acceso a la plataforma para su consultorio.</p>
+          </div>
+          <div class="contact-info">
+            <div><span class="icon-badge blue"><i data-icon="pin"></i></span><div><h4>Dirección</h4><p>[Dirección del centro]</p></div></div>
+            <div><span class="icon-badge green"><i data-icon="phone"></i></span><div><h4>Teléfono</h4><p>[000 000 0000]</p></div></div>
+            <div><span class="icon-badge blue"><i data-icon="mail"></i></span><div><h4>Correo</h4><p>[contacto@dentfrucer.com]</p></div></div>
+            <div><span class="icon-badge green"><i data-icon="clock"></i></span><div><h4>Horario</h4><p>[Lunes a viernes · 9:00 – 19:00]</p></div></div>
+          </div>
+        </div>
+        <form id="contact-form" class="form-card">
+          <div class="form-row">
+            <div class="field"><label for="c-name">Nombre</label><input class="input" id="c-name" required autocomplete="name"></div>
+            <div class="field"><label for="c-phone">Teléfono</label><input class="input" id="c-phone" type="tel" autocomplete="tel"></div>
+          </div>
+          <div class="field"><label for="c-email">Correo electrónico</label><input class="input" id="c-email" type="email" required autocomplete="email"></div>
+          <div class="field">
+            <label for="c-type">Motivo</label>
+            <select class="input select" id="c-type">
+              <option>Solicitar acceso como médico</option>
+              <option>Agendar un estudio</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div class="field"><label for="c-msg">Mensaje</label><textarea class="input" id="c-msg" rows="4"></textarea></div>
+          <button class="btn btn-primary btn-block" type="submit">Enviar mensaje</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <span class="footer-logo"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></span>
+          <p>Imagenología Dento Maxilo Facial. Estudios digitales para odontólogos y especialistas.</p>
+        </div>
+        <div>
+          <h5>Servicios</h5>
+          <ul><li><a href="#servicios">Cone Beam</a></li><li><a href="#servicios">Panorámica</a></li><li><a href="#servicios">Cefalometría</a></li></ul>
+        </div>
+        <div>
+          <h5>Plataforma</h5>
+          <ul><li><a href="login.html">Portal del médico</a></li><li><a href="login.html?rol=admin">Administración</a></li><li><a href="#visor">Visor DICOM</a></li></ul>
+        </div>
+        <div>
+          <h5>Contacto</h5>
+          <ul><li>[000 000 0000]</li><li>[contacto@dentfrucer.com]</li></ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>© <span id="year">2026</span> DentFrucer. Todos los derechos reservados.</span>
+        <span><a href="#">Aviso de privacidad</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

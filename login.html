@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iniciar sesión · DentFrucer</title>
+  <link rel="icon" type="image/png" href="assets/img/logo-dentfrucer-circular.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="login">
+  <div class="auth-page">
+    <aside class="auth-side">
+      <div class="circle-logo"><img src="assets/img/logo-dentfrucer-circular.png" alt="DentFrucer"></div>
+      <div>
+        <h2>Estudios de imagen dento maxilo facial, en un solo lugar.</h2>
+        <p>Acceda a tomografías Cone Beam, panorámicas y cefalometrías de sus pacientes de forma segura.</p>
+      </div>
+      <p style="font-size:13px;margin:0">© DentFrucer · Imagenología Dento Maxilo Facial</p>
+    </aside>
+
+    <main class="auth-main">
+      <div class="auth-box">
+        <a class="back" href="index.html"><i data-icon="arrowLeft"></i> Volver al inicio</a>
+        <h1 id="login-title">Acceso para médicos</h1>
+        <p class="sub" id="login-sub">Consulte los estudios de sus pacientes.</p>
+
+        <div class="role-switch" role="tablist" aria-label="Tipo de usuario">
+          <button type="button" role="tab" data-role="doctor" aria-selected="true"><i data-icon="stethoscope"></i> Médico</button>
+          <button type="button" role="tab" data-role="admin" aria-selected="false"><i data-icon="settings"></i> Administrador</button>
+        </div>
+
+        <form id="login-form" class="form-card" novalidate>
+          <div id="login-error" class="form-error" role="alert"></div>
+          <div class="field">
+            <label for="email">Correo electrónico</label>
+            <input class="input" id="email" type="email" autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label for="password">Contraseña</label>
+            <input class="input" id="password" type="password" autocomplete="current-password" required>
+          </div>
+          <div class="auth-meta">
+            <label><input type="checkbox"> Recordarme</label>
+            <a href="#" onclick="return false">¿Olvidó su contraseña?</a>
+          </div>
+          <button class="btn btn-primary btn-block" type="submit">Iniciar sesión</button>
+        </form>
+
+        <div class="demo-note">
+          <strong>Modo demostración.</strong> Aún no hay base de datos ni autenticación real.
+          <button type="button" id="fill-demo" class="btn btn-ghost btn-sm" style="padding:4px 6px;color:var(--green-600)">Rellenar datos de demostración</button>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
