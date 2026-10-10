@@ -61,6 +61,8 @@ h1, h2, h3, h4 { font-family: var(--font-sans); line-height: 1.15; margin: 0 0 .
 p { margin: 0 0 1em; }
 
 .container { width: 100%; max-width: var(--container); margin: 0 auto; padding: 0 24px; }
+/* Lo oculto con el atributo hidden queda oculto aunque su clase defina display. */
+[hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 :focus-visible { outline: 3px solid var(--blue-500); outline-offset: 2px; border-radius: 4px; }
@@ -449,7 +451,6 @@ body[data-guard] .app { visibility: hidden; }
 /* ---------- Agenda pública (agendar.html) ---------- */
 .booking-page { background: var(--surface-2); }
 .booking { padding: 40px 0 72px; }
-.booking [hidden] { display: none !important; }
 .booking-head { max-width: 640px; margin-bottom: 28px; }
 .booking-head .kicker { color: var(--green-600); font-weight: 700; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
 .booking-head h1 { font-size: clamp(28px, 4vw, 38px); font-weight: 800; margin: 8px 0 6px; }
@@ -535,8 +536,31 @@ body[data-guard] .app { visibility: hidden; }
 .panel-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .upload-appt { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: var(--radius-md); background: var(--lime-50); border: 1px solid #d6ebbb; color: #365a14; font-size: 14px; margin-bottom: 16px; }
 .upload-appt svg { width: 18px; height: 18px; flex: none; }
-.upload-appt[hidden] { display: none; }
 .form-row > .field { align-content: start; }
 .referrer-hint { display: block; font-size: 12px; color: var(--warning); margin-top: 4px; }
 @media (max-width: 1024px) { .stats.five { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .stats.five { grid-template-columns: 1fr; } }
+.modal.md { max-width: 680px; }
+.form-row.three { grid-template-columns: repeat(3, 1fr); }
+.modal .modal-foot .spacer { flex: 1; }
+.btn-danger { color: var(--danger); }
+.btn-danger:hover { background: #fdecea; }
+.input.warn { border-color: #e9c46a; background: #fffaf0; }
+.search-sm .input { min-width: 0; width: 160px; padding-top: 7px; padding-bottom: 7px; font-size: 14px; }
+.cell-contact { font-size: 13px; color: var(--ink-soft); }
+@media (max-width: 560px) { .form-row.three { grid-template-columns: 1fr; } }
+
+/* ---------- Resultados para pacientes (resultados.html) ---------- */
+.results-card { max-width: 620px; margin: 0 auto; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-xl); padding: 40px; box-shadow: var(--shadow-md); text-align: center; }
+.results-card h1 { font-size: 28px; margin: 6px 0 16px; }
+.results-card .kicker { color: var(--green-600); font-weight: 700; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; margin: 0; }
+.results-icon { width: 64px; height: 64px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--surface-2); color: var(--muted); margin-bottom: 12px; }
+.results-icon.ok { background: var(--blue-50); color: var(--blue-700); }
+.results-icon svg { width: 30px; height: 30px; }
+.results-details { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; text-align: left; max-width: 420px; margin: 0 auto 24px; }
+.results-details dt { color: var(--muted); }
+.results-details dd { margin: 0; font-weight: 600; }
+.results-actions { display: flex; justify-content: center; gap: 10px; margin-bottom: 28px; }
+.results-files { text-align: left; border-top: 1px solid var(--line); padding-top: 20px; }
+.results-files h2 { font-size: 16px; }
+@media (max-width: 560px) { .results-card { padding: 28px 18px; } }

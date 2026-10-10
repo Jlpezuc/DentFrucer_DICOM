@@ -1,6 +1,11 @@
 // Estructura visual del visor (pantalla completa): encabezado, barra de
 // herramientas, escenario de imágenes, panel lateral y pie. No sabe nada de
 // DICOM: los modos (modes/*.js) la llenan y escuchan sus eventos.
+//
+// viewOnly: visor de solo lectura (pacientes). Los botones del encabezado se
+// llaman "Descargar archivos" y "Guardar imagen", y la ayuda no menciona las
+// mediciones; las herramientas y acciones que se muestran las elige el
+// espacio de trabajo con setTools().
 
 import { escapeHtml } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -13,10 +18,11 @@ const IMAGE_ACTIONS = [
   { id: 'invert', label: 'Invertir grises', icon: 'invert', key: 'I' },
   { id: 'fit', label: 'Ajustar a la pantalla', icon: 'fit', key: 'F' },
   { id: 'overlay', label: 'Ocultar o mostrar los datos sobre la imagen', icon: 'overlay', key: 'O' },
-  { id: 'reset', label: 'Restablecer vista', icon: 'reset', key: 'X' }
+  { id: 'reset', label: 'Restablecer vista', icon: 'reset', key: 'X' },
+  { id: 'undo', label: 'Deshacer', icon: 'undo', keyLabel: 'Ctrl+Z' }
 ];
 
-export function createShell({ study, onClose }) {
+export function createShell({ study, onClose, viewOnly = false }) {
   const listeners = {};
   const emit = (ev, ...args) => (listeners[ev] || []).forEach((fn) => fn(...args));
 
@@ -42,8 +48,8 @@ export function createShell({ study, onClose }) {
         </div>
       </div>
       <div class="dv-header-actions">
-        <button type="button" class="dv-hbtn" data-action="download" title="Descargar archivos originales">${icon('download')}<span>Descargar</span></button>
-        <button type="button" class="dv-hbtn" data-action="export" title="Guardar la vista como imagen PNG">${icon('image')}<span>Exportar</span></button>
+        <button type="button" class="dv-hbtn" data-action="download" title="Descargar archivos originales">${icon('download')}<span>${viewOnly ? 'Descargar archivos' : 'Descargar'}</span></button>
+        <button type="button" class="dv-hbtn" data-action="export" title="Guardar la vista como imagen PNG">${icon('image')}<span>${viewOnly ? 'Guardar imagen' : 'Exportar'}</span></button>
         <button type="button" class="dv-hbtn" data-action="print" title="Imprimir la vista">${icon('printer')}<span>Imprimir</span></button>
         <span class="dv-hsep"></span>
         <button type="button" class="dv-hbtn dv-icon-only" data-action="panel" title="Mostrar u ocultar el panel lateral">${icon('sidebar')}</button>
@@ -101,6 +107,7 @@ export function createShell({ study, onClose }) {
   let activeTool = null;
   let closed = false;
   let closeGuard = null; // () => texto de aviso si cerrar haría perder trabajo
+  let actionIds = new Set(IMAGE_ACTIONS.map((a) => a.id)); // acciones visibles en la barra
 
   if (window.innerWidth < 900) root.classList.add('dv-panel-hidden');
 
@@ -170,16 +177,16 @@ export function createShell({ study, onClose }) {
     // Con un diálogo abierto, el teclado es del diálogo.
     if (!$('.dv-dialog').hidden) return;
     if (e.key === '?') { showHelp(); return; }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); emit('action', 'undo'); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (actionIds.has('undo')) emit('action', 'undo'); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'Delete' || e.key === 'Backspace') { emit('action', 'delete'); e.preventDefault(); return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !viewOnly) { emit('action', 'delete'); e.preventDefault(); return; }
     if (e.key === ' ' && sliceCfg) { e.preventDefault(); togglePlay(); return; }
     if ((e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') && sliceCfg) { e.preventDefault(); sliceCfg.onInput(Math.max(0, sliceCfg.value - (e.key === 'PageUp' ? 10 : 1))); return; }
     if ((e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown') && sliceCfg) { e.preventDefault(); sliceCfg.onInput(Math.min(sliceCfg.max, sliceCfg.value + (e.key === 'PageDown' ? 10 : 1))); return; }
     if (e.key === 'Enter') { emit('action', 'enter'); return; }
     const k = e.key.toUpperCase();
     if (toolKeys[k]) { emit('tool', toolKeys[k]); return; }
-    const act = IMAGE_ACTIONS.find((a) => a.key === k);
+    const act = IMAGE_ACTIONS.find((a) => a.key === k && actionIds.has(a.id));
     if (act) { emit('action', act.id); return; }
     emit('key', e);
   }
@@ -211,6 +218,7 @@ export function createShell({ study, onClose }) {
 
   function showHelp() {
     const tools = Object.entries(TOOLS).filter(([id]) => toolbar.querySelector(`[data-tool="${id}"]`));
+    const editing = (html) => (viewOnly ? '' : html);
     openDialog(`
       <div class="dv-dialog-head"><h3>${icon('help')} Cómo usar el visor</h3><button class="dv-fbtn" data-dclose aria-label="Cerrar">${icon('x')}</button></div>
       <div class="dv-help">
@@ -222,8 +230,8 @@ export function createShell({ study, onClose }) {
             <dt>Clic derecho + arrastrar</dt><dd>Contraste (horizontal) y brillo (vertical)</dd>
             <dt>Clic central + arrastrar</dt><dd>Mover la imagen</dd>
             <dt>Doble clic en un panel</dt><dd>Ampliar / restaurar ese panel</dd>
-            <dt>Doble clic en un implante</dt><dd>Cambiar diámetro y longitud</dd>
-            <dt>Arrastrar un punto</dt><dd>Corregir una medición</dd>
+            ${editing(`<dt>Doble clic en un implante</dt><dd>Cambiar diámetro y longitud</dd>
+            <dt>Arrastrar un punto</dt><dd>Corregir una medición</dd>`)}
           </dl>
         </section>
         <section>
@@ -236,8 +244,8 @@ export function createShell({ study, onClose }) {
             <dt><kbd>↑</kbd> <kbd>↓</kbd> <kbd>RePág</kbd></dt><dd>Corte anterior / siguiente (de 10 en 10)</dd>
             <dt><kbd>Espacio</kbd></dt><dd>Reproducir cortes</dd>
             <dt><kbd>F</kbd> <kbd>G</kbd> <kbd>I</kbd> <kbd>X</kbd></dt><dd>Ajustar, girar, invertir, restablecer</dd>
-            <dt><kbd>O</kbd></dt><dd>Ocultar / mostrar los datos del paciente sobre la imagen</dd>
-            <dt><kbd>Supr</kbd> · <kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Borrar medición seleccionada · deshacer</dd>
+            ${editing(`<dt><kbd>O</kbd></dt><dd>Ocultar / mostrar los datos del paciente sobre la imagen</dd>
+            <dt><kbd>Supr</kbd> · <kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Borrar medición seleccionada · deshacer</dd>`)}
             <dt><kbd>Esc</kbd></dt><dd>Cancelar / cerrar el visor</dd>
           </dl>
         </section>
@@ -285,9 +293,10 @@ export function createShell({ study, onClose }) {
       l.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', () => actions[Number(b.dataset.i)].onClick()));
     },
 
-    // Herramientas
-    setTools(ids) {
+    // Herramientas. actions: ids de IMAGE_ACTIONS que se muestran (por defecto, todas).
+    setTools(ids, actions = IMAGE_ACTIONS.map((a) => a.id)) {
       Object.keys(toolKeys).forEach((k) => delete toolKeys[k]);
+      actionIds = new Set(actions);
       const btn = (attrs, ic, label, key) => `<button type="button" class="dv-tool" ${attrs} aria-label="${label}" data-tip="${label}${key ? ' · ' + key : ''}">${icon(ic)}</button>`;
       let html = '<div class="dv-tgroup">';
       for (const id of ids) {
@@ -297,8 +306,7 @@ export function createShell({ study, onClose }) {
         html += btn(`data-tool="${id}"`, t.icon, t.label, t.key);
       }
       html += '</div><div class="dv-tgroup dv-tgroup-actions">';
-      for (const a of IMAGE_ACTIONS) html += btn(`data-action="${a.id}"`, a.icon, a.label, a.key);
-      html += btn('data-action="undo"', 'undo', 'Deshacer', 'Ctrl+Z');
+      for (const a of IMAGE_ACTIONS) if (actionIds.has(a.id)) html += btn(`data-action="${a.id}"`, a.icon, a.label, a.key || a.keyLabel);
       html += '</div>';
       toolbar.innerHTML = html;
     },

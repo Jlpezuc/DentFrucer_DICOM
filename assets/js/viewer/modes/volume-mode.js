@@ -30,9 +30,9 @@ const STRIP_COUNT = 5;                 // cortes transversales en la tira (impar
 const STRIP_GAPS = [0.5, 1, 2, 3];     // separación entre cortes de la tira (mm)
 const isWide = () => window.matchMedia('(min-width: 821px)').matches;
 
-export function startVolumeMode(shell, { study, data, onDownload }) {
+export function startVolumeMode(shell, { study, data, onDownload, viewOnly }) {
   const vol = data.volumes[0];
-  const ws = new Workspace(shell, { study, profileId: 'cbct', onDownload });
+  const ws = new Workspace(shell, { study, profileId: 'cbct', onDownload, viewOnly });
   const grid = document.createElement('div');
   grid.className = 'dv-grid dv-grid-mpr';
   grid.dataset.layout = 4;
@@ -651,8 +651,15 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
 
   // --- Información ------------------------------------------------------------------------
   const [sx, sy, sz] = vol.spacing;
+  // Solo lectura: sin panorámica por curva ni distribución de implantes (son de planificación).
+  if (viewOnly) {
+    quad.querySelector('.dv-quad-tabs').hidden = true;
+    extra.querySelector('.dv-layout-seg').hidden = true;
+  }
+
   renderInfo(ws.infoTab, {
     study,
+    allTags: !viewOnly,
     dataset: vol.meta.dataset,
     extra: [
       ['Matriz', `${vol.nx} × ${vol.ny} × ${vol.nz}`],

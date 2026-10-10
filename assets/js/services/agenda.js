@@ -1,7 +1,8 @@
 // Lógica de la agenda compartida por la página pública, el panel y el backend:
-// turnos disponibles, claves de turno y normalización de los datos del paciente.
+// turnos disponibles, claves de turno, estados y validación de las citas.
 
 import { agendaConfig } from '../config/agenda-config.js';
+import { LIMITS, normalizePerson, plainText } from './people.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -39,6 +40,16 @@ export function dayTimes(date) {
   return out;
 }
 
+// Horas que el panel ofrece para un día: las del horario o, si ese día no se
+// atiende (sábado, feriado…), todo el día, para citas fuera de horario.
+export function adminDayTimes(date) {
+  const times = dayTimes(date);
+  if (times.length) return { times, outside: false };
+  const all = [];
+  for (let t = 7 * 60; t + agendaConfig.slotMinutes <= 20 * 60; t += agendaConfig.slotMinutes) all.push(toHHMM(t));
+  return { times: all, outside: true };
+}
+
 // Turnos de un día con su estado: libre, ocupado o ya pasado (respetando la anticipación mínima).
 export function daySlots(date, busy, now = new Date()) {
   const limit = new Date(now.getTime() + agendaConfig.minNoticeMinutes * 60000);
@@ -51,35 +62,18 @@ export function daySlots(date, busy, now = new Date()) {
   });
 }
 
-// Nombres: se respetan mayúsculas escritas a propósito; si todo está en
-// minúsculas o en mayúsculas se pasa a "Nombre Propio".
-function tidyName(s) {
-  s = String(s || '').replace(/\s+/g, ' ').trim();
-  if (s && (s === s.toLowerCase() || s === s.toUpperCase())) {
-    s = s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase());
-  }
-  return s;
-}
+export const APPOINTMENT_STATUSES = ['Pendiente', 'Atendida', 'No asistió', 'Cancelada'];
+export const isActive = (appt) => appt.status !== 'Cancelada';
 
-export const LIMITS = { name: 60, email: 120, phone: 30, referrer: 80 };
-
-// Valida y normaliza los datos del formulario. Devuelve { data } o { error }.
+// Valida y normaliza una cita (formulario público o panel). Devuelve { data } o { error }.
 export function normalizeBooking(input) {
-  const firstName = tidyName(input.firstName);
-  const lastName = tidyName(input.lastName);
-  const email = String(input.email || '').trim().toLowerCase();
-  const phone = String(input.phone || '').replace(/\s+/g, ' ').trim();
+  const { data: person, error } = normalizePerson(input);
+  if (error) return { error };
   const referrer = String(input.referrer || '').replace(/\s+/g, ' ').trim();
-  if (!firstName || !lastName) return { error: 'Escriba su nombre y su apellido.' };
-  if (firstName.length > LIMITS.name || lastName.length > LIMITS.name) return { error: 'El nombre o el apellido es demasiado largo.' };
-  if (email && (email.length > LIMITS.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))) return { error: 'El correo no es válido. Puede dejarlo en blanco.' };
-  if (phone.length > LIMITS.phone || (phone && !/^[0-9+()\-. ]{6,}$/.test(phone))) return { error: 'El teléfono no es válido. Puede dejarlo en blanco.' };
   if (referrer.length > LIMITS.referrer) return { error: 'El nombre del médico es demasiado largo.' };
   if (!agendaConfig.exams.some((e) => e.id === input.exam)) return { error: 'Elija el tipo de examen.' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date || '') || !/^\d{2}:\d{2}$/.test(input.time || '')) return { error: 'Elija el día y la hora.' };
-  return {
-    data: { firstName, lastName, name: firstName + ' ' + lastName, email, phone, referrer, exam: input.exam, date: input.date, time: input.time }
-  };
+  return { data: { ...person, referrer, exam: input.exam, date: input.date, time: input.time } };
 }
 
 // ID del paciente creado desde la agenda. Si la persona deja correo o teléfono,
@@ -87,9 +81,8 @@ export function normalizeBooking(input) {
 // queda duplicado en la lista de pacientes. Sin contacto no se puede saber si
 // es la misma persona, así que cada cita crea su propio paciente.
 export async function agendaPatientId(data, appointmentId) {
-  const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
   const contact = data.email || data.phone.replace(/\D/g, '') || 'cita:' + appointmentId;
-  const bytes = new TextEncoder().encode(norm(data.name) + '|' + contact);
+  const bytes = new TextEncoder().encode(plainText(data.name) + '|' + contact);
   const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
   return 'ag_' + Array.from(hash.slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('');
 }

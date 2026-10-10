@@ -11,9 +11,10 @@ Portal web de **DentFrucer – Imagenología Dento Maxilo Facial** para consulta
 | `index.html` | Landing pública de la clínica; el acceso es para médicos |
 | `agendar.html` | Agenda en línea para pacientes, sin crear cuenta |
 | `login.html` | Inicio de sesión de médicos |
-| `portal.html` | Portal del médico: solo los estudios de sus pacientes |
+| `portal.html` | Portal del médico: solo los estudios asignados a él |
 | `admin-login.html` | Acceso de administración (no enlazado desde la landing) |
-| `admin.html` | Panel: carga de estudios, pacientes, médicos y asignaciones |
+| `admin.html` | Panel: agenda, carga de estudios, pacientes y médicos |
+| `resultados.html` | Resultados para pacientes con visor de solo lectura (**acceso desactivado**, ver abajo) |
 
 ## Firebase
 
@@ -31,12 +32,22 @@ Con Firebase ya configurado, agregue `?demo=1` a la URL (por ejemplo `login.html
 En **`agendar.html`** el paciente elige el examen, el día y la hora libres y deja **nombre y apellido** (obligatorios), **correo** y **teléfono** (opcionales) y, si quiere, el médico que lo envía. No crea ninguna cuenta. Al confirmar:
 
 - se guarda la **cita** y se ocupa el **turno** (nadie más puede tomarlo);
-- se crea el **paciente** en la lista de la clínica, sin médico asignado (si ya había agendado con el mismo nombre y correo/teléfono, no se duplica);
+- se crea el **paciente** en la lista de la clínica (si ya había agendado con el mismo nombre y correo/teléfono, no se duplica);
 - el paciente ve un código de cita y puede agregarla a su calendario (.ics).
 
-En el panel de administración, la sección **Agenda** muestra las citas de hoy, las próximas y las anteriores. **Cargar estudio** desde una cita rellena el paciente, la modalidad y la fecha, y al subir los archivos la cita queda como *Atendida*. Los pacientes con cita hoy aparecen primero en la lista de carga, y el médico que indicaron se muestra junto al selector de médico tratante. Cancelar una cita libera el horario.
+En el panel de administración, la sección **Agenda** muestra las citas de hoy, las próximas y las anteriores, y permite **crear, editar y borrar citas** (cambiar el día o la hora mueve el turno; cancelar o borrar lo libera). **Cargar estudio** desde una cita rellena el paciente, la modalidad y la fecha, sugiere el médico que indicó el paciente y, al subir los archivos, la cita queda como *Atendida*.
 
 Horarios, duración de los turnos, días cerrados, tipos de examen e indicaciones se editan en `assets/js/config/agenda-config.js`. En modo demostración (`agendar.html?demo=1`) las citas se guardan solo en la pestaña del navegador. Un enlace como `agendar.html?examen=CBCT` deja el examen preseleccionado.
+
+## Pacientes, estudios y médicos
+
+Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (nombre, apellido, expediente, edad, correo, teléfono) y se edita desde la tabla *Pacientes*. Cada **estudio** pertenece a un paciente **y** a un médico, que se elige al cargarlo y se puede cambiar en la tabla *Estudios*. El médico ve en su portal los estudios que tiene asignados, y su lista *Mis pacientes* sale de esos estudios. Un mismo paciente puede tener estudios para médicos distintos.
+
+## Resultados para pacientes (desactivado)
+
+`resultados.html?t=…` muestra al paciente su estudio y abre el **visor de solo lectura**: navegar, contraste, lupa, girar e invertir, **guardar la imagen** (PNG) y **descargar los archivos** originales; sin mediciones, notas, implantes ni etiquetas DICOM completas. Está pensado para abrirse con un enlace enviado por correo.
+
+El acceso está **desactivado** (`assets/js/config/patient-access.js`, `enabled: false`): la página responde "Acceso no disponible" y no carga ningún dato. Solo se puede probar en modo demostración, con un estudio de ejemplo: `resultados.html?demo=1&t=EST-2026-0418` (CBCT) o `…&t=EST-2026-0415` (panorámica). Lo que falta para activarlo está en [FIREBASE.md](FIREBASE.md#acceso-de-pacientes-pendiente).
 
 ## Visor
 
@@ -64,19 +75,27 @@ Los scripts son módulos ES: abra el sitio con un servidor (no con `file://`).
 
 ```
 index.html, login.html, portal.html,      páginas
-admin-login.html, admin.html, agendar.html
+admin-login.html, admin.html, agendar.html,
+resultados.html
 assets/css/styles.css                    estilos del sitio (paleta de marca)
 assets/css/viewer.css                    estilos del visor (tema oscuro)
 assets/img/                              logotipos
 assets/js/
   app.js                 punto de entrada: carga el módulo de cada página
-  config/                configuración de Firebase y de la agenda (horarios, exámenes)
-  services/backend.js    datos: Firebase o modo demostración
-  services/agenda.js     turnos disponibles y validación de las citas
+  config/                Firebase, agenda (horarios, exámenes) y acceso de pacientes
+  services/
+    backend.js           elige el backend y documenta el modelo de datos
+    backend/firebase.js  implementación con Firebase
+    backend/demo.js      implementación de demostración (datos de ejemplo)
+    backend/shared.js    utilidades comunes a ambas
+    mode.js              ¿modo demostración?
+    agenda.js            turnos, estados y validación de las citas
+    people.js            validación de nombres y contacto de pacientes
   ui/                    utilidades compartidas: iconos, modales, formatos
-  pages/                 lógica de cada página (landing, login, admin, portal, agenda)
+  pages/                 lógica de cada página: landing, login, portal, agenda, results
+    admin/               panel: index (estado) + agenda, studies, upload, people
   viewer/
-    index.js             abre el visor y elige el modo
+    index.js             abre el visor (completo o de solo lectura) y elige el modo
     shell.js             estructura visual: encabezado, barras, paneles
     data/                lectura DICOM, píxeles, ZIP, imágenes, volúmenes
     core/                viewport, herramientas, mediciones, 3D, exportación

@@ -1,0 +1,287 @@
+// Backend con Firebase: Authentication + Firestore + Storage.
+// Modelo de datos: ver services/backend.js.
+
+import { firebaseConfig } from '../../config/firebase-config.js';
+import { patientAccess } from '../../config/patient-access.js';
+import { agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
+import { normalizePatient } from '../people.js';
+import {
+  AccessDisabledError, agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, friendlyAuthError, studyCode, studyPatientFields
+} from './shared.js';
+
+const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+
+export async function createFirebaseBackend() {
+  const [appMod, authMod, fsMod, stMod] = await Promise.all([
+    import(SDK + 'firebase-app.js'),
+    import(SDK + 'firebase-auth.js'),
+    import(SDK + 'firebase-firestore.js'),
+    import(SDK + 'firebase-storage.js')
+  ]);
+  const { initializeApp } = appMod;
+  const {
+    getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+    sendPasswordResetEmail, createUserWithEmailAndPassword
+  } = authMod;
+  const {
+    getFirestore, collection, doc, getDoc, getDocs, query, where,
+    setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, runTransaction
+  } = fsMod;
+  const { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } = stMod;
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+
+  const list = async (q) => (await getDocs(q)).docs.map((s) => ({ id: s.id, ...s.data() }));
+  const isDenied = (e) => String((e && e.code) || '').includes('permission-denied');
+  const fail = (result) => { if (result.error) throw new Error(result.error); return result.data; };
+
+  // Espera la primera respuesta de Auth (sesión restaurada o ninguna).
+  const authReady = new Promise((resolve) => {
+    const off = onAuthStateChanged(auth, (u) => { off(); resolve(u); });
+  });
+
+  async function profileOf(user) {
+    if (!user) return null;
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (!snap.exists()) return null;
+    const d = snap.data();
+    return {
+      uid: user.uid,
+      email: user.email,
+      name: d.name || user.email,
+      role: d.role,
+      specialty: d.specialty || '',
+      title: d.role === 'admin' ? 'Administrador' : (d.specialty || 'Médico')
+    };
+  }
+
+  return {
+    mode: 'firebase',
+
+    // --- Sesión -----------------------------------------------------------------
+    async currentUser() {
+      await authReady;
+      return profileOf(auth.currentUser);
+    },
+
+    async signIn(email, password) {
+      try {
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+        const profile = await profileOf(cred.user);
+        if (!profile) {
+          await signOut(auth);
+          throw new Error('Su cuenta no tiene un perfil asignado. Contacte a DentFrucer.');
+        }
+        return profile;
+      } catch (e) {
+        throw new Error(friendlyAuthError(e));
+      }
+    },
+
+    signOut: () => signOut(auth),
+
+    async resetPassword(email) {
+      try { await sendPasswordResetEmail(auth, email); } catch (e) { throw new Error(friendlyAuthError(e)); }
+    },
+
+    // --- Médicos ----------------------------------------------------------------
+    async listDoctors() {
+      return (await list(query(collection(db, 'users'), where('role', '==', 'doctor')))).sort(byName);
+    },
+
+    // Crea la cuenta del médico con una segunda instancia de la app, para no
+    // cerrar la sesión del administrador.
+    async createDoctor({ name, email, password, specialty }) {
+      const secondary = initializeApp(firebaseConfig, 'secondary-' + Date.now());
+      const secAuth = getAuth(secondary);
+      try {
+        const cred = await createUserWithEmailAndPassword(secAuth, email, password);
+        await setDoc(doc(db, 'users', cred.user.uid), {
+          name, email, specialty: specialty || '', role: 'doctor', createdAt: serverTimestamp()
+        });
+        await signOut(secAuth);
+        return cred.user.uid;
+      } catch (e) {
+        throw new Error(friendlyAuthError(e));
+      }
+    },
+
+    // --- Pacientes (solo administración) -------------------------------------------
+    async listPatients() {
+      return (await list(collection(db, 'patients'))).sort(byName);
+    },
+
+    async createPatient(input) {
+      const data = fail(normalizePatient(input));
+      const r = doc(collection(db, 'patients'));
+      await setDoc(r, { ...data, source: 'panel', createdAt: serverTimestamp() });
+      return r.id;
+    },
+
+    // Actualiza la ficha y los datos del paciente copiados en sus estudios.
+    async updatePatient(id, input) {
+      const data = fail(normalizePatient(input));
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'patients', id), data);
+      const studies = await list(query(collection(db, 'studies'), where('patientId', '==', id)));
+      studies.forEach((s) => batch.update(doc(db, 'studies', s.id), studyPatientFields(data)));
+      await batch.commit();
+    },
+
+    // --- Estudios: cada uno tiene su paciente y su médico ------------------------
+    // Las reglas exigen el filtro por doctorId para los médicos.
+    async listStudies({ doctorId } = {}) {
+      const c = collection(db, 'studies');
+      return (await list(doctorId ? query(c, where('doctorId', '==', doctorId)) : c)).sort(byDateDesc);
+    },
+
+    async uploadStudy({ patient, doctorId, modality, description, date, files, onProgress }) {
+      const r = doc(collection(db, 'studies'));
+      const total = files.reduce((n, f) => n + f.size, 0) || 1;
+      const done = new Array(files.length).fill(0);
+      const uploaded = [];
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const path = 'studies/' + r.id + '/' + (f.webkitRelativePath || f.name);
+        await new Promise((resolve, reject) => {
+          const task = uploadBytesResumable(ref(storage, path), f, { contentType: f.type || 'application/dicom' });
+          task.on('state_changed', (s) => {
+            done[i] = s.bytesTransferred;
+            if (onProgress) onProgress(done.reduce((a, b) => a + b, 0) / total);
+          }, reject, resolve);
+        });
+        uploaded.push({ name: f.name, path, size: f.size });
+      }
+      await setDoc(r, {
+        code: studyCode(r.id),
+        patientId: patient.id, ...studyPatientFields(patient),
+        doctorId: doctorId || null,
+        modality, description, date,
+        files: uploaded, totalSize: uploaded.reduce((n, f) => n + f.size, 0),
+        status: 'Nuevo', createdAt: serverTimestamp()
+      });
+      return r.id;
+    },
+
+    setStudyDoctor: (studyId, doctorId) => updateDoc(doc(db, 'studies', studyId), { doctorId: doctorId || null }),
+
+    async deleteStudy(study) {
+      await Promise.all((study.files || []).map((f) => deleteObject(ref(storage, f.path)).catch(() => {})));
+      await deleteDoc(doc(db, 'studies', study.id));
+    },
+
+    markSeen: (studyId) => updateDoc(doc(db, 'studies', studyId), { status: 'Visto' }),
+
+    async fileUrls(study) {
+      return Promise.all((study.files || []).map(async (f) => ({ name: f.name, url: await getDownloadURL(ref(storage, f.path)) })));
+    },
+
+    // --- Agenda: público -----------------------------------------------------------
+    // Turnos ocupados entre dos fechas (públicos: no contienen datos personales).
+    async listBusySlots(from, to) {
+      const q = query(collection(db, 'slots'), where('date', '>=', from), where('date', '<=', to));
+      return new Set((await getDocs(q)).docs.map((d) => d.id));
+    },
+
+    // Reserva pública, sin cuenta: crea en un solo lote la cita, el turno ocupado
+    // y (si no existía) el paciente. Las reglas solo permiten crear, nunca leer.
+    async bookAppointment(input) {
+      const data = fail(normalizeBooking(input));
+      const apptRef = doc(collection(db, 'appointments'));
+      const sid = slotId(data.date, data.time);
+      const patientId = await agendaPatientId(data, apptRef.id);
+      const code = appointmentCode(apptRef.id);
+      const commit = (withPatient) => {
+        const batch = writeBatch(db);
+        if (withPatient) batch.set(doc(db, 'patients', patientId), { ...agendaPatient(data), createdAt: serverTimestamp() });
+        batch.set(apptRef, { ...appointmentFields(data), code, slotId: sid, patientId, createdAt: serverTimestamp() });
+        batch.set(doc(db, 'slots', sid), { date: data.date, time: data.time, appointmentId: apptRef.id });
+        return batch.commit();
+      };
+      const slotTaken = async () => (await getDoc(doc(db, 'slots', sid))).exists();
+      try {
+        await commit(true);
+      } catch (e) {
+        if (!isDenied(e)) throw new Error(friendlyAuthError(e));
+        if (await slotTaken()) throw new SlotTakenError();
+        // El paciente ya existía (agendó antes con los mismos datos): solo la cita.
+        try { await commit(false); } catch (e2) {
+          if (isDenied(e2) && await slotTaken()) throw new SlotTakenError();
+          throw new Error('No se pudo agendar la cita. Intente de nuevo o llámenos.');
+        }
+      }
+      return { id: apptRef.id, code, ...data };
+    },
+
+    // --- Agenda: administración ------------------------------------------------------
+    async listAppointments() {
+      return (await list(collection(db, 'appointments'))).sort(byDateTime);
+    },
+
+    // Cita creada desde el panel. patientId: paciente existente; si falta, se usa
+    // (o se crea) la ficha que corresponde a los datos, igual que en la agenda pública.
+    async createAppointment(input, { patientId } = {}) {
+      const data = fail(normalizeBooking(input));
+      const apptRef = doc(collection(db, 'appointments'));
+      const pid = patientId || await agendaPatientId(data, apptRef.id);
+      const sid = slotId(data.date, data.time);
+      await runTransaction(db, async (tx) => {
+        const slotRef = doc(db, 'slots', sid);
+        const patientRef = doc(db, 'patients', pid);
+        if ((await tx.get(slotRef)).exists()) throw new SlotTakenError();
+        const patientExists = (await tx.get(patientRef)).exists();
+        if (!patientExists) tx.set(patientRef, { ...agendaPatient(data), createdAt: serverTimestamp() });
+        tx.set(apptRef, { ...appointmentFields({ ...data, status: input.status }), code: appointmentCode(apptRef.id), slotId: sid, patientId: pid, createdAt: serverTimestamp() });
+        tx.set(slotRef, { date: data.date, time: data.time, appointmentId: apptRef.id });
+      });
+      return apptRef.id;
+    },
+
+    // Edita una cita. Si cambia el día/hora o pasa a cancelada (o vuelve de
+    // cancelada), el turno ocupado se mueve, se libera o se vuelve a ocupar.
+    async updateAppointment(prev, changes) {
+      const next = { ...prev, ...changes };
+      const data = fail(normalizeBooking(next));
+      if (!APPOINTMENT_STATUSES.includes(next.status)) throw new Error('Estado de cita no válido.');
+      const oldSid = prev.slotId;
+      const newSid = slotId(data.date, data.time);
+      const wasActive = isActive(prev);
+      const nowActive = isActive(next);
+      const takeNew = nowActive && (!wasActive || newSid !== oldSid);
+      const freeOld = wasActive && (!nowActive || newSid !== oldSid);
+      await runTransaction(db, async (tx) => {
+        const newRef = doc(db, 'slots', newSid);
+        if (takeNew) {
+          const s = await tx.get(newRef);
+          if (s.exists() && s.data().appointmentId !== prev.id) throw new SlotTakenError();
+        }
+        if (freeOld && oldSid) tx.delete(doc(db, 'slots', oldSid));
+        if (takeNew) tx.set(newRef, { date: data.date, time: data.time, appointmentId: prev.id });
+        tx.update(doc(db, 'appointments', prev.id), { ...appointmentFields({ ...data, status: next.status }), slotId: newSid });
+      });
+    },
+
+    // Borra la cita (y libera su turno). La ficha del paciente se conserva.
+    async deleteAppointment(appt) {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'appointments', appt.id));
+      if (isActive(appt) && appt.slotId) batch.delete(doc(db, 'slots', appt.slotId));
+      await batch.commit();
+    },
+
+    // --- Resultados para pacientes ------------------------------------------------------
+    // Estudio que un paciente abre con el enlace recibido por correo:
+    //   { study, files: [{ name, url }] }
+    // Desactivado (config/patient-access.js). Para activarlo se planea guardar, al
+    // enviar el correo, un documento shares/{token} con un token aleatorio largo,
+    // los datos del estudio y los enlaces de descarga; las reglas permitirían
+    // "get" (nunca "list") de ese documento, y el enlace caducaría (expiresAt).
+    async getSharedStudy() {
+      if (!patientAccess.enabled) throw new AccessDisabledError();
+      throw new Error('El acceso de pacientes está activado, pero falta implementar getSharedStudy en el backend.');
+    }
+  };
+}

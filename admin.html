@@ -38,8 +38,9 @@
           <p>Gestione la agenda, los estudios DICOM, los pacientes y los médicos.</p>
         </div>
         <div class="actions">
-          <button class="btn btn-outline btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo médico</button>
+          <button class="btn btn-outline btn-sm" type="button" data-open="appointment"><i data-icon="calendar"></i> Nueva cita</button>
           <button class="btn btn-outline btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo paciente</button>
+          <button class="btn btn-outline btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo médico</button>
           <a class="btn btn-primary btn-sm" href="#carga"><i data-icon="upload"></i> Cargar estudio</a>
         </div>
       </div>
@@ -49,9 +50,10 @@
         <div class="stat"><div class="k">Estudios</div><div class="v" id="stat-studies">–</div></div>
         <div class="stat"><div class="k">Pacientes</div><div class="v" id="stat-patients">–</div></div>
         <div class="stat"><div class="k">Médicos</div><div class="v" id="stat-doctors">–</div></div>
-        <div class="stat"><div class="k">Pacientes sin médico</div><div class="v" id="stat-unassigned" style="color:var(--warning)">–</div></div>
+        <div class="stat"><div class="k">Estudios sin médico</div><div class="v" id="stat-unassigned" style="color:var(--warning)">–</div></div>
       </div>
 
+      <!-- Agenda -->
       <section class="panel" id="agenda">
         <div class="panel-head">
           <div class="tabs" id="agenda-tabs" role="tablist">
@@ -60,8 +62,8 @@
             <button type="button" data-filter="past" aria-selected="false">Anteriores</button>
           </div>
           <div class="panel-actions">
-            <button class="btn btn-ghost btn-sm" type="button" id="copy-booking-link" title="Copiar el enlace para compartirlo con los pacientes"><i data-icon="link"></i> Copiar enlace</button>
-            <a class="btn btn-outline btn-sm" href="agendar.html" target="_blank" rel="noopener"><i data-icon="plus"></i> Nueva cita</a>
+            <button class="btn btn-ghost btn-sm" type="button" id="copy-booking-link" title="Copiar el enlace de la agenda en línea para compartirlo con los pacientes"><i data-icon="link"></i> Copiar enlace</button>
+            <button class="btn btn-primary btn-sm" type="button" data-open="appointment"><i data-icon="plus"></i> Nueva cita</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -72,11 +74,13 @@
         </div>
       </section>
 
+      <!-- Estudios -->
       <section class="panel" id="estudios">
         <div class="panel-head">
           <div class="tabs" id="study-tabs" role="tablist">
             <button type="button" data-filter="all" aria-selected="true">Todos</button>
             <button type="button" data-filter="new" aria-selected="false">No vistos</button>
+            <button type="button" data-filter="nodoctor" aria-selected="false">Sin médico</button>
             <button type="button" data-filter="cbct" aria-selected="false">CBCT</button>
           </div>
           <label class="search">
@@ -93,6 +97,7 @@
         </div>
       </section>
 
+      <!-- Carga de estudios -->
       <section class="panel" id="carga">
         <div class="panel-head"><h2>Cargar estudio</h2></div>
         <form class="panel-body" id="upload-form" novalidate>
@@ -102,16 +107,21 @@
             <div class="field">
               <label for="u-patient">Paciente</label>
               <select class="input select" id="u-patient" required></select>
-              <span class="hint">Los pacientes que agendaron en línea ya están en la lista. ¿No aparece? <a href="#" data-open="patient">Registrar paciente</a>. El estudio será visible para el médico del paciente.</span>
+              <span class="hint">Los pacientes que agendaron ya están en la lista. ¿No aparece? <a href="#" data-open="patient">Registrar paciente</a>.</span>
             </div>
+            <div class="field">
+              <label for="u-doctor">Médico que recibe el estudio</label>
+              <select class="input select" id="u-doctor"></select>
+              <span class="hint" id="u-doctor-hint">El estudio aparecerá en el portal de este médico.</span>
+            </div>
+          </div>
+          <div class="form-row three">
             <div class="field">
               <label for="u-modality">Modalidad</label>
               <select class="input select" id="u-modality">
                 <option>CBCT</option><option>Panorámica</option><option>Cefalometría</option><option>Periapical</option><option>Otro</option>
               </select>
             </div>
-          </div>
-          <div class="form-row">
             <div class="field"><label for="u-desc">Descripción</label><input class="input" id="u-desc" placeholder="Ej.: Cone Beam · maxilar completo"></div>
             <div class="field"><label for="u-date">Fecha del estudio</label><input class="input" id="u-date" type="date"></div>
           </div>
@@ -133,27 +143,102 @@
       </section>
 
       <div class="grid-2">
+        <!-- Pacientes -->
         <section class="panel" id="pacientes">
-          <div class="panel-head"><h2>Pacientes</h2><button class="btn btn-ghost btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo</button></div>
+          <div class="panel-head">
+            <h2>Pacientes</h2>
+            <div class="panel-actions">
+              <label class="search search-sm">
+                <span class="sr-only">Buscar pacientes</span>
+                <i data-icon="search"></i>
+                <input class="input" id="patient-search" type="search" placeholder="Buscar">
+              </label>
+              <button class="btn btn-ghost btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo</button>
+            </div>
+          </div>
           <div class="table-wrap">
             <table class="data">
-              <thead><tr><th>Paciente</th><th>Estudios</th><th>Médico tratante</th></tr></thead>
+              <thead><tr><th>Paciente</th><th>Contacto</th><th>Estudios</th><th></th></tr></thead>
               <tbody id="patients-body"></tbody>
             </table>
           </div>
         </section>
 
+        <!-- Médicos -->
         <section class="panel" id="medicos">
           <div class="panel-head"><h2>Médicos</h2><button class="btn btn-ghost btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo</button></div>
           <div class="table-wrap">
             <table class="data">
-              <thead><tr><th>Médico</th><th>Especialidad</th><th>Pacientes</th></tr></thead>
+              <thead><tr><th>Médico</th><th>Especialidad</th><th>Estudios</th></tr></thead>
               <tbody id="doctors-body"></tbody>
             </table>
           </div>
         </section>
       </div>
     </main>
+  </div>
+
+  <!-- Cita: nueva o editar -->
+  <div class="modal-backdrop" id="appointment-modal" role="dialog" aria-modal="true" aria-labelledby="appointment-modal-title">
+    <div class="modal md">
+      <div class="modal-head"><h3 id="appointment-modal-title">Nueva cita</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <form class="modal-body" id="appointment-form" novalidate>
+        <div class="form-error" role="alert"></div>
+        <div class="field">
+          <label for="ap-patient">Paciente</label>
+          <select class="input select" id="ap-patient" name="patientId"></select>
+          <span class="hint">Elija un paciente registrado o deje «Paciente nuevo» y escriba sus datos: se agregará a la lista.</span>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="ap-first">Nombre</label><input class="input" id="ap-first" name="firstName" required maxlength="60"></div>
+          <div class="field"><label for="ap-last">Apellido</label><input class="input" id="ap-last" name="lastName" required maxlength="60"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="ap-email">Correo <span class="opt">(opcional)</span></label><input class="input" id="ap-email" name="email" type="email" maxlength="120"></div>
+          <div class="field"><label for="ap-phone">Teléfono <span class="opt">(opcional)</span></label><input class="input" id="ap-phone" name="phone" type="tel" maxlength="30"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="ap-exam">Examen</label><select class="input select" id="ap-exam" name="exam"></select></div>
+          <div class="field"><label for="ap-referrer">Lo envía <span class="opt">(opcional)</span></label><input class="input" id="ap-referrer" name="referrer" maxlength="80" list="doctor-names"></div>
+        </div>
+        <div class="form-row three">
+          <div class="field"><label for="ap-date">Día</label><input class="input" id="ap-date" name="date" type="date" required></div>
+          <div class="field"><label for="ap-time">Hora</label><select class="input select" id="ap-time" name="time" required></select></div>
+          <div class="field"><label for="ap-status">Estado</label><select class="input select" id="ap-status" name="status"></select></div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost btn-danger" type="button" id="ap-delete" hidden><i data-icon="trash"></i> Borrar cita</button>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost" type="button" data-close>Cancelar</button>
+          <button class="btn btn-primary" type="submit">Guardar cita</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <datalist id="doctor-names"></datalist>
+
+  <!-- Paciente: nuevo o editar -->
+  <div class="modal-backdrop" id="patient-modal" role="dialog" aria-modal="true" aria-labelledby="patient-modal-title">
+    <div class="modal sm">
+      <div class="modal-head"><h3 id="patient-modal-title">Nuevo paciente</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <form class="modal-body" id="patient-form" novalidate>
+        <div class="form-error" role="alert"></div>
+        <div class="form-row">
+          <div class="field"><label for="np-first">Nombre</label><input class="input" id="np-first" name="firstName" required maxlength="60"></div>
+          <div class="field"><label for="np-last">Apellido</label><input class="input" id="np-last" name="lastName" required maxlength="60"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="np-code">N.º de expediente</label><input class="input" id="np-code" name="code" placeholder="P-1043" maxlength="30"></div>
+          <div class="field"><label for="np-age">Edad</label><input class="input" id="np-age" name="age" type="number" min="0" max="120"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="np-email">Correo <span class="opt">(opcional)</span></label><input class="input" id="np-email" name="email" type="email" maxlength="120"></div>
+          <div class="field"><label for="np-phone">Teléfono <span class="opt">(opcional)</span></label><input class="input" id="np-phone" name="phone" type="tel" maxlength="30"></div>
+        </div>
+        <p class="hint">El médico no se asigna al paciente sino a cada estudio, al cargarlo.</p>
+        <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Guardar paciente</button></div>
+      </form>
+    </div>
   </div>
 
   <!-- Nuevo médico -->
@@ -170,24 +255,6 @@
       </form>
     </div>
   </div>
-
-  <!-- Nuevo paciente -->
-  <div class="modal-backdrop" id="patient-modal" role="dialog" aria-modal="true" aria-labelledby="patient-modal-title">
-    <div class="modal sm">
-      <div class="modal-head"><h3 id="patient-modal-title">Nuevo paciente</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
-      <form class="modal-body" id="patient-form" novalidate>
-        <div class="form-error" role="alert"></div>
-        <div class="field"><label for="np-name">Nombre completo</label><input class="input" id="np-name" name="name" required></div>
-        <div class="form-row">
-          <div class="field"><label for="np-code">N.º de expediente</label><input class="input" id="np-code" name="code" placeholder="P-1043"></div>
-          <div class="field"><label for="np-age">Edad</label><input class="input" id="np-age" name="age" type="number" min="0" max="120"></div>
-        </div>
-        <div class="field"><label for="np-doctor">Médico tratante</label><select class="input select" id="np-doctor" name="doctorId"></select></div>
-        <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Guardar paciente</button></div>
-      </form>
-    </div>
-  </div>
-
 
   <!-- Archivos -->
   <div class="modal-backdrop" id="files-modal" role="dialog" aria-modal="true" aria-label="Archivos del estudio">

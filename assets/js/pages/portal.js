@@ -1,4 +1,5 @@
-// Portal del médico: solo los estudios y pacientes asignados a su cuenta.
+// Portal del médico: los estudios asignados a su cuenta y, a partir de ellos,
+// sus pacientes (los pacientes no tienen médico; cada estudio sí).
 
 import { backend } from '../services/backend.js';
 import { escapeHtml, setText, toast } from '../ui/dom.js';
@@ -45,11 +46,10 @@ export async function init() {
 
     const pBody = document.getElementById('patients-body');
     pBody.innerHTML = patients.length ? patients.map((p) => {
-      const ps = mine.filter((s) => s.patientId === p.id);
-      const last = ps.reduce((m, s) => (s.date > m ? s.date : m), '');
-      return '<tr><td><div class="cell-patient"><span class="avatar">' + initials(p.name) + '</span><div><strong>' + escapeHtml(p.name) + '</strong><small>' + escapeHtml(p.code) + (p.age ? ' · ' + p.age + ' años' : '') + '</small></div></div></td>' +
-        '<td>' + ps.length + '</td><td>' + fmtDate(last) + '</td></tr>';
-    }).join('') : '<tr><td colspan="3"><div class="empty">Aún no tiene pacientes asignados.</div></td></tr>';
+      const sub = [p.code, p.age ? p.age + ' años' : ''].filter(Boolean).map(escapeHtml).join(' · ');
+      return '<tr><td><div class="cell-patient"><span class="avatar">' + initials(p.name) + '</span><div><strong>' + escapeHtml(p.name) + '</strong><small>' + (sub || '&nbsp;') + '</small></div></div></td>' +
+        '<td>' + p.count + '</td><td>' + fmtDate(p.last) + '</td></tr>';
+    }).join('') : '<tr><td colspan="3"><div class="empty">Aún no tiene pacientes con estudios.</div></td></tr>';
   }
 
   search.addEventListener('input', render);
@@ -67,9 +67,23 @@ export async function init() {
   });
 
   try {
-    [mine, patients] = await Promise.all([backend.listStudies({ doctorId: user.uid }), backend.listPatients({ doctorId: user.uid })]);
+    mine = await backend.listStudies({ doctorId: user.uid });
+    patients = patientsOf(mine);
   } catch (e) {
     toast('No se pudieron cargar sus estudios: ' + e.message);
   }
   render();
+}
+
+// Pacientes del médico: los de sus estudios, con los datos copiados en cada estudio
+// (el más reciente manda), cuántos estudios tiene y la fecha del último.
+function patientsOf(studies) {
+  const map = new Map();
+  for (const s of studies) {
+    const p = map.get(s.patientId) || { id: s.patientId, count: 0, last: '' };
+    p.count++;
+    if (s.date >= p.last) Object.assign(p, { name: s.patientName, code: s.patientCode, age: s.patientAge, last: s.date });
+    map.set(s.patientId, p);
+  }
+  return [...map.values()].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
 }

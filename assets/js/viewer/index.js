@@ -1,6 +1,11 @@
 // Visor de estudios DentFrucer — punto de entrada.
 //
-//   openViewer(study, { backend, isDemo })
+//   openViewer(study, { backend, isDemo, viewOnly, fileUrls })
+//
+//   viewOnly  visor de solo lectura para pacientes: ver, navegar, contraste,
+//             guardar la imagen y descargar los archivos (sin mediciones)
+//   fileUrls  () => [{ name, url }]  de dónde salen los archivos; por defecto
+//             backend.fileUrls(study) (médicos y administración)
 //
 // 1. Abre la carcasa del visor (shell.js) con la pantalla de carga.
 // 2. Obtiene los archivos del estudio (Firebase) o genera datos de demostración.
@@ -27,9 +32,9 @@ import { addDocumentsTab, startDocumentMode } from './modes/document-mode.js';
 
 let current = null;
 
-export async function openViewer(study, { backend, isDemo }) {
+export async function openViewer(study, { backend, isDemo, viewOnly = false, fileUrls = () => backend.fileUrls(study) }) {
   if (current) current.close();
-  const shell = createShell({ study, onClose: () => { current = null; } });
+  const shell = createShell({ study, viewOnly, onClose: () => { current = null; } });
   current = shell;
   let closed = false;
   shell.on('close', () => { closed = true; });
@@ -37,7 +42,7 @@ export async function openViewer(study, { backend, isDemo }) {
   const files = { list: null };
   const download = async () => {
     try {
-      const list = files.list || (await backend.fileUrls(study));
+      const list = files.list || (await fileUrls());
       if (!list.length) { shell.toast('Descarga no disponible en modo demostración.'); return; }
       showDownloads(shell, list);
     } catch (e) { shell.toast('No se pudieron obtener los archivos.'); }
@@ -51,7 +56,7 @@ export async function openViewer(study, { backend, isDemo }) {
       data = await demoStudyData(study.modality, (p) => shell.setLoading({ progress: p }));
     } else {
       shell.setLoading({ title: 'Preparando estudio', detail: 'Obteniendo archivos…', progress: null });
-      files.list = await backend.fileUrls(study);
+      files.list = await fileUrls();
       if (!files.list.length) throw new Error('Este estudio no tiene archivos.');
       data = await loadStudy(files.list, (p) => {
         if (closed) return;
@@ -69,7 +74,7 @@ export async function openViewer(study, { backend, isDemo }) {
     }
 
     shell.hideLoading();
-    const ctx = { study, data, onDownload: download };
+    const ctx = { study, data, onDownload: download, viewOnly };
     if (data.volumes.length) startVolumeMode(shell, ctx);
     else if (data.images.length) startImageMode(shell, { ...ctx, profileId: pickProfile(study.modality, data) });
     else startDocumentMode(shell, ctx);
