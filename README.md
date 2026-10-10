@@ -42,6 +42,6 @@ assets/img/             logotipos
 | `--blue-500` | `#0e9ad3` | Azul del logotipo (DENT) |
 | `--blue-700` | `#09658c` | Botones y enlaces sobre blanco |
 | `--lime-500` | `#8dc63f` | Verde lima del isotipo (FRUCER) |
-| `--green-600` | `#2e8b4e` | Texto verde sobre blanco |
+| `--green-600` | `#287a45` | Texto verde sobre blanco |
 | `--teal-600` | `#07967f` | Superposición azul/verde |
 | `--ink` | `#1f2a33` | Texto principal |
