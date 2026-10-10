@@ -5,7 +5,7 @@ El portal usa tres servicios de Firebase:
 | Servicio | Para qué |
 | --- | --- |
 | **Authentication** (correo y contraseña) | Inicio de sesión de médicos y administradores |
-| **Cloud Firestore** | Médicos, pacientes y estudios (`users`, `patients`, `studies`) |
+| **Cloud Firestore** | Médicos, pacientes, estudios y agenda (`users`, `patients`, `studies`, `appointments`, `slots`) |
 | **Cloud Storage** | Archivos DICOM de cada estudio (`studies/{id}/…`) |
 | **Hosting** (opcional) | Publicar la página, gratis y con HTTPS |
 
@@ -38,7 +38,9 @@ Para entrar como administrador use **`/admin-login.html`**. Esa página no está
 
 ## 4. Publicar reglas de seguridad y la página
 
-Las reglas (`firestore.rules`, `storage.rules`) garantizan que cada médico solo lea **sus** pacientes, estudios y archivos, y que solo un administrador pueda subir, asignar o borrar.
+Las reglas (`firestore.rules`, `storage.rules`) garantizan que cada médico solo lea **sus** pacientes, estudios y archivos, y que solo un administrador pueda subir, asignar o borrar. También permiten que cualquier persona, sin cuenta, **cree** una cita desde `agendar.html`, pero no que lea, cambie o borre citas o pacientes.
+
+> **Importante:** la agenda necesita las reglas actuales. Si ya había publicado reglas antes, vuelva a publicar `firestore.rules`; con las anteriores, agendar falla con *"No se pudo agendar la cita"*.
 
 Con la [CLI de Firebase](https://firebase.google.com/docs/cli) (necesita Node.js):
 
@@ -85,21 +87,37 @@ Formatos que abre: DICOM sin compresión (Explicit/Implicit VR, Big Endian, Defl
 
 **Recomendación al cargar un CBCT:** suba la carpeta de la serie completa (botón *Seleccionar carpeta*) o un ZIP con ella. El visor reconstruye el volumen con todos los cortes.
 
+## La agenda
+
+- Cada cita guarda nombre, apellido, correo y teléfono (opcionales), médico que envía, examen, fecha y hora. Solo la ve un administrador.
+- Los turnos ocupados se guardan aparte en `slots/{fecha_hora}`, sin datos personales: es lo único que la página pública puede leer. Como el ID del documento es el turno, dos personas no pueden reservar la misma hora.
+- Al agendar se crea el paciente en `patients` con `source: 'agenda'` y sin médico. Si la misma persona vuelve a agendar con el mismo nombre y correo (o teléfono), se reutiliza su ficha.
+- Cancelar una cita en el panel borra su turno y deja la hora libre.
+- Horarios, duración de turnos, feriados y tipos de examen: `assets/js/config/agenda-config.js`. Si cambia los tipos de examen, actualice también la lista `exam in [...]` de `firestore.rules`.
+- **Recomendado:** active [App Check](https://firebase.google.com/docs/app-check) con reCAPTCHA para que solo su página pueda crear citas; sin él, un robot podría llenar la agenda con citas falsas. La página ya incluye un campo trampa básico contra robots simples.
+- El correo de confirmación automático no está incluido (necesita un servidor, por ejemplo la extensión *Trigger Email* de Firebase). El paciente recibe la confirmación en pantalla y un archivo de calendario.
+
 ## Uso diario
 
-1. **Nuevo médico**: crea su cuenta. Comparta el correo y la contraseña inicial por un canal seguro; el médico puede cambiarla con *¿Olvidó su contraseña?*.
-2. **Nuevo paciente**: se registra con su médico tratante.
-3. **Cargar estudio**: elija el paciente y suba los archivos o la carpeta. El estudio aparece de inmediato en el portal de su médico.
-4. Para cambiar el médico de un paciente, use el selector en la tabla *Pacientes*; sus estudios pasan al nuevo médico.
+1. **Agenda**: revise las citas del día. Asigne el médico tratante a los pacientes nuevos (la tabla *Pacientes* muestra el médico que indicaron al agendar).
+2. **Nuevo médico**: crea su cuenta. Comparta el correo y la contraseña inicial por un canal seguro; el médico puede cambiarla con *¿Olvidó su contraseña?*.
+3. **Nuevo paciente**: solo para quien no agendó en línea; se registra con su médico tratante.
+4. **Cargar estudio**: use *Cargar estudio* en la cita (o elija el paciente) y suba los archivos o la carpeta. El estudio aparece de inmediato en el portal de su médico y la cita queda como atendida.
+5. Para cambiar el médico de un paciente, use el selector en la tabla *Pacientes*; sus estudios pasan al nuevo médico.
 
 ## Modelo de datos
 
 ```
 users/{uid}      name, email, role ('admin' | 'doctor'), specialty
 patients/{id}    name, code, age, doctorId
+                 (desde la agenda además: firstName, lastName, email, phone, referrer, source: 'agenda')
 studies/{id}     code, patientId, patientName, patientCode, patientAge, doctorId,
                  modality, description, date (YYYY-MM-DD), files[{name, path, size}],
                  totalSize, status ('Nuevo' | 'Visto'), createdAt
+appointments/{id}  code, firstName, lastName, name, email, phone, referrer, exam,
+                 date (YYYY-MM-DD), time (HH:MM), slotId, patientId,
+                 status ('Pendiente' | 'Atendida' | 'No asistió' | 'Cancelada'), createdAt
+slots/{fecha_hora} date, time, appointmentId      (turnos ocupados, lectura pública)
 Storage          studies/{studyId}/{archivo}
 ```
 

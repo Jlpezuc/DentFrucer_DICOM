@@ -7,12 +7,18 @@
 // Modelo en Firestore:
 //  users/{uid}        { name, email, role: 'admin' | 'doctor', specialty }
 //  patients/{id}      { name, code, age, doctorId, createdAt }
+//                     + desde la agenda: { firstName, lastName, email, phone, referrer, source: 'agenda' }
 //  studies/{id}       { code, patientId, patientName, patientCode, patientAge, doctorId,
 //                       modality, description, date: 'YYYY-MM-DD', files: [{ name, path, size }],
 //                       totalSize, status: 'Nuevo' | 'Visto', createdAt }
+//  appointments/{id}  { code, firstName, lastName, name, email, phone, referrer, exam,
+//                       date: 'YYYY-MM-DD', time: 'HH:MM', slotId, patientId,
+//                       status: 'Pendiente' | 'Atendida' | 'No asistió' | 'Cancelada', studyId?, createdAt }
+//  slots/{fecha_hora} { date, time, appointmentId }   turnos ocupados, sin datos personales
 // Archivos en Storage: studies/{studyId}/{nombre de archivo}
 
 import { firebaseConfig } from '../config/firebase-config.js';
+import { agendaPatientId, appointmentCode, isoDate, normalizeBooking, slotId, SlotTakenError } from './agenda.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 
@@ -31,6 +37,7 @@ function demoForced() {
 export const isDemo = !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith('TU_') || demoForced();
 
 function byDateDesc(a, b) { return (b.date || '').localeCompare(a.date || ''); }
+function byDateTime(a, b) { return (a.date + a.time).localeCompare(b.date + b.time); }
 function byName(a, b) { return (a.name || '').localeCompare(b.name || '', 'es'); }
 function studyCode(id) { return 'EST-' + new Date().getFullYear() + '-' + id.slice(0, 5).toUpperCase(); }
 
@@ -46,6 +53,11 @@ function friendlyAuthError(err) {
   if (code.includes('configuration-not-found') || code.includes('operation-not-allowed')) return 'El inicio de sesión con correo no está activado en Firebase (Authentication → Método de acceso).';
   if (code.includes('network')) return 'Sin conexión. Revise su internet.';
   return (err && err.message) || 'Ocurrió un error inesperado.';
+}
+
+// Datos del paciente que se crea al agendar (sin médico: lo asigna la clínica).
+function agendaPatient(a) {
+  return { name: a.name, firstName: a.firstName, lastName: a.lastName, email: a.email, phone: a.phone, referrer: a.referrer, code: '', age: null, doctorId: null, source: 'agenda' };
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +79,7 @@ async function createFirebaseBackend() {
     getFirestore, collection, doc, getDoc, getDocs, query, where,
     setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch
   } = fsMod;
+  const isDenied = (e) => (e && e.code ? String(e.code) : '').includes('permission-denied');
   const { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } = stMod;
 
   const app = initializeApp(firebaseConfig);
@@ -190,7 +203,7 @@ async function createFirebaseBackend() {
       }
       await setDoc(r, {
         code: studyCode(r.id),
-        patientId: patient.id, patientName: patient.name, patientCode: patient.code, patientAge: patient.age || null,
+        patientId: patient.id, patientName: patient.name, patientCode: patient.code || '', patientAge: patient.age || null,
         doctorId: patient.doctorId,
         modality, description, date,
         files: uploaded, totalSize: uploaded.reduce((n, f) => n + f.size, 0),
@@ -208,6 +221,58 @@ async function createFirebaseBackend() {
 
     async fileUrls(study) {
       return Promise.all((study.files || []).map(async (f) => ({ name: f.name, url: await getDownloadURL(ref(storage, f.path)) })));
+    },
+
+    // --- Agenda ---------------------------------------------------------------
+    // Turnos ocupados entre dos fechas (públicos: no contienen datos personales).
+    async listBusySlots(from, to) {
+      const q = query(collection(db, 'slots'), where('date', '>=', from), where('date', '<=', to));
+      return new Set((await getDocs(q)).docs.map((d) => d.id));
+    },
+
+    // Reserva pública, sin cuenta: crea en un solo lote la cita, el turno ocupado
+    // y (si no existía) el paciente. Las reglas solo permiten crear, nunca leer.
+    async bookAppointment(input) {
+      const { data, error } = normalizeBooking(input);
+      if (error) throw new Error(error);
+      const apptRef = doc(collection(db, 'appointments'));
+      const sid = slotId(data.date, data.time);
+      const patientId = await agendaPatientId(data, apptRef.id);
+      const code = appointmentCode(apptRef.id);
+      const commit = (withPatient) => {
+        const batch = writeBatch(db);
+        if (withPatient) batch.set(doc(db, 'patients', patientId), { ...agendaPatient(data), createdAt: serverTimestamp() });
+        batch.set(apptRef, { ...data, code, slotId: sid, patientId, status: 'Pendiente', createdAt: serverTimestamp() });
+        batch.set(doc(db, 'slots', sid), { date: data.date, time: data.time, appointmentId: apptRef.id });
+        return batch.commit();
+      };
+      const slotTaken = async () => (await getDoc(doc(db, 'slots', sid))).exists();
+      try {
+        await commit(true);
+      } catch (e) {
+        if (!isDenied(e)) throw new Error(friendlyAuthError(e));
+        if (await slotTaken()) throw new SlotTakenError();
+        // El paciente ya existía (agendó antes con los mismos datos): solo la cita.
+        try { await commit(false); } catch (e2) {
+          if (isDenied(e2) && await slotTaken()) throw new SlotTakenError();
+          throw new Error('No se pudo agendar la cita. Intente de nuevo o llámenos.');
+        }
+      }
+      return { id: apptRef.id, code, ...data };
+    },
+
+    async listAppointments() {
+      return (await list(collection(db, 'appointments'))).sort(byDateTime);
+    },
+
+    updateAppointment: (id, fields) => updateDoc(doc(db, 'appointments', id), fields),
+
+    // Cancelar libera el turno para otra persona.
+    async cancelAppointment(appt) {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'appointments', appt.id), { status: 'Cancelada' });
+      if (appt.slotId) batch.delete(doc(db, 'slots', appt.slotId));
+      await batch.commit();
     }
   };
 }
@@ -254,6 +319,40 @@ function createDemoBackend() {
     mk('EST-2026-0385', 'p6', 'Panorámica', 'Ortopantomografía digital', '2026-09-29', 17, 1, 'Visto'),
     mk('EST-2026-0380', 'p7', 'CBCT', 'Cone Beam · seno maxilar', '2026-09-27', 402, 500, 'Visto')
   ];
+  // Agenda de demostración: algunas citas de ejemplo para hoy y mañana. Lo que se
+  // agenda en agendar.html se guarda en la sesión del navegador para verlo luego
+  // en el panel de administración (solo en modo demostración).
+  const AGENDA_KEY = 'dentfrucer.demo.agenda';
+  const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return isoDate(d); };
+  const demoAgendaPatient = (id, firstName, lastName, email, phone, referrer) =>
+    ({ id, ...agendaPatient({ firstName, lastName, name: firstName + ' ' + lastName, email, phone, referrer }) });
+  let agenda;
+  try { agenda = JSON.parse(sessionStorage.getItem(AGENDA_KEY)); } catch (e) { agenda = null; }
+  if (!agenda) {
+    const pa = [
+      demoAgendaPatient('ag_demo1', 'Andrés', 'Molina', 'amolina@correo.com', '', 'Dra. Laura Méndez'),
+      demoAgendaPatient('ag_demo2', 'Camila', 'Rojas', '', '300 555 0192', 'Dr. Carlos Rivas')
+    ];
+    const ap = (id, p, exam, date, time) => ({
+      id, code: appointmentCode(id), firstName: p.firstName || p.name.split(' ')[0], lastName: p.lastName || p.name.split(' ').slice(1).join(' '),
+      name: p.name, email: p.email || '', phone: p.phone || '', referrer: p.referrer || '', exam, date, time,
+      slotId: slotId(date, time), patientId: p.id, status: 'Pendiente'
+    });
+    agenda = {
+      patients: pa,
+      appointments: [
+        ap('demoa1', pa[0], 'Panorámica', day(0), '10:20'),
+        ap('demoa2', pa[1], 'CBCT', day(0), '11:00'),
+        ap('demoa3', patients[1], 'Cefalometría', day(1), '09:00')
+      ]
+    };
+  }
+  patients.push(...agenda.patients);
+  const appointments = agenda.appointments;
+  const saveAgenda = () => {
+    try { sessionStorage.setItem(AGENDA_KEY, JSON.stringify({ patients: patients.filter((p) => p.source === 'agenda'), appointments })); } catch (e) { /* modo privado */ }
+  };
+
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const read = () => { try { return JSON.parse(sessionStorage.getItem(KEY)); } catch (e) { return null; } };
   const write = (v) => { try { v ? sessionStorage.setItem(KEY, JSON.stringify(v)) : sessionStorage.removeItem(KEY); } catch (e) { /* modo privado */ } };
@@ -288,6 +387,7 @@ function createDemoBackend() {
     async setPatientDoctor(patientId, doctorId) {
       patients.filter((p) => p.id === patientId).forEach((p) => { p.doctorId = doctorId; });
       studies.filter((s) => s.patientId === patientId).forEach((s) => { s.doctorId = doctorId; });
+      saveAgenda();
     },
     async uploadStudy({ patient, modality, description, date, files, onProgress }) {
       for (let i = 1; i <= 10; i++) { await wait(80); if (onProgress) onProgress(i / 10); }
@@ -304,7 +404,28 @@ function createDemoBackend() {
       if (i >= 0) studies.splice(i, 1);
     },
     async markSeen(studyId) { const s = studies.find((x) => x.id === studyId); if (s) s.status = 'Visto'; },
-    async fileUrls() { return []; }
+    async fileUrls() { return []; },
+
+    async listBusySlots(from, to) {
+      return new Set(appointments.filter((a) => a.status !== 'Cancelada' && a.date >= from && a.date <= to).map((a) => a.slotId));
+    },
+    async bookAppointment(input) {
+      await wait(400);
+      const { data, error } = normalizeBooking(input);
+      if (error) throw new Error(error);
+      const sid = slotId(data.date, data.time);
+      if (appointments.some((a) => a.slotId === sid && a.status !== 'Cancelada')) throw new SlotTakenError();
+      const id = 'd' + Math.random().toString(36).slice(2, 12);
+      const patientId = await agendaPatientId(data, id);
+      if (!patients.some((p) => p.id === patientId)) patients.push({ id: patientId, ...agendaPatient(data) });
+      const appt = { id, ...data, code: appointmentCode(id), slotId: sid, patientId, status: 'Pendiente' };
+      appointments.push(appt);
+      saveAgenda();
+      return appt;
+    },
+    async listAppointments() { return appointments.map((a) => ({ ...a })).sort(byDateTime); },
+    async updateAppointment(id, fields) { Object.assign(appointments.find((a) => a.id === id) || {}, fields); saveAgenda(); },
+    async cancelAppointment(appt) { await this.updateAppointment(appt.id, { status: 'Cancelada' }); }
   };
 }
 

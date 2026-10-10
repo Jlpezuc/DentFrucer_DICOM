@@ -1,5 +1,6 @@
-// Panel de administración: estudios, carga de archivos, pacientes y médicos.
+// Panel de administración: agenda, estudios, carga de archivos, pacientes y médicos.
 
+import { examLabel } from '../services/agenda.js';
 import { backend } from '../services/backend.js';
 import { busy, escapeHtml, modal, setText, showError, toast } from '../ui/dom.js';
 import { fmtDate, fmtSize, initials, today } from '../ui/format.js';
@@ -13,13 +14,16 @@ export async function init() {
   const doctorModal = modal('doctor-modal');
   const patientModal = modal('patient-modal');
 
-  const state = { studies: [], patients: [], doctors: [], filter: 'all' };
+  const state = { studies: [], patients: [], doctors: [], appointments: [], filter: 'all', agendaFilter: 'today', uploadAppt: null };
   const doctorName = (id) => (state.doctors.find((d) => d.id === id) || {}).name;
+  const patientById = (id) => state.patients.find((p) => p.id === id);
 
   async function load() {
     try {
-      const [studies, patients, doctors] = await Promise.all([backend.listStudies(), backend.listPatients(), backend.listDoctors()]);
-      Object.assign(state, { studies, patients, doctors });
+      const [studies, patients, doctors, appointments] = await Promise.all([
+        backend.listStudies(), backend.listPatients(), backend.listDoctors(), backend.listAppointments()
+      ]);
+      Object.assign(state, { studies, patients, doctors, appointments });
     } catch (e) {
       toast('No se pudieron cargar los datos: ' + e.message);
     }
@@ -27,10 +31,12 @@ export async function init() {
   }
 
   function renderAll() {
+    setText('stat-today', state.appointments.filter((a) => a.date === today() && a.status !== 'Cancelada').length);
     setText('stat-studies', state.studies.length);
     setText('stat-patients', state.patients.length);
     setText('stat-doctors', state.doctors.length);
     setText('stat-unassigned', state.patients.filter((p) => !p.doctorId).length);
+    renderAgenda();
     renderStudies();
     renderPatients();
     renderDoctors();
@@ -84,6 +90,69 @@ export async function init() {
     }
   });
 
+  // Agenda
+  const aBody = document.getElementById('agenda-body');
+  const contactOf = (x) => [x.email, x.phone].filter(Boolean).map(escapeHtml).join(' · ');
+  function renderAgenda() {
+    const t = today();
+    const f = state.agendaFilter;
+    const rows = state.appointments
+      .filter((a) => (f === 'today' ? a.date === t : f === 'next' ? a.date > t : a.date < t))
+      .filter((a) => f !== 'next' || a.status !== 'Cancelada');
+    if (f === 'past') rows.reverse();
+    if (!rows.length) {
+      const msg = { today: 'No hay citas para hoy.', next: 'No hay citas próximas.', past: 'No hay citas anteriores.' }[f];
+      aBody.innerHTML = '<tr><td colspan="6"><div class="empty">' + msg + ' Los pacientes agendan en <a href="agendar.html" target="_blank" rel="noopener">agendar.html</a>.</div></td></tr>';
+      return;
+    }
+    aBody.innerHTML = rows.map((a) => {
+      const closed = a.status === 'Cancelada';
+      const when = f === 'today' ? escapeHtml(a.time) : escapeHtml(a.time) + '<small>' + fmtDate(a.date) + '</small>';
+      const statusCell = closed
+        ? '<span class="badge gray">Cancelada</span>'
+        : '<label class="sr-only" for="as-' + escapeHtml(a.id) + '">Estado de la cita de ' + escapeHtml(a.name) + '</label>' +
+          '<select class="input select input-sm" id="as-' + escapeHtml(a.id) + '" data-appt-status="' + escapeHtml(a.id) + '">' +
+          ['Pendiente', 'Atendida', 'No asistió', 'Cancelada'].map((st) => '<option' + (st === a.status ? ' selected' : '') + '>' + st + '</option>').join('') + '</select>';
+      return '<tr class="appt-row' + (closed ? ' done' : '') + '">' +
+        '<td><span class="appt-time">' + when + '</span></td>' +
+        '<td><div class="cell-patient"><span class="avatar">' + initials(a.name) + '</span><div><strong>' + escapeHtml(a.name) + '</strong><small>' + (contactOf(a) || 'Sin contacto') + ' · ' + escapeHtml(a.code || '') + '</small></div></div></td>' +
+        '<td><span class="badge blue" title="' + escapeHtml(examLabel(a.exam)) + '">' + escapeHtml(a.exam) + '</span></td>' +
+        '<td>' + (a.referrer ? escapeHtml(a.referrer) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + statusCell + '</td>' +
+        '<td><div class="row-actions">' + (closed ? '' : '<button class="btn btn-outline btn-sm" type="button" data-appt-upload="' + escapeHtml(a.id) + '" title="Cargar el estudio de esta cita">' + icon('upload') + ' Cargar estudio</button>') + '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+  document.querySelectorAll('#agenda-tabs button').forEach((b) => b.addEventListener('click', () => {
+    state.agendaFilter = b.dataset.filter;
+    document.querySelectorAll('#agenda-tabs button').forEach((x) => x.setAttribute('aria-selected', x === b ? 'true' : 'false'));
+    renderAgenda();
+  }));
+  aBody.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-appt-upload]');
+    if (b) startUploadFor(state.appointments.find((a) => a.id === b.dataset.apptUpload));
+  });
+  aBody.addEventListener('change', async (e) => {
+    const sel = e.target.closest('[data-appt-status]');
+    if (!sel) return;
+    const appt = state.appointments.find((a) => a.id === sel.dataset.apptStatus);
+    if (sel.value === 'Cancelada' && !confirm('¿Cancelar la cita de ' + appt.name + ' (' + fmtDate(appt.date) + ' ' + appt.time + ')? El horario quedará libre para otra persona.')) {
+      sel.value = appt.status;
+      return;
+    }
+    sel.disabled = true;
+    try {
+      if (sel.value === 'Cancelada') await backend.cancelAppointment(appt);
+      else await backend.updateAppointment(appt.id, { status: sel.value });
+      toast(sel.value === 'Cancelada' ? 'Cita cancelada. El horario quedó libre.' : 'Cita marcada como «' + sel.value + '».');
+      await load();
+    } catch (ex) { toast('No se pudo actualizar la cita: ' + ex.message); sel.value = appt.status; sel.disabled = false; }
+  });
+  document.getElementById('copy-booking-link').addEventListener('click', async () => {
+    const url = new URL('agendar.html', location.href).href;
+    try { await navigator.clipboard.writeText(url); toast('Enlace copiado: ' + url); } catch (ex) { toast(url); }
+  });
+
   // Pacientes
   const pBody = document.getElementById('patients-body');
   function doctorOptions(selected, emptyLabel) {
@@ -94,9 +163,13 @@ export async function init() {
     if (!state.patients.length) { pBody.innerHTML = '<tr><td colspan="3"><div class="empty">Aún no hay pacientes.</div></td></tr>'; return; }
     pBody.innerHTML = state.patients.map((p) => {
       const n = state.studies.filter((s) => s.patientId === p.id).length;
-      return '<tr><td><div class="cell-patient"><span class="avatar">' + initials(p.name) + '</span><div><strong>' + escapeHtml(p.name) + '</strong><small>' + escapeHtml(p.code) + (p.age ? ' · ' + p.age + ' años' : '') + '</small></div></div></td>' +
+      const sub = [p.code, p.age ? p.age + ' años' : '', p.source === 'agenda' ? contactOf(p) : ''].filter(Boolean).join(' · ');
+      const tag = p.source === 'agenda' ? ' <span class="badge green" title="Se registró al agendar su cita">Agenda</span>' : '';
+      // Médico que el paciente indicó al agendar: ayuda a asignarlo.
+      const hint = !p.doctorId && p.referrer ? '<span class="referrer-hint">Indicó: ' + escapeHtml(p.referrer) + '</span>' : '';
+      return '<tr><td><div class="cell-patient"><span class="avatar">' + initials(p.name) + '</span><div><strong>' + escapeHtml(p.name) + '</strong>' + tag + '<small>' + (sub || '&nbsp;') + '</small></div></div></td>' +
         '<td>' + n + '</td>' +
-        '<td><label class="sr-only" for="pd-' + escapeHtml(p.id) + '">Médico de ' + escapeHtml(p.name) + '</label><select class="input select input-sm" id="pd-' + escapeHtml(p.id) + '" data-patient="' + escapeHtml(p.id) + '">' + doctorOptions(p.doctorId) + '</select></td></tr>';
+        '<td><label class="sr-only" for="pd-' + escapeHtml(p.id) + '">Médico de ' + escapeHtml(p.name) + '</label><select class="input select input-sm" id="pd-' + escapeHtml(p.id) + '" data-patient="' + escapeHtml(p.id) + '">' + doctorOptions(p.doctorId) + '</select>' + hint + '</td></tr>';
     }).join('');
   }
   pBody.addEventListener('change', async (e) => {
@@ -124,8 +197,16 @@ export async function init() {
   function renderSelects() {
     const up = document.getElementById('u-patient');
     const cur = up.value;
-    up.innerHTML = '<option value="">Seleccione un paciente…</option>' + state.patients.map((p) =>
-      '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + ' · ' + escapeHtml(p.code) + (p.doctorId ? ' — ' + escapeHtml(doctorName(p.doctorId) || '') : ' — sin médico') + '</option>').join('');
+    const option = (p, extra) => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + (p.code ? ' · ' + escapeHtml(p.code) : '') + (extra || '') +
+      (p.doctorId ? ' — ' + escapeHtml(doctorName(p.doctorId) || '') : ' — sin médico') + '</option>';
+    // Arriba, los pacientes con cita hoy: son los que se van a cargar.
+    const todays = state.appointments.filter((a) => a.date === today() && a.status !== 'Cancelada' && patientById(a.patientId));
+    const seen = new Set();
+    const todayOpts = todays.filter((a) => !seen.has(a.patientId) && seen.add(a.patientId))
+      .map((a) => option(patientById(a.patientId), ' (' + a.time + ' · ' + a.exam + ')')).join('');
+    up.innerHTML = '<option value="">Seleccione un paciente…</option>' +
+      (todayOpts ? '<optgroup label="Citas de hoy">' + todayOpts + '</optgroup><optgroup label="Todos los pacientes">' : '') +
+      state.patients.map((p) => option(p)).join('') + (todayOpts ? '</optgroup>' : '');
     up.value = cur;
     document.getElementById('np-doctor').innerHTML = doctorOptions('', 'Asignar más tarde');
   }
@@ -175,6 +256,32 @@ export async function init() {
 
   // Carga de estudios
   const uForm = document.getElementById('upload-form');
+  const uPatient = document.getElementById('u-patient');
+  const apptBox = document.getElementById('upload-appt');
+
+  // Cita a la que corresponde el estudio que se va a cargar: al subirlo se marca como atendida.
+  function setUploadAppt(appt) {
+    state.uploadAppt = appt || null;
+    apptBox.hidden = !appt;
+    if (!appt) return;
+    apptBox.innerHTML = icon('calendar') + '<span>Cita del ' + fmtDate(appt.date) + ' a las ' + escapeHtml(appt.time) + ' · ' + escapeHtml(examLabel(appt.exam)) +
+      '. Al subir el estudio se marcará como <strong>atendida</strong>.</span>';
+    document.getElementById('u-modality').value = appt.exam;
+    document.getElementById('u-date').value = appt.date <= today() ? appt.date : today();
+  }
+  // Cita pendiente más reciente del paciente (hoy o antes).
+  const pendingApptOf = (patientId) => state.appointments
+    .filter((a) => a.patientId === patientId && a.status === 'Pendiente' && a.date <= today())
+    .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time))[0];
+  uPatient.addEventListener('change', () => setUploadAppt(pendingApptOf(uPatient.value)));
+
+  function startUploadFor(appt) {
+    if (!appt) return;
+    if (!patientById(appt.patientId)) { toast('No se encontró el paciente de esta cita.'); return; }
+    uPatient.value = appt.patientId;
+    setUploadAppt(appt);
+    document.getElementById('carga').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   const dz = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
   const folderInput = document.getElementById('folder-input');
@@ -215,9 +322,14 @@ export async function init() {
         files,
         onProgress: (p) => { bar.style.width = Math.round(p * 100) + '%'; }
       });
-      toast('Estudio cargado' + (patient.doctorId ? ' y visible para ' + doctorName(patient.doctorId) : '') + '.');
+      const appt = state.uploadAppt && state.uploadAppt.patientId === patient.id ? state.uploadAppt : null;
+      if (appt) {
+        try { await backend.updateAppointment(appt.id, { status: 'Atendida' }); } catch (ex) { toast('El estudio se cargó, pero no se pudo marcar la cita como atendida.'); }
+      }
+      toast('Estudio cargado' + (patient.doctorId ? ' y visible para ' + doctorName(patient.doctorId) : '. Asigne un médico al paciente para que pueda verlo') + '.');
       uForm.reset();
       document.getElementById('u-date').value = today();
+      setUploadAppt(null);
       setFiles([]);
       await load();
     } catch (ex) { showError(err, 'No se pudo cargar: ' + ex.message); }

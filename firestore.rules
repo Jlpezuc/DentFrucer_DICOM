@@ -4,6 +4,9 @@ rules_version = '2';
 // - Administradores (users/{uid}.role == 'admin'): acceso total.
 // - Médicos: solo leen sus propios pacientes y estudios (doctorId == su uid)
 //   y solo pueden marcar un estudio como 'Visto'.
+// - Público (agendar.html, sin cuenta): puede CREAR una cita, su turno y el
+//   paciente, con campos validados. No puede leer, cambiar ni borrar nada; solo
+//   ve qué turnos están ocupados (colección "slots", sin datos personales).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -17,6 +20,28 @@ service cloud.firestore {
       return signedIn() && data.doctorId == request.auth.uid;
     }
 
+    // --- Validación de lo que llega desde la agenda pública ---------------------
+    function text(v, min, max) {
+      return v is string && v.size() >= min && v.size() <= max;
+    }
+    function validEmail(v) {
+      return v is string && v.size() <= 120 && (v == '' || v.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'));
+    }
+    function validPerson(d) {
+      return text(d.firstName, 1, 60) && text(d.lastName, 1, 60) && text(d.name, 3, 121)
+        && validEmail(d.email) && text(d.phone, 0, 30) && text(d.referrer, 0, 80);
+    }
+    function validSlotKey(d) {
+      return d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.time is string && d.time.matches('^[0-9]{2}:[0-9]{2}$');
+    }
+    function slotPath(id) {
+      return /databases/$(database)/documents/slots/$(id);
+    }
+    function appointmentPath(id) {
+      return /databases/$(database)/documents/appointments/$(id);
+    }
+
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow write: if isAdmin();
@@ -24,7 +49,17 @@ service cloud.firestore {
 
     match /patients/{patientId} {
       allow read: if isAdmin() || ownsRecord(resource.data);
-      allow write: if isAdmin();
+      allow update, delete: if isAdmin();
+      // Paciente creado al agendar: sin médico ni expediente (los asigna la clínica).
+      allow create: if isAdmin() || (
+        request.resource.data.keys().hasOnly(['name', 'firstName', 'lastName', 'email', 'phone', 'referrer', 'code', 'age', 'doctorId', 'source', 'createdAt'])
+        && validPerson(request.resource.data)
+        && request.resource.data.code == ''
+        && request.resource.data.age == null
+        && request.resource.data.doctorId == null
+        && request.resource.data.source == 'agenda'
+        && request.resource.data.createdAt == request.time
+      );
     }
 
     match /studies/{studyId} {
@@ -34,6 +69,39 @@ service cloud.firestore {
         || (ownsRecord(resource.data)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
             && request.resource.data.status == 'Visto');
+    }
+
+    // Citas: datos personales, solo los ve la clínica.
+    match /appointments/{appointmentId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isAdmin() || (
+        request.resource.data.keys().hasOnly(['code', 'firstName', 'lastName', 'name', 'email', 'phone', 'referrer', 'exam', 'date', 'time', 'slotId', 'patientId', 'status', 'createdAt'])
+        && validPerson(request.resource.data)
+        && validSlotKey(request.resource.data)
+        && text(request.resource.data.code, 1, 12)
+        && request.resource.data.exam in ['CBCT', 'Panorámica', 'Cefalometría', 'Periapical', 'Otro']
+        && request.resource.data.status == 'Pendiente'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.slotId == request.resource.data.date + '_' + request.resource.data.time.replace(':', '')
+        && text(request.resource.data.patientId, 1, 64)
+        // El turno se ocupa en la misma operación y apunta a esta cita.
+        && getAfter(slotPath(request.resource.data.slotId)).data.appointmentId == appointmentId
+        && existsAfter(/databases/$(database)/documents/patients/$(request.resource.data.patientId))
+      );
+    }
+
+    // Turnos ocupados: el ID es "fecha_hora", así que un turno no se puede
+    // reservar dos veces (crear sobre uno existente no está permitido).
+    match /slots/{slotKey} {
+      allow read: if true;
+      allow delete: if isAdmin();
+      allow create: if isAdmin() || (
+        request.resource.data.keys().hasOnly(['date', 'time', 'appointmentId'])
+        && validSlotKey(request.resource.data)
+        && slotKey == request.resource.data.date + '_' + request.resource.data.time.replace(':', '')
+        && request.resource.data.appointmentId is string
+        && getAfter(appointmentPath(request.resource.data.appointmentId)).data.slotId == slotKey
+      );
     }
   }
 }
