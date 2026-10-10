@@ -1,8 +1,13 @@
-// Modo tomografía (CBCT): tres planos enlazados por una cruz de navegación
-// (axial, coronal, sagital) y un cuarto panel con tres vistas:
-//   3D           superficie ósea, piel o proyección tipo radiografía
-//   Panorámica   reconstruida a partir de una curva trazada sobre el arco dental
-//   Transversal  cortes perpendiculares a esa curva (planificación de implantes)
+// Modo tomografía (CBCT). Dos distribuciones:
+//
+//   MPR        tres planos enlazados por una cruz de navegación (axial, coronal,
+//              sagital) y un cuarto panel con tres vistas:
+//                3D           superficie ósea, piel o proyección tipo radiografía
+//                Panorámica   reconstruida a partir de una curva trazada sobre el arco
+//                Transversal  un corte perpendicular a esa curva
+//   Implantes  la distribución clásica de planificación: axial con la curva,
+//              panorámica reconstruida y una tira de cortes transversales
+//              consecutivos (separación elegible) alrededor de la zona elegida.
 
 import { escapeHtml } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
@@ -19,6 +24,11 @@ const PLANE = {
   coronal: { label: 'Coronal', color: '#a6d45f', orientation: { top: 'S', bottom: 'I', left: 'R', right: 'L' } },
   sagital: { label: 'Sagital', color: '#e9b04f', orientation: { top: 'S', bottom: 'I', left: 'A', right: 'P' } }
 };
+const CROSS_ORIENTATION = { top: 'S', bottom: 'I', left: 'Vest', right: 'Ling' };
+const CROSS_COLOR = '#c9a0f0';
+const STRIP_COUNT = 5;                 // cortes transversales en la tira (impar: el central es el elegido)
+const STRIP_GAPS = [0.5, 1, 2, 3];     // separación entre cortes de la tira (mm)
+const isWide = () => window.matchMedia('(min-width: 821px)').matches;
 
 export function startVolumeMode(shell, { study, data, onDownload }) {
   const vol = data.volumes[0];
@@ -36,11 +46,14 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
   let showCross = true;
   let maximized = null;
   let focus3D = false;
+  let layout = 'mpr';          // 'mpr' | 'implant'
+  let quadBeforeImplant = '3d';
 
   // --- Paneles MPR -----------------------------------------------------------------------
   const mpr = {};
   for (const axis of ['axial', 'coronal', 'sagital']) {
     const el = document.createElement('div');
+    el.dataset.plane = axis;
     grid.appendChild(el);
     const p = PLANE[axis];
     const vp = new Viewport(el, { name: axis, label: p.label, accent: p.color, orientation: p.orientation });
@@ -94,15 +107,51 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
   const panoVp = new Viewport(quad.querySelector('.dv-q[data-q="pano"]'), { name: 'pano' });
   panoVp.frameLabel = () => 'Panorámica';
   panoVp.onCrosshair = (img) => setCrossIndex(img.x, img.y);
-  panoVp.decorators.push(drawPanoMarker);
+  panoVp.decorators.push(drawPanoMarker, drawAxialLevel);
   panoVp.onDoubleClick = () => toggleMaximize(quad);
   ws.addViewport(panoVp);
 
-  const crossVp = new Viewport(quad.querySelector('.dv-q[data-q="cross"]'), { name: 'cross', orientation: { top: 'S', bottom: 'I', left: 'Vest', right: 'Ling' } });
-  crossVp.frameLabel = () => `Transversal ${(crossIndex * (curve.path ? curve.path.step : 0)).toFixed(1)} mm`;
+  const crossVp = new Viewport(quad.querySelector('.dv-q[data-q="cross"]'), { name: 'cross', orientation: CROSS_ORIENTATION });
+  crossVp.frameLabel = () => `Transversal ${mmAt(crossIndex)}`;
   crossVp.onScroll = (d) => setCrossIndex(crossIndex + d * crossStep());
+  crossVp.onCrosshair = (img) => setCrossIndex(crossIndex, img.y);
   crossVp.onDoubleClick = () => toggleMaximize(quad);
+  crossVp.decorators.push(drawAxialLevel);
   ws.addViewport(crossVp);
+
+  // --- Tira de cortes transversales (distribución Implantes) ---------------------------
+  const strip = document.createElement('div');
+  strip.className = 'dv-strip';
+  strip.innerHTML = `<div class="dv-strip-empty">${icon('layers')}<p>Los cortes transversales aparecerán aquí al trazar la curva panorámica.</p></div>`;
+  grid.appendChild(strip);
+  const stripVps = [];
+  // Zoom y desplazamiento iguales en todos los cortes de la tira.
+  const syncStripView = (src) => {
+    for (const v of stripVps) if (v !== src && v.frame) { v.view = { ...src.view }; v.render(); }
+  };
+  for (let k = 0; k < STRIP_COUNT; k++) {
+    const el = document.createElement('div');
+    strip.appendChild(el);
+    const vp = new Viewport(el, { name: 'strip' + k, orientation: CROSS_ORIENTATION });
+    vp.stripOffset = k - (STRIP_COUNT >> 1);
+    vp.crossIdx = null;
+    vp.showWindowInfo = false;
+    vp.frameLabel = () => (vp.crossIdx === null ? '' : `Transversal ${mmAt(vp.crossIdx)}`);
+    vp.onScroll = (d) => setCrossIndex(crossIndex + d * gapStep());
+    // Clic con Navegar: un corte lateral pasa a ser el central; arrastrar mueve el nivel axial.
+    vp.onCrosshair = (img, first) => {
+      if (vp.crossIdx === null) return;
+      setCrossIndex(first ? vp.crossIdx : crossIndex, img.y);
+    };
+    vp.onDoubleClick = () => toggleMaximize(strip);
+    vp.decorators.push(drawAxialLevel);
+    for (const fn of ['zoomAt', 'panBy', 'flip', 'rotate']) {
+      const orig = vp[fn].bind(vp);
+      vp[fn] = (...args) => { orig(...args); syncStripView(vp); };
+    }
+    ws.addViewport(vp);
+    stripVps.push(vp);
+  }
 
   quad.querySelector('.dv-quad-tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-q]');
@@ -111,6 +160,7 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
   quad.querySelector('[data-start-curve]').addEventListener('click', () => { ws.setTool('curve'); ws.setActive(mpr.axial); });
 
   function setQuadView(q) {
+    if (layout === 'implant') q = 'pano';
     quadView = q;
     quad.querySelectorAll('.dv-quad-tabs [data-q]').forEach((b) => b.setAttribute('aria-selected', b.dataset.q === q ? 'true' : 'false'));
     const needsCurve = (q === 'pano' || q === 'cross') && !curve.pano;
@@ -145,6 +195,8 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
       quadControls.innerHTML = `
         <label class="dv-mini-range" title="Grosor de la capa reconstruida">Grosor <input type="range" min="2" max="30" step="1" value="${curve.thickness}" data-thick><output>${curve.thickness} mm</output></label>
         <div class="dv-seg">${[['avg', 'Radiografía'], ['mip', 'MIP']].map(([m, l]) => `<button type="button" class="dv-chipbtn ${curve.mode === m ? 'active' : ''}" data-pmode="${m}">${l}</button>`).join('')}</div>
+        ${layout === 'implant' ? `<label class="dv-select dv-select-sm" title="Separación entre los cortes transversales de la tira">Cortes cada
+          <select data-gap>${STRIP_GAPS.map((g) => `<option value="${g}" ${g === curve.gap ? 'selected' : ''}>${String(g).replace('.', ',')} mm</option>`).join('')}</select></label>` : ''}
         <button type="button" class="dv-chipbtn" data-newcurve>${icon('curve')} Nueva curva</button>`;
     } else if (quadView === 'cross' && curve.pano) {
       quadControls.innerHTML = `
@@ -162,6 +214,13 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
     if (t.dataset.pmode) { curve.mode = t.dataset.pmode; rebuildPano(); renderQuadControls(); }
     if (t.dataset.newcurve) { ws.setTool('curve'); ws.setActive(mpr.axial); }
     if (t.dataset.cstep) setCrossIndex(crossIndex + Number(t.dataset.cstep) * crossStep());
+  });
+  quadControls.addEventListener('change', (e) => {
+    if (e.target.dataset.gap === undefined) return;
+    curve.gap = Number(e.target.value);
+    updateStrip();
+    panoVp.render();
+    mpr.axial.render();
   });
   quadControls.addEventListener('input', (e) => {
     if (e.target.dataset.thr !== undefined) view3d.setThreshold(Number(e.target.value));
@@ -204,6 +263,7 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
     else pos.x = i;
     updatePlane(axis);
     Object.values(mpr).forEach((v) => v.render());
+    if (axis === 'axial') renderPlanning();
     if (ws.active === mpr[axis]) syncSlider();
   }
 
@@ -217,7 +277,16 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
       if (axis !== from && next[axis] !== index[axis]) { index[axis] = next[axis]; updatePlane(axis); }
     }
     Object.values(mpr).forEach((v) => v.render());
+    renderPlanning();
     syncSlider();
+  }
+
+  // Paneles que muestran el nivel del corte axial (panorámica y transversales).
+  function renderPlanning() {
+    if (!curve.pano) return;
+    panoVp.render();
+    crossVp.render();
+    stripVps.forEach((v) => v.render());
   }
 
   // Dibuja en cada plano las líneas de los otros dos planos.
@@ -247,9 +316,13 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
   }
 
   // --- Curva panorámica ----------------------------------------------------------------
-  const curve = { draft: [], points: null, path: null, pano: null, thickness: 14, mode: 'avg' };
+  // id: aumenta con cada curva nueva; forma parte de la clave de la panorámica y de
+  // los cortes, para que las mediciones no pasen de una curva a otra.
+  const curve = { id: 0, draft: [], points: null, path: null, pano: null, thickness: 14, mode: 'avg', gap: 1 };
   let crossIndex = 0;
   const crossStep = () => (curve.path ? Math.max(1, Math.round(1 / curve.path.step)) : 1);
+  const gapStep = () => (curve.path ? Math.max(1, Math.round(curve.gap / curve.path.step)) : 1);
+  const mmAt = (i) => (curve.path ? (i * curve.path.step).toFixed(1) : '0.0') + ' mm';
 
   function addCurvePoint(img) {
     curve.draft.push([img.x, img.y]);
@@ -261,19 +334,22 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
     // El doble clic agrega dos puntos casi iguales: se quitan los duplicados.
     const pts = curve.draft.filter((p, i, a) => i === 0 || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 2);
     if (pts.length < 3) { shell.toast('Marque al menos 3 puntos sobre el arco dental.'); return; }
+    curve.id++;
     curve.points = pts;
     curve.draft = [];
     rebuildPano();
     crossIndex = Math.floor(curve.path.points.length / 2);
     updateCross();
     ws.setTool('crosshair');
-    setQuadView('pano');
-    shell.toast('Panorámica reconstruida. Haga clic en ella para ver el corte transversal de esa zona.');
+    // En pantallas amplias se pasa a la distribución de implantes.
+    if (layout !== 'implant' && isWide()) setLayout('implant');
+    else { setQuadView('pano'); updateStrip(); }
+    shell.toast('Panorámica reconstruida. Haga clic en ella para elegir la zona de los cortes transversales.');
   }
 
   function rebuildPano() {
     if (!curve.points) return;
-    const { frame, path } = reconstructPanoramic(vol, curve.points, { thickness: curve.thickness, mode: curve.mode });
+    const { frame, path } = reconstructPanoramic(vol, curve.points, { thickness: curve.thickness, mode: curve.mode, key: 'pano' + curve.id });
     curve.pano = frame;
     curve.path = path;
     const first = !panoVp.frame;
@@ -292,22 +368,74 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
     crossIndex = Math.max(0, Math.min(curve.path.points.length - 1, Math.round(i)));
     if (row !== undefined) setPos(pos.x, pos.y, vol.nz - 1 - row);
     updateCross();
+    updateStrip();
     if (quadView === 'cross') renderQuadControls();
-    if (ws.active === crossVp) syncSlider();
+    if (ws.active === crossVp || stripVps.includes(ws.active)) syncSlider();
   }
 
+  const crossFrame = (i) => crossSection(vol, curve.path, i, { halfWidth: 15, keyPrefix: 'cross' + curve.id });
+
   function updateCross() {
-    const frame = crossSection(vol, curve.path, crossIndex, 15);
+    const frame = crossFrame(crossIndex);
     const first = !crossVp.frame;
     crossVp.setFrame(frame, { keepWindow: !first, resetView: first });
     crossVp.wl = { ...wl };
     crossVp.invert = invert;
     crossVp.imageDirty = true;
     crossVp.info.tl = ['Corte transversal'];
-    crossVp.info.br = [`Posición ${(crossIndex * curve.path.step).toFixed(1)} mm`, 'Ancho 30 mm'];
+    crossVp.info.br = [`Posición ${mmAt(crossIndex)}`, 'Ancho 30 mm'];
     crossVp.render();
     panoVp.render();
     mpr.axial.render();
+  }
+
+  // Cortes de la tira: el central es crossIndex; los demás, cada curve.gap mm.
+  function updateStrip() {
+    strip.querySelector('.dv-strip-empty').hidden = !!curve.path;
+    if (layout !== 'implant' || !curve.path) return;
+    const n = curve.path.points.length;
+    for (const vp of stripVps) {
+      const i = crossIndex + vp.stripOffset * gapStep();
+      if (i < 0 || i >= n) {
+        vp.crossIdx = null;
+        vp.setLabel('—', '#55606b');
+        vp.setFrame(null);
+        continue;
+      }
+      vp.crossIdx = i;
+      const first = !vp.frame;
+      vp.setFrame(crossFrame(i), { keepWindow: !first, resetView: first });
+      if (first) { const ref = stripVps.find((v) => v !== vp && v.frame && v._shown); if (ref) vp.view = { ...ref.view }; }
+      vp._shown = true;
+      vp.wl = { ...wl };
+      vp.invert = invert;
+      vp.imageDirty = true;
+      vp.setLabel(mmAt(i), vp.stripOffset === 0 ? '#ffffff' : CROSS_COLOR);
+      vp.el.classList.toggle('dv-strip-center', vp.stripOffset === 0);
+      vp.render();
+    }
+  }
+
+  // Posiciones de la tira (o solo la del corte activo) sobre la curva.
+  function crossMarks() {
+    if (!curve.path) return [];
+    if (layout !== 'implant') return [{ i: crossIndex, center: true }];
+    return stripVps.filter((v) => v.crossIdx !== null).map((v) => ({ i: v.crossIdx, center: v.stripOffset === 0 }));
+  }
+
+  // Línea del nivel del corte axial sobre la panorámica y los transversales.
+  function drawAxialLevel(ctx, vp) {
+    if (!showCross || !vp.frame) return;
+    const row = vol.nz - 1 - pos.z + 0.5;
+    const a = vp.imageToScreen(0, row);
+    const b = vp.imageToScreen(vp.frame.width, row);
+    ctx.save();
+    ctx.strokeStyle = PLANE.axial.color;
+    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.restore();
   }
 
   function drawCurve(ctx, vp) {
@@ -332,29 +460,36 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
       ctx.fillStyle = '#0f1419'; ctx.fill();
       ctx.strokeStyle = '#e9b04f'; ctx.lineWidth = 2; ctx.stroke();
     }
-    // Posición del corte transversal
+    // Posición de los cortes transversales
     if (!curve.draft.length && curve.path) {
-      const [px, py] = curve.path.points[crossIndex];
-      const [nx, ny] = curve.path.normals[crossIndex];
-      const a = vp.imageToScreen((px - nx * 10) / sx, (py - ny * 10) / sy);
-      const b = vp.imageToScreen((px + nx * 10) / sx, (py + ny * 10) / sy);
-      ctx.strokeStyle = '#ffffff';
-      ctx.setLineDash([5, 4]);
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      for (const { i, center } of crossMarks()) {
+        const [px, py] = curve.path.points[i];
+        const [nx, ny] = curve.path.normals[i];
+        const a = vp.imageToScreen((px - nx * 15) / sx, (py - ny * 15) / sy);
+        const b = vp.imageToScreen((px + nx * 15) / sx, (py + ny * 15) / sy);
+        ctx.strokeStyle = center ? '#ffffff' : CROSS_COLOR;
+        ctx.globalAlpha = center ? 1 : 0.8;
+        ctx.setLineDash(center ? [5, 4] : [3, 4]);
+        ctx.lineWidth = center ? 1.5 : 1;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
     }
     ctx.restore();
   }
 
+  // Cada columna de la panorámica es un punto de la curva: columna = índice del corte.
   function drawPanoMarker(ctx, vp) {
     if (!curve.path || !vp.frame) return;
-    const a = vp.imageToScreen(crossIndex + 0.5, 0);
-    const b = vp.imageToScreen(crossIndex + 0.5, vp.frame.height);
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.9)';
-    ctx.setLineDash([6, 5]);
-    ctx.lineWidth = 1.25;
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    for (const { i, center } of crossMarks()) {
+      const a = vp.imageToScreen(i + 0.5, 0);
+      const b = vp.imageToScreen(i + 0.5, vp.frame.height);
+      ctx.strokeStyle = center ? 'rgba(255,255,255,.9)' : CROSS_COLOR;
+      ctx.globalAlpha = center ? 1 : 0.75;
+      ctx.setLineDash(center ? [6, 5] : [3, 5]);
+      ctx.lineWidth = center ? 1.25 : 1;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -378,6 +513,10 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
   const extra = document.createElement('div');
   extra.className = 'dv-extra-group';
   extra.innerHTML = `
+    <div class="dv-seg dv-layout-seg" role="group" aria-label="Distribución">
+      <button type="button" class="dv-chipbtn active" data-layout="mpr" title="Axial, coronal, sagital y 3D">${icon('layout4')} MPR</button>
+      <button type="button" class="dv-chipbtn" data-layout="implant" title="Panorámica y cortes transversales para planificar implantes">${icon('implant')} Implantes</button>
+    </div>
     <label class="dv-select" title="Espesor de corte (proyección de máxima intensidad)">
       ${icon('layers')}
       <select data-slab>
@@ -398,6 +537,11 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
     showCross = !showCross;
     e.currentTarget.classList.toggle('on', showCross);
     Object.values(mpr).forEach((v) => v.render());
+    renderPlanning();
+  });
+  extra.querySelector('.dv-layout-seg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-layout]');
+    if (b) setLayout(b.dataset.layout);
   });
   extra.querySelector('.dv-mobile-views').addEventListener('click', (e) => {
     const b = e.target.closest('[data-mview]');
@@ -420,7 +564,32 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
     });
   }
   // En pantallas angostas se muestra un panel a la vez.
-  if (window.matchMedia('(max-width: 820px)').matches) toggleMaximize(mpr.axial.el, true);
+  if (!isWide()) toggleMaximize(mpr.axial.el, true);
+
+  function setLayout(next) {
+    if (next === layout) return;
+    if (maximized) toggleMaximize(maximized);
+    layout = next;
+    grid.dataset.layout = next === 'implant' ? 'implant' : 4;
+    extra.querySelectorAll('[data-layout]').forEach((b) => b.classList.toggle('active', b.dataset.layout === next));
+    if (next === 'implant') {
+      quadBeforeImplant = quadView;
+      setQuadView('pano');
+      updateStrip();
+      if (!curve.pano) {
+        ws.setTool('curve');
+        shell.toast('Trace la curva del arco en la vista axial: clic a lo largo del arco y doble clic o Enter para terminar.');
+      } else ws.setActive(stripVps[STRIP_COUNT >> 1]);
+    } else {
+      if (stripVps.includes(ws.active)) ws.setActive(mpr.axial);
+      setQuadView(quadBeforeImplant);
+    }
+    mpr.axial.render();
+    requestAnimationFrame(() => {
+      ws.viewports.forEach((v) => { v.needsFit = true; v.fitIfNeeded(); v.render(); });
+      view3d.render(false);
+    });
+  }
 
   // --- Control de cortes (pie) -------------------------------------------------------
   function syncSlider() {
@@ -428,8 +597,8 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
     if (vp && vp.axis) {
       const n = sliceCount(vol, vp.axis);
       shell.setSlider({ value: index[vp.axis], max: n - 1, label: `${PLANE[vp.axis].label} ${index[vp.axis] + 1} / ${n}`, onInput: (v) => setIndex(vp.axis, v) });
-    } else if (vp === crossVp && curve.path) {
-      shell.setSlider({ value: crossIndex, max: curve.path.points.length - 1, label: `${(crossIndex * curve.path.step).toFixed(1)} mm`, onInput: (v) => setCrossIndex(v) });
+    } else if ((vp === crossVp || stripVps.includes(vp)) && curve.path) {
+      shell.setSlider({ value: crossIndex, max: curve.path.points.length - 1, label: `Transversal ${mmAt(crossIndex)}`, onInput: (v) => setCrossIndex(v) });
     } else shell.setSlider(null);
   }
 
@@ -468,17 +637,16 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
     }
     return false;
   };
-  // Claves de frame: '<volumen>:<plano>:<corte>', 'cross:<posición>' o 'pano…'.
+  // Claves de frame: '<volumen>:<plano>:<corte>', 'cross<curva>:<posición>' o 'pano<curva>'.
   ws.goTo = (a) => {
     const parts = a.key.split(':');
-    if (mpr[parts[1]]) { setIndex(parts[1], Number(parts[2])); ws.setActive(mpr[parts[1]]); }
-    else if (parts[0] === 'cross') { setQuadView('cross'); setCrossIndex(Number(parts[1])); }
-    else if (a.key.startsWith('pano')) setQuadView('pano');
-  };
-  ws.exportSource = () => {
-    if (focus3D && quadView === '3d') return { canvas: view3d.canvas, label: '3D' };
-    const vp = ws.active;
-    return vp ? { canvas: vp.canvas, label: vp.frameLabel(), key: vp.frame && vp.frame.key } : null;
+    if (mpr[parts[1]]) { setIndex(parts[1], Number(parts[2])); ws.setActive(mpr[parts[1]]); return; }
+    const m = /^(cross|pano)(\d+)$/.exec(parts[0]);
+    if (!m) return;
+    if (Number(m[2]) !== curve.id) { shell.toast('Esa medición se hizo sobre una curva panorámica anterior.'); return; }
+    if (m[1] === 'pano') { setQuadView('pano'); ws.setActive(panoVp); return; }
+    if (layout === 'implant') { setCrossIndex(Number(parts[1])); ws.setActive(stripVps[STRIP_COUNT >> 1]); }
+    else { setQuadView('cross'); setCrossIndex(Number(parts[1])); }
   };
 
   // --- Información ------------------------------------------------------------------------
@@ -490,7 +658,7 @@ export function startVolumeMode(shell, { study, data, onDownload }) {
       ['Matriz', `${vol.nx} × ${vol.ny} × ${vol.nz}`],
       ['Vóxel', `${sx.toFixed(3)} × ${sy.toFixed(3)} × ${sz.toFixed(3)} mm`],
       ['Campo de visión', `${(vol.nx * sx).toFixed(0)} × ${(vol.ny * sy).toFixed(0)} × ${(vol.nz * sz).toFixed(0)} mm`],
-      ['Unidades', vol.units === 'HU' ? 'Hounsfield (HU)' : 'Valores del equipo'],
+      ['Unidades', vol.units === 'HU' ? 'Hounsfield (HU) · aproximadas en CBCT' : 'Valores del equipo'],
       vol.meta.downsampled ? ['Nota', 'Resolución reducida para caber en memoria'] : ['', '']
     ]
   });

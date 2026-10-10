@@ -12,6 +12,7 @@ const IMAGE_ACTIONS = [
   { id: 'flipV', label: 'Voltear vertical', icon: 'flipV' },
   { id: 'invert', label: 'Invertir grises', icon: 'invert', key: 'I' },
   { id: 'fit', label: 'Ajustar a la pantalla', icon: 'fit', key: 'F' },
+  { id: 'overlay', label: 'Ocultar o mostrar los datos sobre la imagen', icon: 'overlay', key: 'O' },
   { id: 'reset', label: 'Restablecer vista', icon: 'reset', key: 'X' }
 ];
 
@@ -99,6 +100,7 @@ export function createShell({ study, onClose }) {
   let playing = null;
   let activeTool = null;
   let closed = false;
+  let closeGuard = null; // () => texto de aviso si cerrar haría perder trabajo
 
   if (window.innerWidth < 900) root.classList.add('dv-panel-hidden');
 
@@ -107,7 +109,7 @@ export function createShell({ study, onClose }) {
     const b = e.target.closest('[data-action]');
     if (!b) return;
     const a = b.dataset.action;
-    if (a === 'close') return shell.close();
+    if (a === 'close') return requestClose();
     if (a === 'panel') { root.classList.toggle('dv-panel-hidden'); emit('layout'); return; }
     if (a === 'fullscreen') {
       if (document.fullscreenElement) document.exitFullscreen();
@@ -162,9 +164,11 @@ export function createShell({ study, onClose }) {
     if (e.key === 'Escape') {
       if (!$('.dv-dialog').hidden) { closeDialog(); return; }
       if (emitCancel()) return;
-      shell.close();
+      requestClose();
       return;
     }
+    // Con un diálogo abierto, el teclado es del diálogo.
+    if (!$('.dv-dialog').hidden) return;
     if (e.key === '?') { showHelp(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); emit('action', 'undo'); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -198,6 +202,13 @@ export function createShell({ study, onClose }) {
   }
   function closeDialog() { dialog.hidden = true; dialog.innerHTML = ''; if (dialog._resolve) { dialog._resolve(null); dialog._resolve = null; } }
 
+  // Cerrar el visor; si hay trabajo sin guardar (mediciones), se pide confirmación.
+  async function requestClose() {
+    const warning = closeGuard && closeGuard();
+    if (warning && !(await shell.confirm({ title: 'Cerrar el visor', message: warning, okLabel: 'Cerrar visor', cancelLabel: 'Seguir en el visor' }))) return;
+    shell.close();
+  }
+
   function showHelp() {
     const tools = Object.entries(TOOLS).filter(([id]) => toolbar.querySelector(`[data-tool="${id}"]`));
     openDialog(`
@@ -211,6 +222,7 @@ export function createShell({ study, onClose }) {
             <dt>Clic derecho + arrastrar</dt><dd>Contraste (horizontal) y brillo (vertical)</dd>
             <dt>Clic central + arrastrar</dt><dd>Mover la imagen</dd>
             <dt>Doble clic en un panel</dt><dd>Ampliar / restaurar ese panel</dd>
+            <dt>Doble clic en un implante</dt><dd>Cambiar diámetro y longitud</dd>
             <dt>Arrastrar un punto</dt><dd>Corregir una medición</dd>
           </dl>
         </section>
@@ -224,6 +236,7 @@ export function createShell({ study, onClose }) {
             <dt><kbd>↑</kbd> <kbd>↓</kbd> <kbd>RePág</kbd></dt><dd>Corte anterior / siguiente (de 10 en 10)</dd>
             <dt><kbd>Espacio</kbd></dt><dd>Reproducir cortes</dd>
             <dt><kbd>F</kbd> <kbd>G</kbd> <kbd>I</kbd> <kbd>X</kbd></dt><dd>Ajustar, girar, invertir, restablecer</dd>
+            <dt><kbd>O</kbd></dt><dd>Ocultar / mostrar los datos del paciente sobre la imagen</dd>
             <dt><kbd>Supr</kbd> · <kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Borrar medición seleccionada · deshacer</dd>
             <dt><kbd>Esc</kbd></dt><dd>Cancelar / cerrar el visor</dd>
           </dl>
@@ -289,10 +302,10 @@ export function createShell({ study, onClose }) {
       html += '</div>';
       toolbar.innerHTML = html;
     },
-    setActiveTool(id) {
+    setActiveTool(id, hint) {
       activeTool = id;
       toolbar.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === id));
-      shell.setHint(TOOLS[id] ? TOOLS[id].hint : '');
+      shell.setHint(hint || (TOOLS[id] ? TOOLS[id].hint : ''));
     },
     setActionState(id, on) {
       const b = toolbar.querySelector(`[data-action="${id}"]`);
@@ -330,8 +343,11 @@ export function createShell({ study, onClose }) {
       const body = document.createElement('div');
       body.className = 'dv-tab-body';
       body.dataset.tab = id;
+      // Solo se ve la pestaña activa (la primera, hasta que se elija otra).
+      body.hidden = tabs.children.length > 1;
       tabBodies.appendChild(body);
       if (tabs.children.length === 1) shell.showTab(id);
+      else tabs.lastElementChild.setAttribute('aria-selected', 'false');
       return body;
     },
     showTab(id) {
@@ -366,6 +382,72 @@ export function createShell({ study, onClose }) {
         });
       });
     },
+
+    // Confirmación con el estilo del visor. Devuelve true si se acepta.
+    confirm({ title, message, okLabel = 'Aceptar', cancelLabel = 'Cancelar' }) {
+      const card = openDialog(`
+        <div class="dv-prompt">
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(message)}</p>
+          <div class="dv-prompt-actions"><button type="button" class="dv-btn" data-dclose>${escapeHtml(cancelLabel)}</button><button type="button" class="dv-btn primary" data-ok>${escapeHtml(okLabel)}</button></div>
+        </div>`, 'dv-prompt-card');
+      const ok = card.querySelector('[data-ok]');
+      setTimeout(() => ok.focus(), 20);
+      return new Promise((resolve) => {
+        dialog._resolve = (v) => resolve(!!v);
+        ok.addEventListener('click', () => { dialog._resolve = null; closeDialog(); resolve(true); });
+      });
+    },
+
+    // Formulario de valores numéricos con opciones rápidas:
+    //   fields: [{ name, label, value, options: [n], step, min, max, unit }]
+    // Devuelve { name: número } o null si se cancela.
+    form({ title, label = '', fields, okLabel = 'Aceptar' }) {
+      const fmtN = (n) => String(n).replace('.', ',');
+      const card = openDialog(`
+        <form class="dv-prompt dv-form">
+          <h3>${escapeHtml(title)}</h3>
+          ${label ? `<p>${escapeHtml(label)}</p>` : ''}
+          ${fields.map((f) => `
+            <div class="dv-field">
+              <label><span>${escapeHtml(f.label)}</span>
+                <input class="dv-input" name="${f.name}" type="number" inputmode="decimal" step="${f.step || 0.1}" min="${f.min ?? ''}" max="${f.max ?? ''}" value="${f.value}" required>
+              </label>
+              ${f.options ? `<div class="dv-seg dv-opts">${f.options.map((o) => `<button type="button" class="dv-chipbtn ${o === f.value ? 'active' : ''}" data-field="${f.name}" data-v="${o}">${fmtN(o)}</button>`).join('')}</div>` : ''}
+            </div>`).join('')}
+          <div class="dv-prompt-actions"><button type="button" class="dv-btn" data-dclose>Cancelar</button><button type="submit" class="dv-btn primary">${escapeHtml(okLabel)}</button></div>
+        </form>`, 'dv-prompt-card');
+      const formEl = card.querySelector('form');
+      // Por nombre con querySelector: formEl.elements.length es el número de campos.
+      const input = (name) => formEl.querySelector(`input[name="${name}"]`);
+      const sync = (name) => {
+        const v = Number(input(name).value);
+        card.querySelectorAll(`[data-field="${name}"]`).forEach((b) => b.classList.toggle('active', Number(b.dataset.v) === v));
+      };
+      card.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-field]');
+        if (!b) return;
+        input(b.dataset.field).value = b.dataset.v;
+        sync(b.dataset.field);
+      });
+      formEl.addEventListener('input', (e) => { if (e.target.name) sync(e.target.name); });
+      setTimeout(() => formEl.querySelector('input').focus(), 20);
+      return new Promise((resolve) => {
+        dialog._resolve = resolve;
+        formEl.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const out = {};
+          for (const f of fields) out[f.name] = Number(String(input(f.name).value).replace(',', '.'));
+          dialog._resolve = null;
+          closeDialog();
+          resolve(out);
+        });
+      });
+    },
+
+    // guard() -> texto de aviso (o vacío) antes de cerrar el visor.
+    setCloseGuard(guard) { closeGuard = guard; },
+    requestClose,
 
     close() {
       if (closed) return;

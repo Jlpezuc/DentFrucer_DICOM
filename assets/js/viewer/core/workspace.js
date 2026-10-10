@@ -8,18 +8,20 @@
 //   onAction(id) -> bool    acción de la barra; true si el modo la resolvió
 //   onWindow(vp, wl, invert) la ventana cambió (sincronizar otros paneles)
 //   goTo(annotation)        navegar hasta el corte/imagen de una medición
-//   exportSource()          { canvas, label } a exportar (por defecto el panel activo)
 //   onCancel() -> bool      Esc: cancelar algo propio del modo
+//
+// Exportar e imprimir copian lo que se ve en el escenario (todos los paneles
+// visibles, con sus textos); para un solo panel, amplíelo con doble clic.
 
 import { escapeHtml } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
 import { valueAt } from '../data/frame.js';
-import { AnnotationStore, measure, TYPE_NAMES } from './annotations.js';
-import { composeExport, downloadCanvas, printCanvas } from './export.js';
+import { AnnotationStore, IMPLANT_DIAMETERS, IMPLANT_LENGTHS, measure, normalizeImplant, TYPE_NAMES } from './annotations.js';
+import { composeExport, downloadCanvas, printCanvas, snapshotStage } from './export.js';
 import { applyPreset, PROFILES, windowPresets } from './profiles.js';
 import { ToolController } from './tools.js';
 
-const TYPE_ICONS = { distance: 'ruler', angle: 'angle', roi: 'roi', probe: 'probe', arrow: 'note' };
+const TYPE_ICONS = { distance: 'ruler', angle: 'angle', roi: 'roi', probe: 'probe', arrow: 'note', implant: 'implant' };
 
 export class Workspace {
   constructor(shell, { study, profileId, onDownload }) {
@@ -35,8 +37,11 @@ export class Workspace {
       onActivate: (vp) => this.setActive(vp),
       onCursor: (vp, img) => this.showCursor(vp, img),
       prompt: (opts) => shell.prompt(opts),
-      onCalibrate: (vp, a) => this.calibrate(vp, a)
+      onCalibrate: (vp, a) => this.calibrate(vp, a),
+      onEditImplant: (vp, a) => this.editImplant(a),
+      toast: (text) => shell.toast(text)
     });
+    this.showOverlays = true;
 
     shell.setModeLabel(this.profile.title);
     shell.setTools(this.profile.tools);
@@ -53,6 +58,12 @@ export class Workspace {
     this.infoTab = shell.addTab('info', 'Información', 'info');
     this.store.onChange(() => { this.viewports.forEach((v) => v.render()); this.renderMeasurements(); });
     this.renderMeasurements();
+    // Las mediciones no se guardan: avisar antes de cerrar el visor.
+    shell.setCloseGuard(() => {
+      const n = this.store.items.length;
+      if (!n) return '';
+      return `Hay ${n === 1 ? '1 medición' : n + ' mediciones'} en este estudio. Al cerrar el visor se pierden: si las necesita, use Copiar resumen o Exportar antes de cerrar.`;
+    });
   }
 
   // --- Viewports -------------------------------------------------------------------
@@ -61,6 +72,7 @@ export class Workspace {
     vp.annotations = (v) => (v.frame ? this.store.forKey(v.frame.key) : []);
     vp.isSelected = (a) => a.id === this.store.selectedId;
     vp.onChange = (v) => { if (v === this.active) this.syncWindowUI(); };
+    vp.showOverlays = this.showOverlays;
     this.viewports.push(vp);
     if (!this.active) this.setActive(vp);
     return vp;
@@ -76,7 +88,7 @@ export class Workspace {
 
   setTool(id) {
     this.controller.setTool(id);
-    this.shell.setActiveTool(id);
+    this.shell.setActiveTool(id, this.profile.hints && this.profile.hints[id]);
     if (this.onToolChange) this.onToolChange(id);
   }
 
@@ -118,6 +130,12 @@ export class Workspace {
       case 'flipV': vp && vp.flip('v'); break;
       case 'invert': if (vp) { vp.setInvert(!vp.invert); this.syncWindowUI(); } break;
       case 'fit': vp && vp.fit(); break;
+      case 'overlay':
+        this.showOverlays = !this.showOverlays;
+        this.viewports.forEach((v) => { v.showOverlays = this.showOverlays; v.render(); });
+        this.shell.setActionState('overlay', !this.showOverlays);
+        this.shell.toast(this.showOverlays ? 'Datos sobre la imagen visibles.' : 'Datos del paciente ocultos (la orientación y la escala se mantienen).');
+        break;
       case 'reset': if (vp) { vp.resetView(); this.syncWindowUI(); this.refreshPresets(); } break;
     }
   }
@@ -161,6 +179,26 @@ export class Workspace {
     if (this.onCalibrated) this.onCalibrated(vp);
   }
 
+  // --- Implantes ------------------------------------------------------------------------
+  async editImplant(a) {
+    const v = await this.shell.form({
+      title: 'Implante',
+      label: 'Medidas del implante simulado. Se conserva la posición de la plataforma.',
+      fields: [
+        { name: 'diameter', label: 'Diámetro (mm)', value: a.diameter, options: IMPLANT_DIAMETERS, step: 0.05, min: 2, max: 8 },
+        { name: 'length', label: 'Longitud (mm)', value: a.length, options: IMPLANT_LENGTHS, step: 0.5, min: 4, max: 25 }
+      ],
+      okLabel: 'Aplicar'
+    });
+    if (!v || !(v.diameter > 0) || !(v.length > 0)) return;
+    this.store.snapshot();
+    a.diameter = v.diameter;
+    a.length = v.length;
+    normalizeImplant(a, this.frameFor(a), 1);
+    this.controller.implantSize = { diameter: v.diameter, length: v.length };
+    this.store.emit();
+  }
+
   // --- Panel de mediciones --------------------------------------------------------------
   frameFor(a) {
     const vp = this.viewports.find((v) => v.frame && v.frame.key === a.key);
@@ -193,7 +231,10 @@ export class Workspace {
           <span class="dv-mico">${icon(TYPE_ICONS[a.type])}</span>
           <span class="dv-mtxt"><strong>${i + 1}. ${escapeHtml(t.name)}</strong><small>${escapeHtml(a.frameLabel || '')}</small></span>
           <span class="dv-mval">${escapeHtml(t.value)}${t.lines.map((l) => `<small>${escapeHtml(l)}</small>`).join('')}</span>
-          <button type="button" class="dv-fbtn" data-del="${a.id}" aria-label="Borrar">${icon('trash')}</button>
+          <span class="dv-mbtns">
+            ${a.type === 'implant' ? `<button type="button" class="dv-fbtn" data-edit="${a.id}" aria-label="Cambiar medidas" title="Cambiar medidas">${icon('edit')}</button>` : ''}
+            <button type="button" class="dv-fbtn" data-del="${a.id}" aria-label="Borrar" title="Borrar">${icon('trash')}</button>
+          </span>
         </li>`;
       }).join('')}</ul>
       <div class="dv-mactions">
@@ -203,7 +244,17 @@ export class Workspace {
     this.measureTab.onclick = (e) => {
       const del = e.target.closest('[data-del]');
       if (del) { this.store.remove(del.dataset.del); return; }
-      if (e.target.closest('[data-clear]')) { if (confirm('¿Borrar todas las mediciones?')) this.store.clear(); return; }
+      const edit = e.target.closest('[data-edit]');
+      if (edit) {
+        const a = this.store.items.find((x) => x.id === edit.dataset.edit);
+        if (a) { this.store.select(a.id); if (this.goTo) this.goTo(a); this.editImplant(a); }
+        return;
+      }
+      if (e.target.closest('[data-clear]')) {
+        this.shell.confirm({ title: 'Borrar todas las mediciones', message: 'Se borrarán todas las mediciones y notas de este estudio. Puede deshacerlo con Ctrl+Z.', okLabel: 'Borrar todas' })
+          .then((ok) => { if (ok) this.store.clear(); });
+        return;
+      }
       if (e.target.closest('[data-copy]')) { this.copySummary(); return; }
       const li = e.target.closest('[data-id]');
       if (li) {
@@ -214,9 +265,10 @@ export class Workspace {
     };
   }
 
-  summaryLines(filterKey) {
+  // keys: conjunto de frames a incluir (todas las mediciones si se omite).
+  summaryLines(keys) {
     return this.store.items
-      .filter((a) => !filterKey || a.key === filterKey)
+      .filter((a) => !keys || keys.has(a.key))
       .map((a) => {
         const t = this.measurementText(a);
         return `${t.name}${a.frameLabel ? ' (' + a.frameLabel + ')' : ''}: ${t.value}${t.lines.length ? ' · ' + t.lines.join(' · ') : ''}`;
@@ -233,17 +285,22 @@ export class Workspace {
   // --- Encabezado: descargar, exportar, imprimir --------------------------------------
   async header(a) {
     if (a === 'download') { if (this.onDownload) this.onDownload(); return; }
-    const src = this.exportSource ? this.exportSource() : this.active && { canvas: this.active.canvas, label: this.active.frameLabel ? this.active.frameLabel() : '', key: this.active.frame && this.active.frame.key };
-    if (!src) return;
+    // Se exporta lo que se ve: todos los paneles visibles del escenario.
+    const visible = this.viewports.filter((v) => v.frame && v.el.getBoundingClientRect().width > 0);
+    const snap = snapshotStage(this.shell.stage);
+    if (!snap) return;
+    const label = visible.length === 1 && visible[0].frameLabel ? visible[0].frameLabel() : '';
     const win = a === 'print' ? window.open('', '_blank') : null;
     const s = this.study;
-    const canvas = await composeExport(src.canvas, {
+    const canvas = await composeExport(snap.canvas, {
+      scale: snap.scale,
       title: s.patientName || 'Paciente',
-      lines: [s.patientCode, s.description || this.profile.title, src.label, s.date].filter(Boolean),
-      measurements: src.key ? this.summaryLines(src.key) : []
+      lines: [s.patientCode, s.description || this.profile.title, label, s.date ? new Date(s.date + 'T12:00:00').toLocaleDateString('es') : ''].filter(Boolean),
+      measurements: this.summaryLines(new Set(visible.map((v) => v.frame.key))),
+      note: this.profile.densityNote && this.store.items.some((m) => m.type === 'roi' || m.type === 'probe') ? 'Valores de gris de CBCT: no son unidades Hounsfield calibradas.' : ''
     });
     if (a === 'export') {
-      const name = ['DentFrucer', s.patientCode || s.patientName, src.label].filter(Boolean).join('_').replace(/[^\w.-]+/g, '_');
+      const name = ['DentFrucer', s.patientCode || s.patientName, label || this.profile.title].filter(Boolean).join('_').replace(/[^\w.-]+/g, '_');
       downloadCanvas(canvas, name + '.png');
       this.shell.toast('Imagen exportada.');
     } else if (!printCanvas(canvas, 'DentFrucer · ' + (s.patientName || ''), win)) {

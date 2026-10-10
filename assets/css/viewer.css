@@ -23,6 +23,8 @@
   -webkit-user-select: none; user-select: none;
 }
 .dv-root * { box-sizing: border-box; }
+/* El visor se abre dentro de las páginas del sitio: anular estilos genéricos de styles.css. */
+.dv-root section { padding: 0; }
 .dv-root [hidden] { display: none !important; }
 .dv-root svg { width: 18px; height: 18px; flex: none; }
 .dv-root button { font: inherit; color: inherit; }
@@ -70,7 +72,8 @@ body.dv-open { overflow: hidden; }
 /* Barra de herramientas */
 .dv-toolbar {
   background: var(--dv-surface); border-right: 1px solid var(--dv-line);
-  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: #2b3843 transparent;
 }
 .dv-tgroup { display: flex; flex-direction: column; gap: 2px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--dv-line); }
 .dv-tgroup:last-child { border-bottom: 0; }
@@ -96,9 +99,14 @@ body.dv-open { overflow: hidden; }
 .dv-grid[data-layout="1"] { grid-template-columns: 1fr; }
 .dv-grid[data-layout="2"] { grid-template-columns: 1fr 1fr; }
 .dv-grid[data-layout="4"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
-.dv-grid.dv-has-max > * { display: none; }
+.dv-grid[data-layout="implant"] { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1.15fr); }
+.dv-grid[data-layout="implant"] > [data-plane="coronal"], .dv-grid[data-layout="implant"] > [data-plane="sagital"] { display: none; }
+.dv-grid[data-layout="implant"] > .dv-strip { display: grid; grid-column: 1 / -1; }
+.dv-grid[data-layout="implant"] .dv-quad-tabs { display: none; }
+.dv-grid.dv-has-max > :not(.dv-max) { display: none; }
 .dv-grid.dv-has-max > .dv-max { display: flex; grid-column: 1 / -1; grid-row: 1 / -1; }
 .dv-grid.dv-has-max > .dv-pane.dv-max { display: block; }
+.dv-grid.dv-has-max > .dv-strip.dv-max { display: grid; }
 
 .dv-pane { position: relative; overflow: hidden; background: #000; min-width: 0; min-height: 0; outline: 1px solid #141b21; outline-offset: -1px; }
 .dv-pane.active { outline: 2px solid var(--dv-blue); outline-offset: -2px; }
@@ -150,6 +158,17 @@ body.dv-open { overflow: hidden; }
 .dv-quad-controls:empty { display: none; }
 .dv-cross-pos { font-size: 12px; color: var(--dv-muted); font-variant-numeric: tabular-nums; }
 
+/* Tira de cortes transversales (distribución Implantes) */
+.dv-strip { display: none; position: relative; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; min-width: 0; min-height: 0; background: #000; }
+.dv-strip > .dv-pane { height: 100%; }
+.dv-strip > .dv-strip-center { outline-color: #3a4a57; }
+.dv-strip > .dv-strip-center.active { outline-color: var(--dv-blue); }
+.dv-strip .dv-orient { font-size: 10.5px; }
+.dv-strip .dv-pane-label { text-transform: none; letter-spacing: .02em; }
+.dv-strip-empty { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; background: #000; color: var(--dv-muted); text-align: center; font-size: 13px; }
+.dv-strip-empty svg { width: 30px; height: 30px; color: #c9a0f0; }
+.dv-strip-empty p { margin: 0; max-width: 340px; }
+
 /* Panel lateral */
 .dv-panel { background: var(--dv-surface); border-left: 1px solid var(--dv-line); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .dv-tabs { display: flex; gap: 0; padding: 8px 6px 0; border-bottom: 1px solid var(--dv-line); overflow-x: auto; }
@@ -182,17 +201,21 @@ body.dv-open { overflow: hidden; }
 /* Lista de mediciones */
 .dv-mlist { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
 .dv-mlist li {
-  display: grid; grid-template-columns: 30px 1fr auto 30px; align-items: center; gap: 8px; padding: 8px; border-radius: 9px;
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: "ico txt btns" "ico val btns";
+  align-items: center; gap: 2px 8px; padding: 8px; border-radius: 9px;
   background: var(--dv-surface-2); border: 1px solid transparent; cursor: pointer; transition: border-color .15s;
 }
 .dv-mlist li:hover { border-color: var(--dv-line); }
 .dv-mlist li.sel { border-color: var(--dv-blue); background: #15232e; }
-.dv-mico { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: rgba(141,198,63,.12); color: var(--dv-lime-2); }
+.dv-mico { grid-area: ico; align-self: start; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: rgba(141,198,63,.12); color: var(--dv-lime-2); }
 .dv-mico svg { width: 16px; height: 16px; }
-.dv-mtxt { min-width: 0; display: flex; flex-direction: column; }
-.dv-mtxt strong { font-size: 12.5px; font-weight: 600; }
+.dv-mtxt { grid-area: txt; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.dv-mtxt strong { font-size: 12px; font-weight: 600; color: var(--dv-muted); white-space: nowrap; }
 .dv-mtxt small, .dv-mval small { color: var(--dv-muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dv-mval { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; display: flex; flex-direction: column; }
+.dv-mval { grid-area: val; min-width: 0; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13.5px; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.dv-mval small { font-weight: 500; }
+.dv-mbtns { grid-area: btns; display: flex; gap: 4px; }
+.dv-mbtns .dv-fbtn { width: 30px; height: 30px; }
 .dv-mactions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Miniaturas y documentos */
@@ -247,8 +270,10 @@ body.dv-open { overflow: hidden; }
 .dv-select svg { width: 15px; height: 15px; }
 .dv-select select { background: transparent; border: 0; color: inherit; font: inherit; font-size: 12.5px; padding: 6px 4px; outline: none; }
 .dv-select select option { background: var(--dv-surface-2); }
+.dv-select-sm { height: 30px; font-size: 12px; color: var(--dv-muted); }
 .dv-mini-range { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dv-muted); }
 .dv-mini-range input { width: 110px; flex: none; }
+.dv-quad-controls .dv-mini-range input { width: 84px; }
 .dv-mini-range output { min-width: 40px; color: var(--dv-text); font-variant-numeric: tabular-nums; }
 .dv-mobile-views { display: none; }
 
@@ -300,6 +325,11 @@ body.dv-open { overflow: hidden; }
 .dv-prompt p { color: var(--dv-muted); font-size: 13px; margin: 8px 0 12px; }
 .dv-prompt .dv-input { margin-top: 10px; }
 .dv-prompt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.dv-form .dv-field { margin-top: 14px; }
+.dv-form .dv-field label { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--dv-muted); }
+.dv-form .dv-field .dv-input { width: 110px; margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.dv-opts { flex-wrap: wrap; margin-top: 8px; }
+.dv-opts .dv-chipbtn { padding: 4px 9px; }
 .dv-toast {
   position: absolute; left: 50%; top: 68px; z-index: 70; transform: translate(-50%, -8px); opacity: 0; pointer-events: none;
   max-width: min(560px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 10px; background: #e6ecf1; color: #0f1419; font-size: 13px; font-weight: 500;
@@ -312,6 +342,20 @@ body.dv-open { overflow: hidden; }
   .dv-hbtn span { display: none; }
   .dv-hbtn { padding: 0 9px; }
   .dv-body { grid-template-columns: 60px minmax(0, 1fr) 280px; }
+}
+/* Pantallas de poca altura (portátiles y monitores de 1080 px con la barra del
+   navegador): las herramientas pasan a dos columnas para que todas queden a la
+   vista sin desplazarse. */
+@media (max-height: 980px) and (min-width: 821px) {
+  .dv-body { grid-template-columns: 96px minmax(0, 1fr) 312px; }
+  .dv-root.dv-panel-hidden .dv-body { grid-template-columns: 96px minmax(0, 1fr) 0; }
+  .dv-tgroup { display: grid; grid-template-columns: repeat(2, 40px); }
+  .dv-tool { height: 36px; }
+  .dv-tool.active::before { display: none; }
+  .dv-tool[data-tip]:hover::after { left: 102px; }
+}
+@media (max-height: 980px) and (min-width: 821px) and (max-width: 1100px) {
+  .dv-body { grid-template-columns: 96px minmax(0, 1fr) 280px; }
 }
 @media (max-width: 820px) {
   .dv-root { grid-template-rows: 52px minmax(0, 1fr) auto auto; }
@@ -332,6 +376,7 @@ body.dv-open { overflow: hidden; }
   .dv-hbtn.dv-close { margin-left: 2px; }
   .dv-hint, .dv-cursor { display: none; }
   .dv-mobile-views { display: flex; }
+  .dv-layout-seg { display: none; }
   .dv-presets { overflow-x: auto; max-width: 100%; }
   .dv-loading, .dv-doclayer { inset: 52px 0 0; }
   .dv-help { grid-template-columns: 1fr; }
