@@ -1,443 +1,530 @@
-/* DentFrucer — comportamiento de la maqueta.
-   NOTA: no hay backend ni base de datos todavía. El inicio de sesión es una
-   simulación (sessionStorage) y los datos de pacientes/estudios son de ejemplo. */
+// DentFrucer — lógica de las páginas.
+// Los datos vienen de backend.js (Firebase, o modo demostración si no está configurado).
 
-(function () {
-  'use strict';
+import { icon, renderIcons } from './icons.js';
 
-  // ---------- Iconos (trazos 24x24, estilo lineal) ----------
-  const ICONS = {
-    scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="4"/>',
-    layers: '<path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/>',
-    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>',
-    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
-    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
-    cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
-    zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>',
-    devices: '<rect x="2" y="4" width="14" height="10" rx="2"/><path d="M6 18h6"/><rect x="17" y="8" width="5" height="12" rx="1"/>',
-    check: '<path d="M20 6 9 17l-5-5"/>',
-    lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
-    key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
-    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
-    folder: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>',
-    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
-    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-    eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
-    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
-    trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
-    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
-    logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
-    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
-    menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
-    x: '<path d="M18 6 6 18M6 6l12 12"/>',
-    arrowLeft: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
-    arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
-    phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/>',
-    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
-    pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
-    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-    zoom: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/>',
-    contrast: '<circle cx="12" cy="12" r="10"/><path d="M12 2v20" /><path d="M12 2a10 10 0 0 1 0 20Z" fill="currentColor"/>',
-    ruler: '<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2M11.5 9.5l2-2M8.5 6.5l2-2M17.5 15.5l2-2"/>',
-    move: '<path d="m5 9-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>',
-    cube: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    stethoscope: '<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/>',
-    activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
-    share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>'
+const page = document.body.dataset.page;
+renderIcons();
+// La landing no necesita Firebase: solo se carga en las páginas con sesión.
+const { backend, isDemo } = page === 'landing' ? {} : await import('./backend.js');
+
+// ---------- Utilidades ----------
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function initials(name) {
+  return String(name || '?').replace(/^(Dr\.|Dra\.)\s*/, '').split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('').toUpperCase();
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return '—';
+  const u = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (n >= 10 || i === 0 ? Math.round(n) : n.toFixed(1)) + ' ' + u[i];
+}
+
+function today() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function toast(msg) {
+  let t = document.querySelector('.toast');
+  if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function statusBadge(s) {
+  const map = { 'Nuevo': 'blue', 'Visto': 'green' };
+  return '<span class="badge ' + (map[s] || 'gray') + '">' + escapeHtml(s || '—') + '</span>';
+}
+
+function setText(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+
+function busy(btn, on, label) {
+  if (!btn) return;
+  if (on) { btn._label = btn.innerHTML; btn.disabled = true; btn.textContent = label || 'Procesando…'; }
+  else { btn.disabled = false; if (btn._label) btn.innerHTML = btn._label; }
+}
+
+function showError(el, msg) {
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('show', !!msg);
+}
+
+// ---------- Modales ----------
+function modal(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const close = () => el.classList.remove('open');
+  el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('[data-close]')) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  return {
+    el,
+    open() { el.classList.add('open'); const f = el.querySelector('input, select, button[data-close]'); if (f) f.focus(); },
+    close
   };
+}
 
-  function icon(name, extra) {
-    const body = ICONS[name] || '';
-    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' + (extra ? ' ' + extra : '') + '>' + body + '</svg>';
-  }
+function viewerMarkup(study) {
+  return '' +
+    '<div class="viewer-mock">' +
+      '<div class="vm-toolbar">' +
+        '<span class="vm-tool active" title="Mover">' + icon('move') + '</span>' +
+        '<span class="vm-tool" title="Zoom">' + icon('zoom') + '</span>' +
+        '<span class="vm-tool" title="Ventana / Nivel">' + icon('contrast') + '</span>' +
+        '<span class="vm-tool" title="Medir">' + icon('ruler') + '</span>' +
+        '<span class="vm-tool" title="3D">' + icon('cube') + '</span>' +
+        '<span class="vm-title">' + escapeHtml(study.code) + ' · ' + escapeHtml(study.modality) + '</span>' +
+      '</div>' +
+      '<div class="vm-body">' +
+        '<div class="vm-series"><div class="vm-thumb active"></div><div class="vm-thumb"></div><div class="vm-thumb"></div></div>' +
+        '<div class="vm-grid">' +
+          '<div class="vm-pane"><span class="label">AXIAL</span><div class="vm-shape axial"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>' +
+          '<div class="vm-pane"><span class="label">CORONAL</span><div class="vm-shape"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>' +
+          '<div class="vm-pane"><span class="label">SAGITAL</span><div class="vm-shape"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>' +
+          '<div class="vm-pane three-d"><span class="label">3D</span><div class="vm-shape"></div><span class="vm-placeholder-tag">Visor en desarrollo</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="vm-status"><span>' + escapeHtml(study.patientName) + ' · ' + escapeHtml(study.patientCode) + '</span><span>' + (study.files || []).length + ' archivo(s) · ' + fmtSize(study.totalSize) + '</span></div>' +
+    '</div>';
+}
 
-  function renderIcons(root) {
-    (root || document).querySelectorAll('i[data-icon]').forEach(function (el) {
-      el.outerHTML = icon(el.getAttribute('data-icon'));
-    });
-  }
+function initViewer() {
+  const m = modal('viewer-modal');
+  return (study) => {
+    m.el.querySelector('.modal-head h3').textContent = study.patientName + ' — ' + study.description;
+    m.el.querySelector('.modal-content').innerHTML = viewerMarkup(study);
+    m.open();
+  };
+}
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-
-  function initials(name) {
-    return name.replace(/^(Dr\.|Dra\.)\s*/, '').split(/\s+/).slice(0, 2).map(function (p) { return p[0]; }).join('').toUpperCase();
-  }
-
-  function toast(msg) {
-    let t = document.querySelector('.toast');
-    if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(t._h);
-    t._h = setTimeout(function () { t.classList.remove('show'); }, 2600);
-  }
-
-  // ---------- Sesión simulada ----------
-  const SESSION_KEY = 'dentfrucer.session';
-  const Session = {
-    get: function () {
-      try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; }
-    },
-    set: function (s) {
-      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch (e) { /* modo privado */ }
-    },
-    clear: function () {
-      try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { /* noop */ }
+function initFilesModal() {
+  const m = modal('files-modal');
+  return async (study) => {
+    if (isDemo) { toast('Descarga no disponible en modo demostración.'); return; }
+    const list = m.el.querySelector('.file-list');
+    list.innerHTML = '<li class="muted">Preparando enlaces…</li>';
+    m.el.querySelector('.modal-head h3').textContent = 'Archivos · ' + study.patientName;
+    m.open();
+    try {
+      const files = await backend.fileUrls(study);
+      list.innerHTML = files.length
+        ? files.map((f) => '<li><a href="' + escapeHtml(f.url) + '" target="_blank" rel="noopener" download>' + icon('download') + ' ' + escapeHtml(f.name) + '</a></li>').join('')
+        : '<li class="muted">Este estudio no tiene archivos.</li>';
+    } catch (e) {
+      list.innerHTML = '<li class="muted">No se pudieron obtener los archivos.</li>';
     }
   };
+}
 
-  // Usuarios de demostración (se reemplazarán por la base de datos)
-  const DEMO_USERS = {
-    admin: { email: 'admin@dentfrucer.com', name: 'Administración', role: 'admin', title: 'Administrador' },
-    doctor: { email: 'doctor@dentfrucer.com', name: 'Dra. Laura Méndez', role: 'doctor', title: 'Odontóloga · Ortodoncia', id: 'D-01' }
-  };
+// ---------- Sesión y guardas ----------
+const ROUTES = {
+  doctor: { login: 'login.html', home: 'portal.html' },
+  admin: { login: 'admin-login.html', home: 'admin.html' }
+};
 
-  // ---------- Datos de ejemplo ----------
-  const DOCTORS = [
-    { id: 'D-01', name: 'Dra. Laura Méndez', specialty: 'Ortodoncia', email: 'doctor@dentfrucer.com', patients: 4 },
-    { id: 'D-02', name: 'Dr. Carlos Rivas', specialty: 'Implantología', email: 'crivas@clinica.com', patients: 3 },
-    { id: 'D-03', name: 'Dra. Ana Torres', specialty: 'Endodoncia', email: 'atorres@clinica.com', patients: 2 }
-  ];
-
-  const STUDIES = [
-    { id: 'EST-2026-0418', patient: 'Martina Gómez', pid: 'P-1042', age: 14, modality: 'CBCT', desc: 'Tomografía Cone Beam · maxilar completo', date: '2026-10-08', doctor: 'D-01', size: '412 MB', images: 512, status: 'Nuevo' },
-    { id: 'EST-2026-0415', patient: 'Martina Gómez', pid: 'P-1042', age: 14, modality: 'Panorámica', desc: 'Ortopantomografía digital', date: '2026-10-08', doctor: 'D-01', size: '18 MB', images: 1, status: 'Visto' },
-    { id: 'EST-2026-0409', patient: 'Julián Pérez', pid: 'P-1037', age: 11, modality: 'Cefalometría', desc: 'Telerradiografía lateral de cráneo', date: '2026-10-06', doctor: 'D-01', size: '22 MB', images: 1, status: 'Visto' },
-    { id: 'EST-2026-0402', patient: 'Sofía Herrera', pid: 'P-1029', age: 32, modality: 'CBCT', desc: 'Cone Beam · ATM bilateral', date: '2026-10-03', doctor: 'D-01', size: '388 MB', images: 480, status: 'Nuevo' },
-    { id: 'EST-2026-0397', patient: 'Tomás Aguilar', pid: 'P-1021', age: 45, modality: 'CBCT', desc: 'Cone Beam · zona implante 36', date: '2026-10-02', doctor: 'D-02', size: '296 MB', images: 384, status: 'Visto' },
-    { id: 'EST-2026-0391', patient: 'Valentina Ruiz', pid: 'P-1018', age: 27, modality: 'Periapical', desc: 'Serie periapical completa', date: '2026-09-30', doctor: 'D-03', size: '36 MB', images: 14, status: 'Pendiente' },
-    { id: 'EST-2026-0385', patient: 'Diego Castro', pid: 'P-1011', age: 9, modality: 'Panorámica', desc: 'Ortopantomografía digital', date: '2026-09-29', doctor: 'D-01', size: '17 MB', images: 1, status: 'Visto' },
-    { id: 'EST-2026-0380', patient: 'Lucía Fernández', pid: 'P-1006', age: 52, modality: 'CBCT', desc: 'Cone Beam · seno maxilar', date: '2026-09-27', doctor: 'D-02', size: '402 MB', images: 500, status: 'Sin asignar' }
-  ];
-
-  function doctorName(id) {
-    const d = DOCTORS.find(function (x) { return x.id === id; });
-    return d ? d.name : '—';
+async function requireRole(role) {
+  let user = null;
+  try { user = await backend.currentUser(); } catch (e) { user = null; }
+  if (!user || user.role !== role) {
+    location.replace(ROUTES[role].login);
+    return null;
   }
+  document.querySelectorAll('[data-user-name]').forEach((el) => { el.textContent = user.name; });
+  document.querySelectorAll('[data-user-title]').forEach((el) => { el.textContent = user.title; });
+  document.querySelectorAll('[data-user-initials]').forEach((el) => { el.textContent = initials(user.name); });
+  document.querySelectorAll('[data-logout]').forEach((el) => el.addEventListener('click', async () => {
+    await backend.signOut();
+    location.href = ROUTES[role].login;
+  }));
+  document.body.removeAttribute('data-guard');
+  return user;
+}
 
-  function fmtDate(iso) {
-    const d = new Date(iso + 'T12:00:00');
-    return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-  }
-
-  function statusBadge(s) {
-    const map = { 'Nuevo': 'blue', 'Visto': 'green', 'Pendiente': 'amber', 'Sin asignar': 'gray' };
-    return '<span class="badge ' + (map[s] || 'gray') + '">' + escapeHtml(s) + '</span>';
-  }
-
-  // ---------- Landing ----------
-  function initLanding() {
-    const toggle = document.querySelector('.menu-toggle');
-    const nav = document.querySelector('.nav');
-    if (toggle && nav) {
-      toggle.addEventListener('click', function () {
-        const open = nav.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      });
-      nav.querySelectorAll('a').forEach(function (a) {
-        a.addEventListener('click', function () { nav.classList.remove('open'); toggle.setAttribute('aria-expanded', 'false'); });
-      });
-    }
-    const contact = document.getElementById('contact-form');
-    if (contact) {
-      contact.addEventListener('submit', function (e) {
-        e.preventDefault();
-        contact.reset();
-        toast('Gracias. Nos pondremos en contacto pronto.');
-      });
-    }
-    const year = document.getElementById('year');
-    if (year) year.textContent = new Date().getFullYear();
-  }
-
-  // ---------- Login ----------
-  function initLogin() {
-    const form = document.getElementById('login-form');
-    if (!form) return;
-    const tabs = document.querySelectorAll('.role-switch button');
-    const emailInput = document.getElementById('email');
-    const title = document.getElementById('login-title');
-    const sub = document.getElementById('login-sub');
-    const err = document.getElementById('login-error');
-    let role = new URLSearchParams(location.search).get('rol') === 'admin' ? 'admin' : 'doctor';
-
-    const copy = {
-      doctor: { title: 'Acceso para médicos', sub: 'Consulte los estudios de sus pacientes.', ph: 'doctor@dentfrucer.com' },
-      admin: { title: 'Acceso administrativo', sub: 'Gestione estudios, pacientes y médicos.', ph: 'admin@dentfrucer.com' }
-    };
-
-    function setRole(r) {
-      role = r;
-      tabs.forEach(function (b) { b.setAttribute('aria-selected', b.dataset.role === r ? 'true' : 'false'); });
-      title.textContent = copy[r].title;
-      sub.textContent = copy[r].sub;
-      emailInput.placeholder = copy[r].ph;
-      err.classList.remove('show');
-    }
-    tabs.forEach(function (b) { b.addEventListener('click', function () { setRole(b.dataset.role); }); });
-    setRole(role);
-
-    document.getElementById('fill-demo').addEventListener('click', function () {
-      emailInput.value = DEMO_USERS[role].email;
-      document.getElementById('password').value = 'demo1234';
+// ---------- Landing ----------
+function initLanding() {
+  const toggle = document.querySelector('.menu-toggle');
+  const nav = document.querySelector('.nav');
+  if (toggle && nav) {
+    toggle.addEventListener('click', () => {
+      const open = nav.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
-
-    form.addEventListener('submit', function (e) {
+    nav.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => { nav.classList.remove('open'); toggle.setAttribute('aria-expanded', 'false'); }));
+  }
+  const contact = document.getElementById('contact-form');
+  if (contact) {
+    contact.addEventListener('submit', (e) => {
       e.preventDefault();
-      const email = emailInput.value.trim().toLowerCase();
-      const pass = document.getElementById('password').value;
-      const user = DEMO_USERS[role];
-      // Validación simulada: se reemplazará por autenticación real en el servidor.
-      if (email !== user.email || pass !== 'demo1234') {
-        err.textContent = 'Credenciales incorrectas. Use “Rellenar datos de demostración”.';
-        err.classList.add('show');
-        return;
-      }
-      Session.set(user);
-      location.href = role === 'admin' ? 'admin.html' : 'portal.html';
+      contact.reset();
+      toast('Gracias. Nos pondremos en contacto pronto.');
+    });
+  }
+  setText('year', new Date().getFullYear());
+}
+
+// ---------- Inicio de sesión (médico o administrador según data-role) ----------
+async function initLogin() {
+  const role = document.body.dataset.role === 'admin' ? 'admin' : 'doctor';
+  const form = document.getElementById('login-form');
+  const err = document.getElementById('login-error');
+  const email = document.getElementById('email');
+  const pass = document.getElementById('password');
+  const submit = form.querySelector('button[type=submit]');
+
+  // Si ya hay sesión con el rol correcto, entrar directo.
+  try {
+    const u = await backend.currentUser();
+    if (u && u.role === role) { location.replace(ROUTES[role].home); return; }
+  } catch (e) { /* sin sesión */ }
+
+  const demo = document.getElementById('demo-note');
+  if (demo) {
+    demo.hidden = !isDemo;
+    const fill = document.getElementById('fill-demo');
+    if (fill) fill.addEventListener('click', () => {
+      email.value = role === 'admin' ? 'admin@dentfrucer.com' : 'doctor@dentfrucer.com';
+      pass.value = 'demo1234';
     });
   }
 
-  // ---------- Guardas de rol ----------
-  function requireRole(role) {
-    const s = Session.get();
-    if (!s || s.role !== role) {
-      location.replace('login.html' + (role === 'admin' ? '?rol=admin' : ''));
-      return null;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    showError(err, '');
+    if (!email.value.trim() || !pass.value) { showError(err, 'Ingrese su correo y contraseña.'); return; }
+    busy(submit, true, 'Ingresando…');
+    try {
+      const user = await backend.signIn(email.value.trim(), pass.value);
+      if (user.role !== role) {
+        await backend.signOut();
+        throw new Error(role === 'admin' ? 'Esta cuenta no tiene permisos de administración.' : 'Esta cuenta no tiene acceso al portal de médicos.');
+      }
+      location.href = ROUTES[role].home;
+    } catch (ex) {
+      showError(err, ex.message);
+      busy(submit, false);
     }
-    document.querySelectorAll('[data-user-name]').forEach(function (el) { el.textContent = s.name; });
-    document.querySelectorAll('[data-user-title]').forEach(function (el) { el.textContent = s.title; });
-    document.querySelectorAll('[data-user-initials]').forEach(function (el) { el.textContent = initials(s.name); });
-    document.querySelectorAll('[data-logout]').forEach(function (el) {
-      el.addEventListener('click', function () { Session.clear(); location.href = 'login.html'; });
-    });
-    return s;
-  }
+  });
 
-  // ---------- Modal visor (placeholder) ----------
-  function viewerMarkup(study) {
-    return '' +
-      '<div class="viewer-mock">' +
-        '<div class="vm-toolbar">' +
-          '<span class="vm-tool active" title="Mover">' + icon('move') + '</span>' +
-          '<span class="vm-tool" title="Zoom">' + icon('zoom') + '</span>' +
-          '<span class="vm-tool" title="Ventana / Nivel">' + icon('contrast') + '</span>' +
-          '<span class="vm-tool" title="Medir">' + icon('ruler') + '</span>' +
-          '<span class="vm-tool" title="3D">' + icon('cube') + '</span>' +
-          '<span class="vm-title">' + escapeHtml(study.id) + ' · ' + escapeHtml(study.modality) + '</span>' +
-        '</div>' +
-        '<div class="vm-body">' +
-          '<div class="vm-series"><div class="vm-thumb active"></div><div class="vm-thumb"></div><div class="vm-thumb"></div></div>' +
-          '<div class="vm-grid">' +
-            '<div class="vm-pane"><span class="label">AXIAL</span><div class="vm-shape axial"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>' +
-            '<div class="vm-pane"><span class="label">CORONAL</span><div class="vm-shape"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>' +
-            '<div class="vm-pane"><span class="label">SAGITAL</span><div class="vm-shape"></div><span class="xhair-h"></span><span class="xhair-v"></span></div>' +
-            '<div class="vm-pane three-d"><span class="label">3D</span><div class="vm-shape"></div><span class="vm-placeholder-tag">Visor en desarrollo</span></div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="vm-status"><span>' + escapeHtml(study.patient) + ' · ' + escapeHtml(study.pid) + '</span><span>' + study.images + ' imágenes · ' + escapeHtml(study.size) + '</span></div>' +
-      '</div>';
-  }
+  const forgot = document.getElementById('forgot');
+  if (forgot) forgot.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (!email.value.trim()) { showError(err, 'Escriba su correo y vuelva a pulsar “¿Olvidó su contraseña?”.'); email.focus(); return; }
+    try {
+      await backend.resetPassword(email.value.trim());
+      showError(err, '');
+      toast('Si el correo está registrado, recibirá un enlace para restablecer la contraseña.');
+    } catch (ex) { showError(err, ex.message); }
+  });
+}
 
-  function initModal() {
-    const backdrop = document.getElementById('viewer-modal');
-    if (!backdrop) return { open: function () {} };
-    const body = backdrop.querySelector('.modal-content');
-    const title = backdrop.querySelector('.modal-head h3');
-    function close() { backdrop.classList.remove('open'); }
-    backdrop.addEventListener('click', function (e) { if (e.target === backdrop || e.target.closest('[data-close]')) close(); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-    return {
-      open: function (study) {
-        title.textContent = study.patient + ' — ' + study.desc;
-        body.innerHTML = viewerMarkup(study);
-        backdrop.classList.add('open');
-        backdrop.querySelector('[data-close]').focus();
-      }
-    };
-  }
+// ---------- Panel de administración ----------
+async function initAdmin() {
+  if (!(await requireRole('admin'))) return;
+  const openViewer = initViewer();
+  const openFiles = initFilesModal();
+  const doctorModal = modal('doctor-modal');
+  const patientModal = modal('patient-modal');
 
-  // ---------- Panel de administración ----------
-  function initAdmin() {
-    if (!requireRole('admin')) return;
-    const modal = initModal();
+  const state = { studies: [], patients: [], doctors: [], filter: 'all' };
+  const doctorName = (id) => (state.doctors.find((d) => d.id === id) || {}).name;
 
-    // Estadísticas
-    const set = function (id, v) { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('stat-studies', STUDIES.length);
-    set('stat-patients', new Set(STUDIES.map(function (s) { return s.pid; })).size);
-    set('stat-doctors', DOCTORS.length);
-    set('stat-unassigned', STUDIES.filter(function (s) { return s.status === 'Sin asignar'; }).length);
-
-    // Tabla de estudios
-    const tbody = document.getElementById('studies-body');
-    const search = document.getElementById('admin-search');
-    const tabs = document.querySelectorAll('#study-tabs button');
-    let filter = 'all';
-
-    function render() {
-      const q = (search.value || '').trim().toLowerCase();
-      const rows = STUDIES.filter(function (s) {
-        if (filter === 'unassigned' && s.status !== 'Sin asignar') return false;
-        if (filter === 'cbct' && s.modality !== 'CBCT') return false;
-        if (!q) return true;
-        return (s.patient + ' ' + s.pid + ' ' + s.id + ' ' + doctorName(s.doctor) + ' ' + s.modality).toLowerCase().indexOf(q) !== -1;
-      });
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="7"><div class="empty">No se encontraron estudios.</div></td></tr>';
-        return;
-      }
-      tbody.innerHTML = rows.map(function (s) {
-        const doc = s.status === 'Sin asignar' ? '<span class="badge gray">Sin asignar</span>' : escapeHtml(doctorName(s.doctor));
-        return '<tr>' +
-          '<td><div class="cell-patient"><span class="avatar">' + initials(s.patient) + '</span><div><strong>' + escapeHtml(s.patient) + '</strong><small>' + escapeHtml(s.pid) + ' · ' + s.age + ' años</small></div></div></td>' +
-          '<td><span class="mono">' + escapeHtml(s.id) + '</span></td>' +
-          '<td><span class="badge blue">' + escapeHtml(s.modality) + '</span></td>' +
-          '<td>' + fmtDate(s.date) + '</td>' +
-          '<td>' + doc + '</td>' +
-          '<td><span class="mono">' + escapeHtml(s.size) + '</span></td>' +
-          '<td><div class="row-actions">' +
-            '<button class="icon-btn" title="Ver" data-view="' + s.id + '">' + icon('eye') + '</button>' +
-            '<button class="icon-btn" title="Asignar a médico" data-assign="' + s.id + '">' + icon('link') + '</button>' +
-            '<button class="icon-btn" title="Eliminar" data-delete="' + s.id + '">' + icon('trash') + '</button>' +
-          '</div></td>' +
-        '</tr>';
-      }).join('');
+  async function load() {
+    try {
+      const [studies, patients, doctors] = await Promise.all([backend.listStudies(), backend.listPatients(), backend.listDoctors()]);
+      Object.assign(state, { studies, patients, doctors });
+    } catch (e) {
+      toast('No se pudieron cargar los datos: ' + e.message);
     }
+    renderAll();
+  }
 
-    tabs.forEach(function (b) {
-      b.addEventListener('click', function () {
-        filter = b.dataset.filter;
-        tabs.forEach(function (x) { x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
-        render();
-      });
-    });
-    search.addEventListener('input', render);
-    tbody.addEventListener('click', function (e) {
-      const v = e.target.closest('[data-view]');
-      const a = e.target.closest('[data-assign]');
-      const d = e.target.closest('[data-delete]');
-      if (v) modal.open(STUDIES.find(function (s) { return s.id === v.dataset.view; }));
-      if (a) toast('Asignación de médicos: disponible al conectar la base de datos.');
-      if (d) toast('Eliminación de estudios: disponible al conectar la base de datos.');
-    });
-    render();
+  function renderAll() {
+    setText('stat-studies', state.studies.length);
+    setText('stat-patients', state.patients.length);
+    setText('stat-doctors', state.doctors.length);
+    setText('stat-unassigned', state.patients.filter((p) => !p.doctorId).length);
+    renderStudies();
+    renderPatients();
+    renderDoctors();
+    renderSelects();
+  }
 
-    // Médicos
-    const docs = document.getElementById('doctors-body');
-    docs.innerHTML = DOCTORS.map(function (d) {
+  // Estudios
+  const tbody = document.getElementById('studies-body');
+  const search = document.getElementById('admin-search');
+  function renderStudies() {
+    const q = search.value.trim().toLowerCase();
+    const rows = state.studies.filter((s) => {
+      if (state.filter === 'new' && s.status !== 'Nuevo') return false;
+      if (state.filter === 'cbct' && s.modality !== 'CBCT') return false;
+      return !q || [s.patientName, s.patientCode, s.code, doctorName(s.doctorId), s.modality].join(' ').toLowerCase().includes(q);
+    });
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty">' + (state.studies.length ? 'No se encontraron estudios.' : 'Todavía no hay estudios. Cargue el primero abajo.') + '</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map((s) => {
+      const doc = s.doctorId && doctorName(s.doctorId) ? escapeHtml(doctorName(s.doctorId)) : '<span class="badge gray">Sin asignar</span>';
       return '<tr>' +
-        '<td><div class="cell-patient"><span class="avatar" style="background:var(--green-600)">' + initials(d.name) + '</span><div><strong>' + escapeHtml(d.name) + '</strong><small>' + escapeHtml(d.email) + '</small></div></div></td>' +
-        '<td>' + escapeHtml(d.specialty) + '</td>' +
-        '<td>' + d.patients + '</td>' +
-        '<td><span class="badge green">Activo</span></td>' +
+        '<td><div class="cell-patient"><span class="avatar">' + initials(s.patientName) + '</span><div><strong>' + escapeHtml(s.patientName) + '</strong><small>' + escapeHtml(s.patientCode) + (s.patientAge ? ' · ' + s.patientAge + ' años' : '') + '</small></div></div></td>' +
+        '<td><span class="mono">' + escapeHtml(s.code) + '</span></td>' +
+        '<td><span class="badge blue">' + escapeHtml(s.modality) + '</span></td>' +
+        '<td>' + fmtDate(s.date) + '</td>' +
+        '<td>' + doc + '</td>' +
+        '<td><span class="mono">' + fmtSize(s.totalSize) + '</span></td>' +
+        '<td><div class="row-actions">' +
+          '<button class="icon-btn" title="Ver" data-view="' + escapeHtml(s.id) + '">' + icon('eye') + '</button>' +
+          '<button class="icon-btn" title="Archivos" data-files="' + escapeHtml(s.id) + '">' + icon('download') + '</button>' +
+          '<button class="icon-btn" title="Eliminar" data-delete="' + escapeHtml(s.id) + '">' + icon('trash') + '</button>' +
+        '</div></td>' +
       '</tr>';
     }).join('');
-
-    // Zona de carga (placeholder)
-    const dz = document.getElementById('dropzone');
-    const fileInput = document.getElementById('file-input');
-    ['dragenter', 'dragover'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('drag'); }); });
-    ['dragleave', 'drop'].forEach(function (ev) { dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('drag'); }); });
-    dz.addEventListener('drop', function (e) {
-      const n = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files.length : 0;
-      toast(n + ' archivo(s) recibidos. La carga se habilitará al conectar el servidor.');
-    });
-    fileInput.addEventListener('change', function () {
-      toast(fileInput.files.length + ' archivo(s) seleccionados. La carga se habilitará al conectar el servidor.');
-      fileInput.value = '';
-    });
-
-    document.querySelectorAll('[data-soon]').forEach(function (el) {
-      el.addEventListener('click', function (e) { e.preventDefault(); toast(el.dataset.soon); });
-    });
   }
-
-  // ---------- Portal del médico ----------
-  function initPortal() {
-    const user = requireRole('doctor');
-    if (!user) return;
-    const modal = initModal();
-    // Solo los estudios de pacientes asignados a este médico
-    const mine = STUDIES.filter(function (s) { return s.doctor === user.id && s.status !== 'Sin asignar'; });
-
-    const set = function (id, v) { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('stat-my-patients', new Set(mine.map(function (s) { return s.pid; })).size);
-    set('stat-my-studies', mine.length);
-    set('stat-my-new', mine.filter(function (s) { return s.status === 'Nuevo'; }).length);
-
-    const grid = document.getElementById('study-grid');
-    const search = document.getElementById('portal-search');
-    const mod = document.getElementById('modality-filter');
-
-    function render() {
-      const q = (search.value || '').trim().toLowerCase();
-      const m = mod.value;
-      const rows = mine.filter(function (s) {
-        if (m && s.modality !== m) return false;
-        return !q || (s.patient + ' ' + s.pid + ' ' + s.desc).toLowerCase().indexOf(q) !== -1;
-      });
-      if (!rows.length) { grid.innerHTML = '<div class="empty">No hay estudios que coincidan.</div>'; return; }
-      grid.innerHTML = rows.map(function (s) {
-        const shape = s.modality === 'Panorámica' ? 'pano' : (s.modality === 'CBCT' ? 'axial' : '');
-        return '<article class="study-card">' +
-          '<div class="study-thumb"><span class="badge blue mod">' + escapeHtml(s.modality) + '</span><div class="vm-shape ' + shape + '"></div></div>' +
-          '<div class="study-body">' +
-            '<h3>' + escapeHtml(s.patient) + '</h3>' +
-            '<div class="meta">' + escapeHtml(s.desc) + '</div>' +
-            '<div class="meta">' + fmtDate(s.date) + ' · ' + s.images + ' imágenes · ' + escapeHtml(s.size) + '</div>' +
-          '</div>' +
-          '<div class="study-foot">' + statusBadge(s.status) +
-            '<div class="row-actions">' +
-              '<button class="icon-btn" title="Descargar" data-download="' + s.id + '">' + icon('download') + '</button>' +
-              '<button class="btn btn-primary btn-sm" data-view="' + s.id + '">' + icon('eye') + ' Abrir</button>' +
-            '</div>' +
-          '</div>' +
-        '</article>';
-      }).join('');
+  document.querySelectorAll('#study-tabs button').forEach((b) => b.addEventListener('click', () => {
+    state.filter = b.dataset.filter;
+    document.querySelectorAll('#study-tabs button').forEach((x) => x.setAttribute('aria-selected', x === b ? 'true' : 'false'));
+    renderStudies();
+  }));
+  search.addEventListener('input', renderStudies);
+  tbody.addEventListener('click', async (e) => {
+    const find = (attr) => { const b = e.target.closest('[' + attr + ']'); return b && state.studies.find((s) => s.id === b.getAttribute(attr)); };
+    const v = find('data-view'); if (v) openViewer(v);
+    const f = find('data-files'); if (f) openFiles(f);
+    const d = find('data-delete');
+    if (d && confirm('¿Eliminar el estudio ' + d.code + ' de ' + d.patientName + '? Se borrarán también sus archivos.')) {
+      try { await backend.deleteStudy(d); toast('Estudio eliminado.'); await load(); } catch (ex) { toast('No se pudo eliminar: ' + ex.message); }
     }
-    search.addEventListener('input', render);
-    mod.addEventListener('change', render);
-    grid.addEventListener('click', function (e) {
-      const v = e.target.closest('[data-view]');
-      const d = e.target.closest('[data-download]');
-      if (v) modal.open(mine.find(function (s) { return s.id === v.dataset.view; }));
-      if (d) toast('La descarga se habilitará al conectar el servidor.');
-    });
-    render();
+  });
 
-    // Lista de pacientes
-    const pBody = document.getElementById('patients-body');
-    const byPatient = {};
-    mine.forEach(function (s) {
-      const p = byPatient[s.pid] || (byPatient[s.pid] = { name: s.patient, pid: s.pid, age: s.age, count: 0, last: s.date });
-      p.count++;
-      if (s.date > p.last) p.last = s.date;
-    });
-    pBody.innerHTML = Object.keys(byPatient).map(function (k) {
-      const p = byPatient[k];
-      return '<tr><td><div class="cell-patient"><span class="avatar">' + initials(p.name) + '</span><div><strong>' + escapeHtml(p.name) + '</strong><small>' + escapeHtml(p.pid) + ' · ' + p.age + ' años</small></div></div></td>' +
-        '<td>' + p.count + '</td><td>' + fmtDate(p.last) + '</td></tr>';
+  // Pacientes
+  const pBody = document.getElementById('patients-body');
+  function doctorOptions(selected, emptyLabel) {
+    return '<option value="">' + (emptyLabel || 'Sin asignar') + '</option>' +
+      state.doctors.map((d) => '<option value="' + escapeHtml(d.id) + '"' + (d.id === selected ? ' selected' : '') + '>' + escapeHtml(d.name) + '</option>').join('');
+  }
+  function renderPatients() {
+    if (!state.patients.length) { pBody.innerHTML = '<tr><td colspan="3"><div class="empty">Aún no hay pacientes.</div></td></tr>'; return; }
+    pBody.innerHTML = state.patients.map((p) => {
+      const n = state.studies.filter((s) => s.patientId === p.id).length;
+      return '<tr><td><div class="cell-patient"><span class="avatar">' + initials(p.name) + '</span><div><strong>' + escapeHtml(p.name) + '</strong><small>' + escapeHtml(p.code) + (p.age ? ' · ' + p.age + ' años' : '') + '</small></div></div></td>' +
+        '<td>' + n + '</td>' +
+        '<td><label class="sr-only" for="pd-' + escapeHtml(p.id) + '">Médico de ' + escapeHtml(p.name) + '</label><select class="input select input-sm" id="pd-' + escapeHtml(p.id) + '" data-patient="' + escapeHtml(p.id) + '">' + doctorOptions(p.doctorId) + '</select></td></tr>';
     }).join('');
+  }
+  pBody.addEventListener('change', async (e) => {
+    const sel = e.target.closest('[data-patient]');
+    if (!sel) return;
+    sel.disabled = true;
+    try {
+      await backend.setPatientDoctor(sel.dataset.patient, sel.value);
+      toast('Médico actualizado. Sus estudios ahora son visibles para ' + (doctorName(sel.value) || 'nadie') + '.');
+      await load();
+    } catch (ex) { toast('No se pudo actualizar: ' + ex.message); sel.disabled = false; }
+  });
 
-    document.querySelectorAll('[data-soon]').forEach(function (el) {
-      el.addEventListener('click', function (e) { e.preventDefault(); toast(el.dataset.soon); });
-    });
+  // Médicos
+  const dBody = document.getElementById('doctors-body');
+  function renderDoctors() {
+    if (!state.doctors.length) { dBody.innerHTML = '<tr><td colspan="3"><div class="empty">Aún no hay médicos registrados.</div></td></tr>'; return; }
+    dBody.innerHTML = state.doctors.map((d) => {
+      const n = state.patients.filter((p) => p.doctorId === d.id).length;
+      return '<tr><td><div class="cell-patient"><span class="avatar" style="background:var(--green-600)">' + initials(d.name) + '</span><div><strong>' + escapeHtml(d.name) + '</strong><small>' + escapeHtml(d.email) + '</small></div></div></td>' +
+        '<td>' + escapeHtml(d.specialty || '—') + '</td><td>' + n + '</td></tr>';
+    }).join('');
   }
 
-  // ---------- Arranque ----------
-  document.addEventListener('DOMContentLoaded', function () {
-    renderIcons();
-    const page = document.body.dataset.page;
-    if (page === 'landing') initLanding();
-    if (page === 'login') initLogin();
-    if (page === 'admin') initAdmin();
-    if (page === 'portal') initPortal();
+  function renderSelects() {
+    const up = document.getElementById('u-patient');
+    const cur = up.value;
+    up.innerHTML = '<option value="">Seleccione un paciente…</option>' + state.patients.map((p) =>
+      '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + ' · ' + escapeHtml(p.code) + (p.doctorId ? ' — ' + escapeHtml(doctorName(p.doctorId) || '') : ' — sin médico') + '</option>').join('');
+    up.value = cur;
+    document.getElementById('np-doctor').innerHTML = doctorOptions('', 'Asignar más tarde');
+  }
+
+  // Nuevo médico
+  document.querySelectorAll('[data-open="doctor"]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); doctorModal.open(); }));
+  const dForm = document.getElementById('doctor-form');
+  dForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = dForm.querySelector('.form-error');
+    const btn = dForm.querySelector('button[type=submit]');
+    const data = Object.fromEntries(new FormData(dForm));
+    showError(err, '');
+    if (!data.name.trim() || !data.email.trim() || data.password.length < 6) { showError(err, 'Complete nombre, correo y una contraseña de al menos 6 caracteres.'); return; }
+    busy(btn, true, 'Creando…');
+    try {
+      await backend.createDoctor(data);
+      dForm.reset();
+      doctorModal.close();
+      toast('Cuenta creada para ' + data.name + '. Comparta sus credenciales de forma segura.');
+      await load();
+    } catch (ex) { showError(err, ex.message); }
+    busy(btn, false);
   });
-})();
+
+  // Nuevo paciente
+  document.querySelectorAll('[data-open="patient"]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); patientModal.open(); }));
+  const pForm = document.getElementById('patient-form');
+  pForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = pForm.querySelector('.form-error');
+    const btn = pForm.querySelector('button[type=submit]');
+    const data = Object.fromEntries(new FormData(pForm));
+    showError(err, '');
+    if (!data.name.trim()) { showError(err, 'Escriba el nombre del paciente.'); return; }
+    busy(btn, true, 'Guardando…');
+    try {
+      const id = await backend.createPatient(data);
+      pForm.reset();
+      patientModal.close();
+      toast('Paciente registrado.');
+      await load();
+      document.getElementById('u-patient').value = id;
+    } catch (ex) { showError(err, ex.message); }
+    busy(btn, false);
+  });
+
+  // Carga de estudios
+  const uForm = document.getElementById('upload-form');
+  const dz = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+  const folderInput = document.getElementById('folder-input');
+  const fileSummary = document.getElementById('file-summary');
+  const progress = document.getElementById('upload-progress');
+  let files = [];
+  document.getElementById('u-date').value = today();
+
+  function setFiles(list) {
+    files = Array.from(list || []).filter((f) => !f.name.startsWith('.'));
+    fileSummary.textContent = files.length ? files.length + ' archivo(s) · ' + fmtSize(files.reduce((n, f) => n + f.size, 0)) : '';
+  }
+  ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('drag'); }));
+  ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('drag'); }));
+  dz.addEventListener('drop', (e) => setFiles(e.dataTransfer && e.dataTransfer.files));
+  fileInput.addEventListener('change', () => setFiles(fileInput.files));
+  folderInput.addEventListener('change', () => setFiles(folderInput.files));
+  document.getElementById('pick-folder').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); folderInput.click(); });
+
+  uForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = uForm.querySelector('.form-error');
+    const btn = uForm.querySelector('button[type=submit]');
+    const patient = state.patients.find((p) => p.id === document.getElementById('u-patient').value);
+    showError(err, '');
+    if (!patient) { showError(err, 'Seleccione un paciente (o regístrelo primero).'); return; }
+    if (!files.length) { showError(err, 'Agregue los archivos del estudio.'); return; }
+    busy(btn, true, 'Subiendo…');
+    progress.hidden = false;
+    const bar = progress.querySelector('span');
+    bar.style.width = '0%';
+    try {
+      await backend.uploadStudy({
+        patient,
+        modality: document.getElementById('u-modality').value,
+        description: document.getElementById('u-desc').value.trim() || document.getElementById('u-modality').value,
+        date: document.getElementById('u-date').value || today(),
+        files,
+        onProgress: (p) => { bar.style.width = Math.round(p * 100) + '%'; }
+      });
+      toast('Estudio cargado' + (patient.doctorId ? ' y visible para ' + doctorName(patient.doctorId) : '') + '.');
+      uForm.reset();
+      document.getElementById('u-date').value = today();
+      setFiles([]);
+      await load();
+    } catch (ex) { showError(err, 'No se pudo cargar: ' + ex.message); }
+    progress.hidden = true;
+    busy(btn, false);
+  });
+
+  await load();
+}
+
+// ---------- Portal del médico ----------
+async function initPortal() {
+  const user = await requireRole('doctor');
+  if (!user) return;
+  const openViewer = initViewer();
+  const openFiles = initFilesModal();
+  let mine = [];
+  let patients = [];
+
+  const grid = document.getElementById('study-grid');
+  const search = document.getElementById('portal-search');
+  const mod = document.getElementById('modality-filter');
+
+  function render() {
+    setText('stat-my-patients', patients.length);
+    setText('stat-my-studies', mine.length);
+    setText('stat-my-new', mine.filter((s) => s.status === 'Nuevo').length);
+
+    const q = search.value.trim().toLowerCase();
+    const rows = mine.filter((s) => (!mod.value || s.modality === mod.value) && (!q || [s.patientName, s.patientCode, s.description].join(' ').toLowerCase().includes(q)));
+    grid.innerHTML = rows.length ? rows.map((s) => {
+      const shape = s.modality === 'Panorámica' ? 'pano' : (s.modality === 'CBCT' ? 'axial' : '');
+      return '<article class="study-card">' +
+        '<div class="study-thumb"><span class="badge blue mod">' + escapeHtml(s.modality) + '</span><div class="vm-shape ' + shape + '"></div></div>' +
+        '<div class="study-body">' +
+          '<h3>' + escapeHtml(s.patientName) + '</h3>' +
+          '<div class="meta">' + escapeHtml(s.description) + '</div>' +
+          '<div class="meta">' + fmtDate(s.date) + ' · ' + (s.files || []).length + ' archivo(s) · ' + fmtSize(s.totalSize) + '</div>' +
+        '</div>' +
+        '<div class="study-foot">' + statusBadge(s.status) +
+          '<div class="row-actions">' +
+            '<button class="icon-btn" title="Descargar" data-files="' + escapeHtml(s.id) + '">' + icon('download') + '</button>' +
+            '<button class="btn btn-primary btn-sm" data-view="' + escapeHtml(s.id) + '">' + icon('eye') + ' Abrir</button>' +
+          '</div>' +
+        '</div>' +
+      '</article>';
+    }).join('') : '<div class="empty">' + (mine.length ? 'No hay estudios que coincidan.' : 'Aún no tiene estudios disponibles. Aparecerán aquí en cuanto DentFrucer los cargue.') + '</div>';
+
+    const pBody = document.getElementById('patients-body');
+    pBody.innerHTML = patients.length ? patients.map((p) => {
+      const ps = mine.filter((s) => s.patientId === p.id);
+      const last = ps.reduce((m, s) => (s.date > m ? s.date : m), '');
+      return '<tr><td><div class="cell-patient"><span class="avatar">' + initials(p.name) + '</span><div><strong>' + escapeHtml(p.name) + '</strong><small>' + escapeHtml(p.code) + (p.age ? ' · ' + p.age + ' años' : '') + '</small></div></div></td>' +
+        '<td>' + ps.length + '</td><td>' + fmtDate(last) + '</td></tr>';
+    }).join('') : '<tr><td colspan="3"><div class="empty">Aún no tiene pacientes asignados.</div></td></tr>';
+  }
+
+  search.addEventListener('input', render);
+  mod.addEventListener('change', render);
+  grid.addEventListener('click', async (e) => {
+    const find = (attr) => { const b = e.target.closest('[' + attr + ']'); return b && mine.find((s) => s.id === b.getAttribute(attr)); };
+    const f = find('data-files'); if (f) openFiles(f);
+    const v = find('data-view');
+    if (v) {
+      openViewer(v);
+      if (v.status === 'Nuevo') {
+        try { await backend.markSeen(v.id); v.status = 'Visto'; render(); } catch (ex) { /* no crítico */ }
+      }
+    }
+  });
+
+  try {
+    [mine, patients] = await Promise.all([backend.listStudies({ doctorId: user.uid }), backend.listPatients({ doctorId: user.uid })]);
+  } catch (e) {
+    toast('No se pudieron cargar sus estudios: ' + e.message);
+  }
+  render();
+}
+
+// ---------- Arranque ----------
+if (page === 'landing') initLanding();
+if (page === 'login') initLogin();
+if (page === 'admin') initAdmin();
+if (page === 'portal') initPortal();

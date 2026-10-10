@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// DentFrucer — reglas de Firestore.
+// - Administradores (users/{uid}.role == 'admin'): acceso total.
+// - Médicos: solo leen sus propios pacientes y estudios (doctorId == su uid)
+//   y solo pueden marcar un estudio como 'Visto'.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function ownsRecord(data) {
+      return signedIn() && data.doctorId == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /patients/{patientId} {
+      allow read: if isAdmin() || ownsRecord(resource.data);
+      allow write: if isAdmin();
+    }
+
+    match /studies/{studyId} {
+      allow read: if isAdmin() || ownsRecord(resource.data);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (ownsRecord(resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+            && request.resource.data.status == 'Visto');
+    }
+  }
+}

@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body data-page="portal">
+<body data-page="portal" data-guard>
   <div class="app doctor">
     <aside class="sidebar">
       <a class="brand" href="index.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
@@ -18,8 +18,6 @@
         <span class="label">Mi consultorio</span>
         <a href="#estudios" class="active"><i data-icon="folder"></i> Estudios</a>
         <a href="#pacientes"><i data-icon="users"></i> Mis pacientes</a>
-        <span class="label">Cuenta</span>
-        <a href="#" data-soon="Perfil: próximamente."><i data-icon="user"></i> Mi perfil</a>
       </nav>
       <div class="side-user">
         <span class="avatar" data-user-initials>LM</span>
@@ -37,9 +35,9 @@
       </div>
 
       <div class="stats three">
-        <div class="stat"><div class="k">Mis pacientes</div><div class="v" id="stat-my-patients">0</div></div>
-        <div class="stat"><div class="k">Estudios disponibles</div><div class="v" id="stat-my-studies">0</div></div>
-        <div class="stat"><div class="k">Nuevos sin revisar</div><div class="v" id="stat-my-new" style="color:var(--blue-700)">0</div></div>
+        <div class="stat"><div class="k">Mis pacientes</div><div class="v" id="stat-my-patients">–</div></div>
+        <div class="stat"><div class="k">Estudios disponibles</div><div class="v" id="stat-my-studies">–</div></div>
+        <div class="stat"><div class="k">Nuevos sin revisar</div><div class="v" id="stat-my-new" style="color:var(--blue-700)">–</div></div>
       </div>
 
       <section class="panel" id="estudios" style="padding:0">
@@ -75,11 +73,18 @@
 
   <div class="modal-backdrop" id="viewer-modal" role="dialog" aria-modal="true" aria-label="Visor DICOM">
     <div class="modal">
-      <div class="modal-head"><h3>Visor</h3><button class="icon-btn" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <div class="modal-head"><h3>Visor</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
       <div class="modal-content"></div>
     </div>
   </div>
 
-  <script src="assets/js/app.js"></script>
+  <div class="modal-backdrop" id="files-modal" role="dialog" aria-modal="true" aria-label="Archivos del estudio">
+    <div class="modal sm">
+      <div class="modal-head"><h3>Archivos</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <div class="modal-body"><ul class="file-list"></ul></div>
+    </div>
+  </div>
+
+  <script type="module" src="assets/js/app.js"></script>
 </body>
 </html>

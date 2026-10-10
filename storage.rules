@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// DentFrucer — reglas de Storage.
+// Archivos en studies/{studyId}/...: los sube y borra un administrador;
+// los lee un administrador o el médico asignado al estudio en Firestore.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAdmin() {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /studies/{studyId}/{allPaths=**} {
+      allow read: if request.auth != null
+        && (isAdmin()
+            || firestore.get(/databases/(default)/documents/studies/$(studyId)).data.doctorId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+  }
+}

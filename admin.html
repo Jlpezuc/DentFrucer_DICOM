@@ -4,25 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Administración · DentFrucer</title>
+  <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/png" href="assets/img/logo-dentfrucer-circular.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body data-page="admin">
+<body data-page="admin" data-guard>
   <div class="app admin">
     <aside class="sidebar">
-      <a class="brand" href="index.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
+      <a class="brand" href="admin.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
       <nav class="side-nav" aria-label="Administración">
         <span class="label">General</span>
         <a href="#estudios" class="active"><i data-icon="folder"></i> Estudios</a>
-        <a href="#carga"><i data-icon="upload"></i> Cargar archivos</a>
+        <a href="#carga"><i data-icon="upload"></i> Cargar estudio</a>
+        <a href="#pacientes"><i data-icon="users"></i> Pacientes</a>
         <a href="#medicos"><i data-icon="stethoscope"></i> Médicos</a>
-        <a href="#" data-soon="Gestión de pacientes: próximamente."><i data-icon="users"></i> Pacientes</a>
-        <span class="label">Sistema</span>
-        <a href="#" data-soon="Registro de actividad: próximamente."><i data-icon="activity"></i> Actividad</a>
-        <a href="#" data-soon="Configuración: próximamente."><i data-icon="settings"></i> Configuración</a>
       </nav>
       <div class="side-user">
         <span class="avatar" data-user-initials>AD</span>
@@ -38,24 +36,25 @@
           <p>Gestione estudios DICOM, pacientes y médicos.</p>
         </div>
         <div class="actions">
-          <a class="btn btn-outline btn-sm" href="#" data-soon="Alta de médicos: próximamente."><i data-icon="plus"></i> Nuevo médico</a>
+          <button class="btn btn-outline btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo médico</button>
+          <button class="btn btn-outline btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo paciente</button>
           <a class="btn btn-primary btn-sm" href="#carga"><i data-icon="upload"></i> Cargar estudio</a>
         </div>
       </div>
 
       <div class="stats">
-        <div class="stat"><div class="k">Estudios</div><div class="v" id="stat-studies">0</div><div class="d">+3 esta semana</div></div>
-        <div class="stat"><div class="k">Pacientes</div><div class="v" id="stat-patients">0</div><div class="d">+2 esta semana</div></div>
-        <div class="stat"><div class="k">Médicos activos</div><div class="v" id="stat-doctors">0</div><div class="d">&nbsp;</div></div>
-        <div class="stat"><div class="k">Sin asignar</div><div class="v" id="stat-unassigned">0</div><div class="d" style="color:var(--warning)">Requieren atención</div></div>
+        <div class="stat"><div class="k">Estudios</div><div class="v" id="stat-studies">–</div></div>
+        <div class="stat"><div class="k">Pacientes</div><div class="v" id="stat-patients">–</div></div>
+        <div class="stat"><div class="k">Médicos</div><div class="v" id="stat-doctors">–</div></div>
+        <div class="stat"><div class="k">Pacientes sin médico</div><div class="v" id="stat-unassigned" style="color:var(--warning)">–</div></div>
       </div>
 
-      <section class="panel" id="estudios" style="padding:0">
+      <section class="panel" id="estudios">
         <div class="panel-head">
           <div class="tabs" id="study-tabs" role="tablist">
             <button type="button" data-filter="all" aria-selected="true">Todos</button>
+            <button type="button" data-filter="new" aria-selected="false">No vistos</button>
             <button type="button" data-filter="cbct" aria-selected="false">CBCT</button>
-            <button type="button" data-filter="unassigned" aria-selected="false">Sin asignar</button>
           </div>
           <label class="search">
             <span class="sr-only">Buscar estudios</span>
@@ -66,40 +65,65 @@
         <div class="table-wrap">
           <table class="data">
             <thead><tr><th>Paciente</th><th>ID estudio</th><th>Modalidad</th><th>Fecha</th><th>Médico</th><th>Tamaño</th><th></th></tr></thead>
-            <tbody id="studies-body"></tbody>
+            <tbody id="studies-body"><tr><td colspan="7"><div class="empty">Cargando…</div></td></tr></tbody>
           </table>
         </div>
       </section>
 
-      <div class="grid-2">
-        <section class="panel" id="carga" style="padding:0">
-          <div class="panel-head"><h2>Cargar archivos DICOM</h2><span class="badge gray">Placeholder</span></div>
-          <div class="panel-body">
-            <label class="dropzone" id="dropzone" for="file-input">
-              <i data-icon="cloud"></i>
-              <p style="margin:0"><strong>Arrastre aquí archivos .dcm o una carpeta</strong></p>
-              <p style="margin:4px 0 16px;font-size:14px">También se admiten archivos .zip con series completas</p>
-              <span class="btn btn-outline btn-sm">Seleccionar archivos</span>
-              <input id="file-input" type="file" multiple class="sr-only">
-            </label>
-            <div class="form-row" style="margin-top:20px">
-              <div class="field"><label for="u-patient">Paciente</label><input class="input" id="u-patient" placeholder="Nombre o ID del paciente"></div>
-              <div class="field">
-                <label for="u-doctor">Médico tratante</label>
-                <select class="input select" id="u-doctor">
-                  <option>Dra. Laura Méndez</option><option>Dr. Carlos Rivas</option><option>Dra. Ana Torres</option>
-                </select>
-              </div>
+      <section class="panel" id="carga">
+        <div class="panel-head"><h2>Cargar estudio</h2></div>
+        <form class="panel-body" id="upload-form" novalidate>
+          <div class="form-error" role="alert"></div>
+          <div class="form-row">
+            <div class="field">
+              <label for="u-patient">Paciente</label>
+              <select class="input select" id="u-patient" required></select>
+              <span class="hint">¿No aparece? <a href="#" data-open="patient">Registrar paciente</a>. El estudio será visible para el médico del paciente.</span>
             </div>
-            <button class="btn btn-primary" type="button" data-soon="La carga se habilitará al conectar el servidor."><i data-icon="upload"></i> Subir y asignar</button>
+            <div class="field">
+              <label for="u-modality">Modalidad</label>
+              <select class="input select" id="u-modality">
+                <option>CBCT</option><option>Panorámica</option><option>Cefalometría</option><option>Periapical</option><option>Otro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label for="u-desc">Descripción</label><input class="input" id="u-desc" placeholder="Ej.: Cone Beam · maxilar completo"></div>
+            <div class="field"><label for="u-date">Fecha del estudio</label><input class="input" id="u-date" type="date"></div>
+          </div>
+          <label class="dropzone" id="dropzone" for="file-input">
+            <i data-icon="cloud"></i>
+            <p style="margin:0"><strong>Arrastre aquí los archivos del estudio</strong></p>
+            <p style="margin:4px 0 16px;font-size:14px">Archivos .dcm, .zip o imágenes</p>
+            <span class="links">
+              <span class="btn btn-outline btn-sm">Seleccionar archivos</span>
+              <button type="button" class="btn btn-ghost btn-sm" id="pick-folder">Seleccionar carpeta</button>
+            </span>
+            <input id="file-input" type="file" multiple class="sr-only">
+            <input id="folder-input" type="file" webkitdirectory multiple class="sr-only">
+          </label>
+          <div class="file-summary" id="file-summary" aria-live="polite"></div>
+          <div class="progress" id="upload-progress" hidden><span></span></div>
+          <button class="btn btn-primary" type="submit" style="margin-top:12px"><i data-icon="upload"></i> Subir estudio</button>
+        </form>
+      </section>
+
+      <div class="grid-2">
+        <section class="panel" id="pacientes">
+          <div class="panel-head"><h2>Pacientes</h2><button class="btn btn-ghost btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo</button></div>
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>Paciente</th><th>Estudios</th><th>Médico tratante</th></tr></thead>
+              <tbody id="patients-body"></tbody>
+            </table>
           </div>
         </section>
 
-        <section class="panel" id="medicos" style="padding:0">
-          <div class="panel-head"><h2>Médicos</h2><a href="#" class="btn btn-ghost btn-sm" data-soon="Gestión de médicos: próximamente.">Ver todos</a></div>
+        <section class="panel" id="medicos">
+          <div class="panel-head"><h2>Médicos</h2><button class="btn btn-ghost btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo</button></div>
           <div class="table-wrap">
             <table class="data">
-              <thead><tr><th>Médico</th><th>Especialidad</th><th>Pacientes</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Médico</th><th>Especialidad</th><th>Pacientes</th></tr></thead>
               <tbody id="doctors-body"></tbody>
             </table>
           </div>
@@ -108,13 +132,54 @@
     </main>
   </div>
 
+  <!-- Nuevo médico -->
+  <div class="modal-backdrop" id="doctor-modal" role="dialog" aria-modal="true" aria-labelledby="doctor-modal-title">
+    <div class="modal sm">
+      <div class="modal-head"><h3 id="doctor-modal-title">Nuevo médico</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <form class="modal-body" id="doctor-form" novalidate>
+        <div class="form-error" role="alert"></div>
+        <div class="field"><label for="nd-name">Nombre completo</label><input class="input" id="nd-name" name="name" required placeholder="Dra. Laura Méndez"></div>
+        <div class="field"><label for="nd-specialty">Especialidad</label><input class="input" id="nd-specialty" name="specialty" placeholder="Ortodoncia"></div>
+        <div class="field"><label for="nd-email">Correo (usuario)</label><input class="input" id="nd-email" name="email" type="email" required autocomplete="off"></div>
+        <div class="field"><label for="nd-pass">Contraseña inicial</label><input class="input" id="nd-pass" name="password" type="text" minlength="6" required autocomplete="new-password"><span class="hint">Mínimo 6 caracteres. El médico puede cambiarla con “¿Olvidó su contraseña?”.</span></div>
+        <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Crear cuenta</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Nuevo paciente -->
+  <div class="modal-backdrop" id="patient-modal" role="dialog" aria-modal="true" aria-labelledby="patient-modal-title">
+    <div class="modal sm">
+      <div class="modal-head"><h3 id="patient-modal-title">Nuevo paciente</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <form class="modal-body" id="patient-form" novalidate>
+        <div class="form-error" role="alert"></div>
+        <div class="field"><label for="np-name">Nombre completo</label><input class="input" id="np-name" name="name" required></div>
+        <div class="form-row">
+          <div class="field"><label for="np-code">N.º de expediente</label><input class="input" id="np-code" name="code" placeholder="P-1043"></div>
+          <div class="field"><label for="np-age">Edad</label><input class="input" id="np-age" name="age" type="number" min="0" max="120"></div>
+        </div>
+        <div class="field"><label for="np-doctor">Médico tratante</label><select class="input select" id="np-doctor" name="doctorId"></select></div>
+        <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Guardar paciente</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Visor (placeholder) -->
   <div class="modal-backdrop" id="viewer-modal" role="dialog" aria-modal="true" aria-label="Visor DICOM">
     <div class="modal">
-      <div class="modal-head"><h3>Visor</h3><button class="icon-btn" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <div class="modal-head"><h3>Visor</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
       <div class="modal-content"></div>
     </div>
   </div>
 
-  <script src="assets/js/app.js"></script>
+  <!-- Archivos -->
+  <div class="modal-backdrop" id="files-modal" role="dialog" aria-modal="true" aria-label="Archivos del estudio">
+    <div class="modal sm">
+      <div class="modal-head"><h3>Archivos</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <div class="modal-body"><ul class="file-list"></ul></div>
+    </div>
+  </div>
+
+  <script type="module" src="assets/js/app.js"></script>
 </body>
 </html>

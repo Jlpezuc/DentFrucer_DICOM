@@ -2,16 +2,26 @@
 
 Portal web de **DentFrucer – Imagenología Dento Maxilo Facial** para consultar estudios DICOM.
 
-> Estado: maqueta (landing + paneles con datos de ejemplo). El visor DICOM, la base de datos y la autenticación real aún no están implementados.
+> Estado: landing, inicio de sesión y paneles conectados a **Firebase** (Authentication, Firestore, Storage). El visor DICOM interactivo es todavía un marcador de posición.
 
 ## Páginas
 
 | Archivo | Descripción |
 | --- | --- |
-| `index.html` | Landing pública: servicios, perfiles, visor (placeholder), seguridad y contacto |
-| `login.html` | Inicio de sesión con selector Médico / Administrador (`?rol=admin`) |
-| `admin.html` | Panel de administración: estudios, carga de archivos, médicos |
+| `index.html` | Landing pública de la clínica; el acceso es para médicos |
+| `login.html` | Inicio de sesión de médicos |
 | `portal.html` | Portal del médico: solo los estudios de sus pacientes |
+| `admin-login.html` | Acceso de administración (no enlazado desde la landing) |
+| `admin.html` | Panel: carga de estudios, pacientes, médicos y asignaciones |
+
+## Firebase
+
+Siga **[FIREBASE.md](FIREBASE.md)** para crear el proyecto, el primer administrador, publicar las reglas de seguridad y la página.
+
+Sin configurar Firebase el sitio funciona en **modo demostración** (datos de ejemplo en memoria):
+
+- Médico: `doctor@dentfrucer.com` / `demo1234`
+- Administrador: `admin@dentfrucer.com` / `demo1234`
 
 ## Probar en local
 
@@ -20,18 +30,18 @@ python3 -m http.server 8000
 # abrir http://localhost:8000
 ```
 
-Credenciales de demostración (también con el botón “Rellenar datos de demostración”):
-
-- Médico: `doctor@dentfrucer.com` / `demo1234`
-- Administrador: `admin@dentfrucer.com` / `demo1234`
-
-La sesión es simulada en `sessionStorage`; no hay seguridad real todavía.
+Los scripts son módulos ES: abra el sitio con un servidor (no con `file://`).
 
 ## Estructura
 
 ```
 assets/css/styles.css   paleta de marca y estilos
-assets/js/app.js        iconos, sesión simulada, datos de ejemplo
+assets/js/app.js            lógica de cada página
+assets/js/backend.js        capa de datos: Firebase o modo demostración
+assets/js/firebase-config.js  configuración del proyecto Firebase
+assets/js/icons.js          iconos SVG
+firestore.rules, storage.rules  reglas de seguridad
+firebase.json               Hosting + reglas para `firebase deploy`
 assets/img/             logotipos
 ```
 

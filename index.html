@@ -20,13 +20,12 @@
       </a>
       <nav class="nav" aria-label="Principal">
         <a href="#servicios">Servicios</a>
-        <a href="#plataforma">Plataforma</a>
+        <a href="#plataforma">Portal</a>
         <a href="#visor">Visor</a>
         <a href="#seguridad">Seguridad</a>
         <a href="#contacto">Contacto</a>
       </nav>
       <div class="header-actions">
-        <a class="btn btn-outline btn-sm" href="login.html?rol=admin">Administración</a>
         <a class="btn btn-primary btn-sm" href="login.html">Iniciar sesión</a>
         <button class="menu-toggle" aria-label="Abrir menú" aria-expanded="false"><i data-icon="menu"></i></button>
       </div>
@@ -119,38 +118,38 @@
       </div>
     </section>
 
-    <!-- Plataforma / roles -->
+    <!-- Portal del médico -->
     <section id="plataforma" class="bg-soft">
       <div class="container">
         <div class="section-head">
-          <span class="kicker">Plataforma</span>
-          <h2>Un acceso para cada perfil</h2>
-          <p>Cada médico ve únicamente los estudios de sus propios pacientes. El equipo de DentFrucer administra la carga y asignación de archivos.</p>
+          <span class="kicker">Portal del médico</span>
+          <h2>Los estudios de sus pacientes, en un solo lugar</h2>
+          <p>Cada médico accede con su propia cuenta y ve únicamente los estudios de sus pacientes.</p>
         </div>
         <div class="roles">
           <article class="role-card doctor">
             <span class="role-tag">Médicos</span>
-            <h3>Portal del médico</h3>
-            <p>Consulte y descargue los estudios de sus pacientes en cuanto están listos.</p>
+            <h3>Todo lo que necesita para diagnosticar</h3>
+            <p>Consulte y descargue los estudios en cuanto están listos, sin discos ni esperas.</p>
             <ul>
-              <li><i data-icon="check"></i> Listado de pacientes y estudios asignados</li>
+              <li><i data-icon="check"></i> Listado de pacientes y estudios</li>
               <li><i data-icon="check"></i> Visor DICOM en el navegador</li>
               <li><i data-icon="check"></i> Descarga de archivos originales</li>
               <li><i data-icon="check"></i> Aviso de estudios nuevos</li>
             </ul>
-            <a class="btn btn-accent" href="login.html">Ingresar como médico <i data-icon="arrowRight"></i></a>
+            <a class="btn btn-accent" href="login.html">Ingresar al portal <i data-icon="arrowRight"></i></a>
           </article>
-          <article class="role-card admin">
-            <span class="role-tag">Administración</span>
-            <h3>Panel de administración</h3>
-            <p>Gestione el archivo completo de estudios del centro de imagenología.</p>
+          <article class="role-card info">
+            <span class="role-tag">Nuevos médicos</span>
+            <h3>¿Aún no tiene cuenta?</h3>
+            <p>Las cuentas son personales y las crea el equipo de DentFrucer para cada médico tratante.</p>
             <ul>
-              <li><i data-icon="check"></i> Carga de archivos DICOM y series</li>
-              <li><i data-icon="check"></i> Alta de pacientes y médicos</li>
-              <li><i data-icon="check"></i> Asignación de estudios a cada médico</li>
-              <li><i data-icon="check"></i> Control de accesos y actividad</li>
+              <li><i data-icon="check"></i> Solicite su acceso desde el formulario de contacto</li>
+              <li><i data-icon="check"></i> Reciba sus credenciales por correo</li>
+              <li><i data-icon="check"></i> Indique a sus pacientes que lo nombren al agendar</li>
+              <li><i data-icon="check"></i> Sus estudios aparecerán automáticamente en el portal</li>
             </ul>
-            <a class="btn btn-primary" href="login.html?rol=admin">Ingresar como administrador <i data-icon="arrowRight"></i></a>
+            <a class="btn btn-primary" href="#contacto">Solicitar acceso <i data-icon="arrowRight"></i></a>
           </article>
         </div>
       </div>
@@ -216,7 +215,7 @@
         <div class="security-list">
           <div class="security-item"><span class="icon-badge blue"><i data-icon="lock"></i></span><div><h4>Acceso por perfil</h4><p>Cada médico accede exclusivamente a los estudios de sus pacientes.</p></div></div>
           <div class="security-item"><span class="icon-badge green"><i data-icon="shield"></i></span><div><h4>Conexión cifrada</h4><p>Toda la información viaja cifrada entre el servidor y su navegador.</p></div></div>
-          <div class="security-item"><span class="icon-badge blue"><i data-icon="key"></i></span><div><h4>Credenciales personales</h4><p>Usuarios individuales administrados por DentFrucer.</p></div></div>
+          <div class="security-item"><span class="icon-badge blue"><i data-icon="key"></i></span><div><h4>Credenciales personales</h4><p>Cada médico tiene un usuario y contraseña propios.</p></div></div>
         </div>
       </div>
     </section>
@@ -284,7 +283,7 @@
         </div>
         <div>
           <h5>Plataforma</h5>
-          <ul><li><a href="login.html">Portal del médico</a></li><li><a href="login.html?rol=admin">Administración</a></li><li><a href="#visor">Visor DICOM</a></li></ul>
+          <ul><li><a href="login.html">Portal del médico</a></li><li><a href="#visor">Visor DICOM</a></li></ul>
         </div>
         <div>
           <h5>Contacto</h5>
@@ -298,6 +297,6 @@
     </div>
   </footer>
 
-  <script src="assets/js/app.js"></script>
+  <script type="module" src="assets/js/app.js"></script>
 </body>
 </html>
