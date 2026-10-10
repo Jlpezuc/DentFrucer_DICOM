@@ -7,6 +7,7 @@
       "storage.rules",
       "README.md",
       "FIREBASE.md",
+      "cors.json",
       "**/.*",
       "**/node_modules/**"
     ],

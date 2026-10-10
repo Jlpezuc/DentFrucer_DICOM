@@ -1,0 +1,7 @@
+[
+  {
+    "origin": ["https://jlpezuc.github.io", "https://dentfrucer-28e0f.web.app", "https://dentfrucer-28e0f.firebaseapp.com"],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600
+  }
+]

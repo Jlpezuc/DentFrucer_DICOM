@@ -9,13 +9,13 @@ El portal usa tres servicios de Firebase:
 | **Cloud Storage** | Archivos DICOM de cada estudio (`studies/{id}/…`) |
 | **Hosting** (opcional) | Publicar la página, gratis y con HTTPS |
 
-Mientras `assets/js/firebase-config.js` tenga los valores `TU_…`, el sitio funciona en **modo demostración**, con datos de ejemplo.
+Mientras `assets/js/config/firebase-config.js` tenga los valores `TU_…`, el sitio funciona en **modo demostración**, con datos de ejemplo.
 
 ## 1. Crear el proyecto
 
 1. Entre a <https://console.firebase.google.com> y pulse **Agregar proyecto** (por ejemplo `dentfrucer`). Google Analytics no hace falta.
 2. En la página del proyecto pulse el icono **Web (`</>`)**, registre la app (nombre: `portal`) y copie el objeto `firebaseConfig`.
-3. Pegue esos valores en `assets/js/firebase-config.js`. No son secretos: la seguridad la dan las reglas del paso 4.
+3. Pegue esos valores en `assets/js/config/firebase-config.js` (solo los valores del objeto, sin las líneas `import`). No son secretos: la seguridad la dan las reglas del paso 4.
 
 ## 2. Activar los servicios
 
@@ -54,6 +54,36 @@ La página quedará en `https://SU-PROYECTO.web.app`. Firebase Hosting es gratis
 Sin la CLI: copie el contenido de `firestore.rules` en *Firestore → Reglas* y el de `storage.rules` en *Storage → Reglas*, y pulse **Publicar** en cada una.
 
 > Si publica la página en otro dominio (GitHub Pages o uno propio), agréguelo en *Authentication → Configuración → Dominios autorizados*.
+
+## 5. Permitir que el visor lea los archivos (CORS)
+
+El visor descarga los archivos DICOM directamente desde Storage para mostrarlos. Google bloquea esas descargas desde otra web hasta que se autoriza el dominio de la página (configuración "CORS" del bucket). Se hace **una sola vez**, desde el navegador:
+
+1. Abra Cloud Shell de su proyecto: <https://console.cloud.google.com/?cloudshell=true&project=dentfrucer-28e0f> (una terminal dentro del navegador; no hay que instalar nada).
+2. Pegue estos dos comandos y pulse Enter:
+
+   ```bash
+   echo '[{"origin":["https://jlpezuc.github.io","https://dentfrucer-28e0f.web.app","https://dentfrucer-28e0f.firebaseapp.com"],"method":["GET"],"maxAgeSeconds":3600}]' > cors.json
+   gcloud storage buckets update gs://dentfrucer-28e0f.firebasestorage.app --cors-file=cors.json
+   ```
+
+3. Listo. Si más adelante usa un dominio propio, agréguelo a la lista y repita el paso 2. El archivo `cors.json` del repositorio tiene la misma configuración.
+
+Si falta este paso, el visor muestra: *"No se pudieron descargar las imágenes… revise la configuración CORS"*.
+
+## El visor
+
+Al abrir un estudio, el visor elige el modo según su contenido:
+
+| Contenido | Modo |
+| --- | --- |
+| Serie de cortes o archivo multicuadro (CBCT) | Tres planos enlazados (axial, coronal, sagital), 3D, panorámica reconstruida por curva y cortes transversales |
+| Panorámica, cefalometría, intraorales, fotos | Visor 2D con mosaico de 1, 2 o 4 imágenes y miniaturas |
+| Informes PDF | Visor de documentos (o pestaña *Informes* junto a las imágenes) |
+
+Formatos que abre: DICOM sin compresión (Explicit/Implicit VR, Big Endian, Deflated), RLE, JPEG Baseline, archivos ZIP con la exportación del equipo, PNG/JPG y PDF. Los DICOM con JPEG 2000, JPEG-LS o JPEG Lossless no se pueden decodificar en el navegador: el visor lo indica y ofrece descargarlos.
+
+**Recomendación al cargar un CBCT:** suba la carpeta de la serie completa (botón *Seleccionar carpeta*) o un ZIP con ella. El visor reconstruye el volumen con todos los cortes.
 
 ## Uso diario
 

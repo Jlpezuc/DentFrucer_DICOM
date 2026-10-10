@@ -12,11 +12,23 @@
 //                       totalSize, status: 'Nuevo' | 'Visto', createdAt }
 // Archivos en Storage: studies/{studyId}/{nombre de archivo}
 
-import { firebaseConfig } from './firebase-config.js';
+import { firebaseConfig } from '../config/firebase-config.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
 
-export const isDemo = !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith('TU_');
+// Modo demostración: sin configuración de Firebase, o forzado con ?demo=1 en la URL
+// (útil para probar la interfaz sin tocar datos reales; ?demo=0 lo desactiva).
+// Solo usa datos de ejemplo en memoria: nunca da acceso a Firebase.
+function demoForced() {
+  try {
+    const q = new URLSearchParams(location.search).get('demo');
+    if (q === '1') sessionStorage.setItem('dentfrucer.forceDemo', '1');
+    if (q === '0') sessionStorage.removeItem('dentfrucer.forceDemo');
+    return sessionStorage.getItem('dentfrucer.forceDemo') === '1';
+  } catch (e) { return false; }
+}
+
+export const isDemo = !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith('TU_') || demoForced();
 
 function byDateDesc(a, b) { return (b.date || '').localeCompare(a.date || ''); }
 function byName(a, b) { return (a.name || '').localeCompare(b.name || '', 'es'); }
