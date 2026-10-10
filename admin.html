@@ -18,7 +18,8 @@
       <a class="brand" href="admin.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
       <nav class="side-nav" aria-label="Administración">
         <span class="label">General</span>
-        <a href="#estudios" class="active"><i data-icon="folder"></i> Estudios</a>
+        <a href="#agenda" class="active"><i data-icon="calendar"></i> Agenda</a>
+        <a href="#estudios"><i data-icon="folder"></i> Estudios</a>
         <a href="#carga"><i data-icon="upload"></i> Cargar estudio</a>
         <a href="#pacientes"><i data-icon="users"></i> Pacientes</a>
         <a href="#medicos"><i data-icon="stethoscope"></i> Médicos</a>
@@ -34,7 +35,7 @@
       <div class="topbar">
         <div>
           <h1>Panel de administración</h1>
-          <p>Gestione estudios DICOM, pacientes y médicos.</p>
+          <p>Gestione la agenda, los estudios DICOM, los pacientes y los médicos.</p>
         </div>
         <div class="actions">
           <button class="btn btn-outline btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo médico</button>
@@ -43,12 +44,33 @@
         </div>
       </div>
 
-      <div class="stats">
+      <div class="stats five">
+        <div class="stat"><div class="k">Citas de hoy</div><div class="v" id="stat-today">–</div></div>
         <div class="stat"><div class="k">Estudios</div><div class="v" id="stat-studies">–</div></div>
         <div class="stat"><div class="k">Pacientes</div><div class="v" id="stat-patients">–</div></div>
         <div class="stat"><div class="k">Médicos</div><div class="v" id="stat-doctors">–</div></div>
         <div class="stat"><div class="k">Pacientes sin médico</div><div class="v" id="stat-unassigned" style="color:var(--warning)">–</div></div>
       </div>
+
+      <section class="panel" id="agenda">
+        <div class="panel-head">
+          <div class="tabs" id="agenda-tabs" role="tablist">
+            <button type="button" data-filter="today" aria-selected="true">Hoy</button>
+            <button type="button" data-filter="next" aria-selected="false">Próximas</button>
+            <button type="button" data-filter="past" aria-selected="false">Anteriores</button>
+          </div>
+          <div class="panel-actions">
+            <button class="btn btn-ghost btn-sm" type="button" id="copy-booking-link" title="Copiar el enlace para compartirlo con los pacientes"><i data-icon="link"></i> Copiar enlace</button>
+            <a class="btn btn-outline btn-sm" href="agendar.html" target="_blank" rel="noopener"><i data-icon="plus"></i> Nueva cita</a>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Fecha</th><th>Paciente</th><th>Examen</th><th>Lo envía</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="agenda-body"><tr><td colspan="6"><div class="empty">Cargando…</div></td></tr></tbody>
+          </table>
+        </div>
+      </section>
 
       <section class="panel" id="estudios">
         <div class="panel-head">
@@ -75,11 +97,12 @@
         <div class="panel-head"><h2>Cargar estudio</h2></div>
         <form class="panel-body" id="upload-form" novalidate>
           <div class="form-error" role="alert"></div>
+          <div class="upload-appt" id="upload-appt" hidden></div>
           <div class="form-row">
             <div class="field">
               <label for="u-patient">Paciente</label>
               <select class="input select" id="u-patient" required></select>
-              <span class="hint">¿No aparece? <a href="#" data-open="patient">Registrar paciente</a>. El estudio será visible para el médico del paciente.</span>
+              <span class="hint">Los pacientes que agendaron en línea ya están en la lista. ¿No aparece? <a href="#" data-open="patient">Registrar paciente</a>. El estudio será visible para el médico del paciente.</span>
             </div>
             <div class="field">
               <label for="u-modality">Modalidad</label>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agendar estudio · DentFrucer</title>
+  <meta name="description" content="Agende en línea su tomografía Cone Beam, radiografía panorámica, cefalometría o radiografías intraorales en DentFrucer.">
+  <link rel="icon" type="image/png" href="assets/img/logo-dentfrucer-circular.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="agenda" class="booking-page">
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html" aria-label="DentFrucer, inicio">
+        <img src="assets/img/logo-dentfrucer.png" alt="DentFrucer · Imagenología Dento Maxilo Facial" width="435" height="115">
+      </a>
+      <div class="header-actions">
+        <a class="btn btn-ghost btn-sm" href="index.html"><i data-icon="arrowLeft"></i> Inicio</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="booking">
+    <div class="container">
+      <div class="booking-head">
+        <span class="kicker">Agenda en línea</span>
+        <h1>Agende su estudio</h1>
+        <p>Elija el examen, el día y la hora. No necesita crear una cuenta.</p>
+      </div>
+
+      <div class="booking-grid" id="booking">
+        <form class="booking-main" id="booking-form" novalidate>
+          <div class="bk-step">
+            <h2><span class="bk-num">1</span> ¿Qué examen se va a realizar?</h2>
+            <div class="bk-exams" id="bk-exams" role="radiogroup" aria-label="Tipo de examen"></div>
+          </div>
+
+          <div class="bk-step">
+            <h2><span class="bk-num">2</span> Elija el día</h2>
+            <div class="bk-cal" id="bk-cal" aria-live="polite"></div>
+          </div>
+
+          <div class="bk-step">
+            <h2><span class="bk-num">3</span> Elija la hora</h2>
+            <div id="bk-times" aria-live="polite"><p class="muted">Primero elija un día.</p></div>
+          </div>
+
+          <div class="bk-step">
+            <h2><span class="bk-num">4</span> Sus datos</h2>
+            <div class="form-row">
+              <div class="field"><label for="bk-first">Nombre <span class="req" aria-hidden="true">*</span></label><input class="input" id="bk-first" name="firstName" required maxlength="60" autocomplete="given-name"></div>
+              <div class="field"><label for="bk-last">Apellido <span class="req" aria-hidden="true">*</span></label><input class="input" id="bk-last" name="lastName" required maxlength="60" autocomplete="family-name"></div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label for="bk-email">Correo electrónico <span class="opt">(opcional)</span></label><input class="input" id="bk-email" name="email" type="email" maxlength="120" autocomplete="email" inputmode="email"></div>
+              <div class="field"><label for="bk-phone">Teléfono <span class="opt">(opcional)</span></label><input class="input" id="bk-phone" name="phone" type="tel" maxlength="30" autocomplete="tel"></div>
+            </div>
+            <div class="field">
+              <label for="bk-referrer">Médico u odontólogo que lo envía <span class="opt">(opcional)</span></label>
+              <input class="input" id="bk-referrer" name="referrer" maxlength="80" placeholder="Ej.: Dra. Laura Méndez">
+              <span class="hint">Así su médico recibe los resultados en su portal.</span>
+            </div>
+            <!-- Campo trampa para robots: las personas no lo ven. -->
+            <div class="bk-trap" aria-hidden="true"><label for="bk-website">No completar</label><input id="bk-website" name="website" tabindex="-1" autocomplete="off"></div>
+          </div>
+        </form>
+
+        <aside class="bk-summary" aria-label="Resumen de la cita">
+          <h3>Su cita</h3>
+          <dl>
+            <dt>Examen</dt><dd data-sum="exam">—</dd>
+            <dt>Día</dt><dd data-sum="date">—</dd>
+            <dt>Hora</dt><dd data-sum="time">—</dd>
+          </dl>
+          <div class="form-error" role="alert" id="bk-error"></div>
+          <button class="btn btn-primary btn-block" type="submit" form="booking-form" id="bk-submit" disabled><i data-icon="check"></i> Confirmar cita</button>
+          <p class="bk-privacy">Usamos sus datos solo para gestionar su cita y entregar sus resultados. <a href="index.html#contacto">¿Dudas? Contáctenos</a>.</p>
+        </aside>
+      </div>
+
+      <div class="bk-done" id="bk-done" hidden tabindex="-1">
+        <span class="bk-done-icon"><i data-icon="check"></i></span>
+        <h2>¡Cita agendada!</h2>
+        <p class="bk-done-lead" id="bk-done-lead"></p>
+        <dl class="bk-done-details" id="bk-done-details"></dl>
+        <div class="bk-done-box">
+          <h4>Antes de venir</h4>
+          <ul id="bk-instructions"></ul>
+        </div>
+        <div class="bk-done-actions">
+          <button class="btn btn-primary" type="button" id="bk-ics"><i data-icon="calendar"></i> Agregar a mi calendario</button>
+          <button class="btn btn-outline" type="button" id="bk-again">Agendar otra cita</button>
+          <a class="btn btn-ghost" href="index.html">Volver al inicio</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

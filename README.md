@@ -9,6 +9,7 @@ Portal web de **DentFrucer – Imagenología Dento Maxilo Facial** para consulta
 | Archivo | Descripción |
 | --- | --- |
 | `index.html` | Landing pública de la clínica; el acceso es para médicos |
+| `agendar.html` | Agenda en línea para pacientes, sin crear cuenta |
 | `login.html` | Inicio de sesión de médicos |
 | `portal.html` | Portal del médico: solo los estudios de sus pacientes |
 | `admin-login.html` | Acceso de administración (no enlazado desde la landing) |
@@ -24,6 +25,18 @@ Sin configurar Firebase el sitio funciona en **modo demostración** (datos de ej
 - Administrador: `admin@dentfrucer.com` / `demo1234`
 
 Con Firebase ya configurado, agregue `?demo=1` a la URL (por ejemplo `login.html?demo=1`) para probar la interfaz con datos de ejemplo sin tocar datos reales; `?demo=0` vuelve al modo normal.
+
+## Agenda de pacientes
+
+En **`agendar.html`** el paciente elige el examen, el día y la hora libres y deja **nombre y apellido** (obligatorios), **correo** y **teléfono** (opcionales) y, si quiere, el médico que lo envía. No crea ninguna cuenta. Al confirmar:
+
+- se guarda la **cita** y se ocupa el **turno** (nadie más puede tomarlo);
+- se crea el **paciente** en la lista de la clínica, sin médico asignado (si ya había agendado con el mismo nombre y correo/teléfono, no se duplica);
+- el paciente ve un código de cita y puede agregarla a su calendario (.ics).
+
+En el panel de administración, la sección **Agenda** muestra las citas de hoy, las próximas y las anteriores. **Cargar estudio** desde una cita rellena el paciente, la modalidad y la fecha, y al subir los archivos la cita queda como *Atendida*. Los pacientes con cita hoy aparecen primero en la lista de carga, y el médico que indicaron se muestra junto al selector de médico tratante. Cancelar una cita libera el horario.
+
+Horarios, duración de los turnos, días cerrados, tipos de examen e indicaciones se editan en `assets/js/config/agenda-config.js`. En modo demostración (`agendar.html?demo=1`) las citas se guardan solo en la pestaña del navegador. Un enlace como `agendar.html?examen=CBCT` deja el examen preseleccionado.
 
 ## Visor
 
@@ -51,16 +64,17 @@ Los scripts son módulos ES: abra el sitio con un servidor (no con `file://`).
 
 ```
 index.html, login.html, portal.html,      páginas
-admin-login.html, admin.html
+admin-login.html, admin.html, agendar.html
 assets/css/styles.css                    estilos del sitio (paleta de marca)
 assets/css/viewer.css                    estilos del visor (tema oscuro)
 assets/img/                              logotipos
 assets/js/
   app.js                 punto de entrada: carga el módulo de cada página
-  config/                configuración de Firebase
+  config/                configuración de Firebase y de la agenda (horarios, exámenes)
   services/backend.js    datos: Firebase o modo demostración
+  services/agenda.js     turnos disponibles y validación de las citas
   ui/                    utilidades compartidas: iconos, modales, formatos
-  pages/                 lógica de cada página (landing, login, admin, portal)
+  pages/                 lógica de cada página (landing, login, admin, portal, agenda)
   viewer/
     index.js             abre el visor y elige el modo
     shell.js             estructura visual: encabezado, barras, paneles
