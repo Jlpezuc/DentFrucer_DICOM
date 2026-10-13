@@ -5,10 +5,10 @@
 
 import { isoDate, agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
 import { normalizePatient } from '../people.js';
-import { agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, studyPatientFields } from './shared.js';
+import { agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, sizeOf, studyEdits, studyPatientFields } from './shared.js';
 
 const SESSION_KEY = 'dentfrucer.demo.session';
-const DB_KEY = 'dentfrucer.demo.db';
+const DB_KEY = 'dentfrucer.demo.db.v2'; // cambia la versión si cambian los datos de ejemplo
 const MB = 1024 * 1024;
 
 const USERS = {
@@ -36,10 +36,10 @@ function seed() {
     person('ag_demo2', 'Camila', 'Rojas', { phone: '300 555 0192', source: 'agenda' })
   ];
   const patient = (id) => patients.find((p) => p.id === id);
-  const study = (id, pid, doctorId, modality, description, date, mb, images, status) => ({
+  const study = (id, pid, doctorId, modality, description, date, mb, images, status, names) => ({
     id, code: id, patientId: pid, ...studyPatientFields(patient(pid)), doctorId,
     modality, description, date, status, totalSize: mb * MB,
-    files: Array.from({ length: Math.min(images, 3) }, (_, i) => ({ name: 'IMG' + String(i + 1).padStart(4, '0') + '.dcm', path: '', size: (mb * MB) / images }))
+    files: Array.from({ length: Math.min(images, 3) }, (_, i) => ({ name: names ? names[i] : 'IMG' + String(i + 1).padStart(4, '0') + '.dcm', path: 'demo/' + id + '/' + i, size: (mb * MB) / images }))
   });
   const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return isoDate(d); };
   const appointment = (id, pid, exam, date, time, referrer) => {
@@ -55,6 +55,8 @@ function seed() {
     studies: [
       study('EST-2026-0418', 'p1', 'D-01', 'CBCT', 'Tomografía Cone Beam · maxilar completo', '2026-10-08', 412, 512, 'Nuevo'),
       study('EST-2026-0415', 'p1', 'D-01', 'Panorámica', 'Ortopantomografía digital', '2026-10-08', 18, 1, 'Visto'),
+      study('EST-2026-0416', 'p1', 'D-01', 'Informe', 'Informe radiológico', '2026-10-08', 0.2, 1, 'Nuevo', ['Informe EST-2026-0418.pdf']),
+      study('EST-2026-0310', 'p1', 'D-02', 'Periapical', 'Control periapical 21', '2026-06-15', 4, 2, 'Visto'),
       study('EST-2026-0409', 'p2', 'D-01', 'Cefalometría', 'Telerradiografía lateral de cráneo', '2026-10-06', 22, 1, 'Visto'),
       study('EST-2026-0402', 'p3', 'D-01', 'CBCT', 'Cone Beam · ATM bilateral', '2026-10-03', 388, 480, 'Nuevo'),
       study('EST-2026-0397', 'p4', 'D-02', 'CBCT', 'Cone Beam · zona implante 36', '2026-10-02', 296, 384, 'Visto'),
@@ -133,12 +135,36 @@ export function createDemoBackend() {
       studies.push({
         id, code: id, patientId: patient.id, ...studyPatientFields(patient), doctorId: doctorId || null,
         modality, description, date, status: 'Nuevo',
-        files: files.map((f) => ({ name: f.name, path: '', size: f.size })), totalSize: files.reduce((n, f) => n + f.size, 0)
+        files: files.map((f) => ({ name: f.name, path: 'demo/' + newId('f'), size: f.size })), totalSize: sizeOf(files)
       });
       save();
       return id;
     },
     async setStudyDoctor(studyId, doctorId) { studies.find((s) => s.id === studyId).doctorId = doctorId || null; save(); },
+    async updateStudy(study, changes) { Object.assign(studies.find((s) => s.id === study.id), studyEdits(changes)); save(); },
+    // Archivos de demostración: solo nombre y tamaño (no hay nada que descargar).
+    async addStudyFiles(study, files, onProgress) {
+      for (let i = 1; i <= 5; i++) { await wait(60); if (onProgress) onProgress(i / 5); }
+      const s = studies.find((x) => x.id === study.id);
+      s.files = [...s.files, ...files.map((f) => ({ name: f.name, path: 'demo/' + newId('f'), size: f.size }))];
+      s.totalSize = sizeOf(s.files);
+      save();
+      return s.files;
+    },
+    async renameStudyFile(study, path, name) {
+      const s = studies.find((x) => x.id === study.id);
+      s.files = s.files.map((f) => (f.path === path ? { ...f, name: cleanFileName(name) } : f));
+      save();
+      return s.files;
+    },
+    async deleteStudyFile(study, path) {
+      const s = studies.find((x) => x.id === study.id);
+      s.files = s.files.filter((f) => f.path !== path);
+      s.totalSize = sizeOf(s.files);
+      save();
+      return s.files;
+    },
+    fileUrl: async () => null,
     async deleteStudy(study) { studies.splice(studies.findIndex((s) => s.id === study.id), 1); save(); },
     async markSeen(studyId) { const s = studies.find((x) => x.id === studyId); if (s) s.status = 'Visto'; save(); },
     async fileUrls() { return []; },

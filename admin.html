@@ -83,16 +83,20 @@
             <button type="button" data-filter="nodoctor" aria-selected="false">Sin médico</button>
             <button type="button" data-filter="cbct" aria-selected="false">CBCT</button>
           </div>
-          <label class="search">
-            <span class="sr-only">Buscar estudios</span>
-            <i data-icon="search"></i>
-            <input class="input" id="admin-search" type="search" placeholder="Buscar paciente, ID o médico">
-          </label>
+          <div class="panel-actions">
+            <label class="search">
+              <span class="sr-only">Buscar estudios</span>
+              <i data-icon="search"></i>
+              <input class="input" id="admin-search" type="search" placeholder="Paciente, médico, ID o fecha (08/10/2026)">
+            </label>
+            <label class="date-filter"><span class="sr-only">Fecha</span><input class="input input-sm" id="admin-date" type="date" title="Ver solo los exámenes de esta fecha"></label>
+          </div>
         </div>
+        <p class="panel-note">Cada fila es un <strong>grupo</strong>: los exámenes de un paciente, para un médico, en una misma fecha. Ábralo para ver, editar o agregar archivos.</p>
         <div class="table-wrap">
           <table class="data">
-            <thead><tr><th>Paciente</th><th>ID estudio</th><th>Modalidad</th><th>Fecha</th><th>Médico</th><th>Tamaño</th><th></th></tr></thead>
-            <tbody id="studies-body"><tr><td colspan="7"><div class="empty">Cargando…</div></td></tr></tbody>
+            <thead><tr><th>Paciente</th><th>Fecha</th><th>Médico</th><th>Exámenes</th><th>Archivos</th><th></th></tr></thead>
+            <tbody id="studies-body"><tr><td colspan="6"><div class="empty">Cargando…</div></td></tr></tbody>
           </table>
         </div>
       </section>
@@ -115,30 +119,14 @@
               <span class="hint" id="u-doctor-hint">El estudio aparecerá en el portal de este médico.</span>
             </div>
           </div>
-          <div class="form-row three">
-            <div class="field">
-              <label for="u-modality">Modalidad</label>
-              <select class="input select" id="u-modality">
-                <option>CBCT</option><option>Panorámica</option><option>Cefalometría</option><option>Periapical</option><option>Otro</option>
-              </select>
-            </div>
-            <div class="field"><label for="u-desc">Descripción</label><input class="input" id="u-desc" placeholder="Ej.: Cone Beam · maxilar completo"></div>
-            <div class="field"><label for="u-date">Fecha del estudio</label><input class="input" id="u-date" type="date"></div>
+          <div class="form-row">
+            <div class="field"><label for="u-date">Fecha de los exámenes</label><input class="input" id="u-date" type="date"></div>
+            <div class="field"><span class="field-label">Grupo</span><span class="hint" id="u-group-hint">Elija paciente, médico y fecha. Los exámenes del mismo paciente, médico y día se agrupan.</span></div>
           </div>
-          <label class="dropzone" id="dropzone" for="file-input">
-            <i data-icon="cloud"></i>
-            <p style="margin:0"><strong>Arrastre aquí los archivos del estudio</strong></p>
-            <p style="margin:4px 0 16px;font-size:14px">Archivos .dcm, .zip o imágenes</p>
-            <span class="links">
-              <span class="btn btn-outline btn-sm">Seleccionar archivos</span>
-              <button type="button" class="btn btn-ghost btn-sm" id="pick-folder">Seleccionar carpeta</button>
-            </span>
-            <input id="file-input" type="file" multiple class="sr-only">
-            <input id="folder-input" type="file" webkitdirectory multiple class="sr-only">
-          </label>
-          <div class="file-summary" id="file-summary" aria-live="polite"></div>
+          <div class="exam-list" id="exam-list"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="add-exam"><i data-icon="plus"></i> Agregar otro examen (o el informe PDF)</button>
           <div class="progress" id="upload-progress" hidden><span></span></div>
-          <button class="btn btn-primary" type="submit" style="margin-top:12px"><i data-icon="upload"></i> Subir estudio</button>
+          <button class="btn btn-primary" type="submit" style="margin-top:12px"><i data-icon="upload"></i> Subir exámenes</button>
         </form>
       </section>
 
@@ -158,7 +146,7 @@
           </div>
           <div class="table-wrap">
             <table class="data">
-              <thead><tr><th>Paciente</th><th>Contacto</th><th>Estudios</th><th></th></tr></thead>
+              <thead><tr><th>Paciente</th><th>Contacto</th><th>Visitas</th><th></th></tr></thead>
               <tbody id="patients-body"></tbody>
             </table>
           </div>
@@ -169,7 +157,7 @@
           <div class="panel-head"><h2>Médicos</h2><button class="btn btn-ghost btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo</button></div>
           <div class="table-wrap">
             <table class="data">
-              <thead><tr><th>Médico</th><th>Especialidad</th><th>Estudios</th></tr></thead>
+              <thead><tr><th>Médico</th><th>Especialidad</th><th>Exámenes</th><th></th></tr></thead>
               <tbody id="doctors-body"></tbody>
             </table>
           </div>
@@ -255,6 +243,18 @@
       </form>
     </div>
   </div>
+
+  <!-- Explorador de exámenes: grupo, paciente o médico -->
+  <div class="modal-backdrop" id="explorer-modal" role="dialog" aria-modal="true" aria-labelledby="explorer-title">
+    <div class="modal explorer">
+      <div class="modal-head">
+        <nav class="crumbs" id="explorer-crumbs" aria-label="Ubicación"></nav>
+        <button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button>
+      </div>
+      <div class="modal-body explorer-body" id="explorer-body"></div>
+    </div>
+  </div>
+  <input type="file" id="explorer-file-input" multiple class="sr-only" tabindex="-1">
 
   <!-- Archivos -->
   <div class="modal-backdrop" id="files-modal" role="dialog" aria-modal="true" aria-label="Archivos del estudio">

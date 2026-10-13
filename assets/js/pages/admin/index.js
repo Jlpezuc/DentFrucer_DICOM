@@ -1,8 +1,9 @@
 // Panel de administración. Cada sección vive en su propio módulo:
 //   agenda.js    citas: lista, alta, edición, cambio de estado y borrado
-//   studies.js   estudios: lista, médico de cada estudio, ver, archivos, borrar
-//   upload.js    carga de un estudio (paciente + médico + archivos)
-//   people.js    pacientes (alta y edición) y médicos
+//   studies.js   exámenes agrupados (paciente + médico + fecha) con búsqueda
+//   explorer.js  explorador: médico → paciente → grupo → exámenes y archivos
+//   upload.js    carga de exámenes (paciente + médico + fecha + archivos)
+//   people.js    pacientes (alta, edición, sus visitas) y médicos
 //
 // Todas comparten el mismo estado y se vuelven a dibujar con ctx.reload().
 
@@ -11,6 +12,7 @@ import { setText, toast } from '../../ui/dom.js';
 import { today } from '../../ui/format.js';
 import { requireRole } from '../session.js';
 import { createAgenda } from './agenda.js';
+import { createExplorer } from './explorer.js';
 import { createPeople } from './people.js';
 import { createStudies } from './studies.js';
 import { createUpload } from './upload.js';
@@ -26,6 +28,7 @@ export async function init() {
     patientById: (id) => state.patients.find((p) => p.id === id)
   };
 
+  ctx.explorer = createExplorer(ctx);
   const upload = createUpload(ctx);
   ctx.startUploadFor = (appt) => upload.startFor(appt);
   const sections = [createAgenda(ctx), createStudies(ctx), upload, createPeople(ctx)];

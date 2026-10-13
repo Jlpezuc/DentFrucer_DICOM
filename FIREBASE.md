@@ -100,8 +100,8 @@ Formatos que abre: DICOM sin compresión (Explicit/Implicit VR, Big Endian, Defl
 ## Uso diario
 
 1. **Agenda**: revise las citas del día; cree, edite o borre citas (por ejemplo las que llegan por teléfono).
-2. **Cargar estudio**: use *Cargar estudio* en la cita (o elija el paciente), elija el **médico que recibe el estudio** (se sugiere el que el paciente indicó al agendar, o el de su último estudio) y suba los archivos o la carpeta. El estudio aparece de inmediato en el portal de ese médico y la cita queda como atendida.
-3. Para cambiar el médico de un estudio, use el selector en la tabla *Estudios* (filtro *Sin médico* para los pendientes).
+2. **Cargar estudio**: use *Cargar estudio* en la cita (o elija el paciente), elija el **médico que recibe los exámenes** (se sugiere el que el paciente indicó al agendar, o el de su último estudio) y agregue uno o varios exámenes con sus archivos (DICOM, ZIP, imágenes o informes PDF). Quedan agrupados por paciente, médico y fecha, aparecen de inmediato en el portal de ese médico y la cita queda como atendida.
+3. **Explorador**: abra un grupo desde la tabla *Estudios*, o los exámenes de un paciente o de un médico con el icono de carpeta. Allí se ven, editan, renombran, descargan y eliminan archivos, y se suben archivos o exámenes nuevos al grupo (por ejemplo el informe, días después).
 4. **Pacientes**: se crean solos al agendar; *Nuevo paciente* es para quien no agendó en línea. Con el lápiz se completan el expediente y la edad, que se copian también en sus estudios.
 5. **Nuevo médico**: crea su cuenta. Comparta el correo y la contraseña inicial por un canal seguro; el médico puede cambiarla con *¿Olvidó su contraseña?*.
 
