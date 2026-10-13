@@ -22,7 +22,7 @@ export function viewOnlyTools(tools) {
 
 // En un CBCT los valores de gris dependen del equipo, del campo de visión y de la
 // posición: no son unidades Hounsfield fiables para estimar densidad ósea.
-const CBCT_DENSITY_NOTE = 'En tomografía Cone Beam los valores de gris no son unidades Hounsfield calibradas: úselos para comparar zonas del mismo estudio, no como densidad absoluta.';
+const CBCT_DENSITY_NOTE = 'En tomografía Cone Beam los valores de gris no son unidades Hounsfield calibradas: úselos para comparar zonas del mismo examen, no como densidad absoluta.';
 
 // Preajustes de ventana. "auto" usa la ventana calculada para cada imagen.
 const HU_PRESETS = [
@@ -74,7 +74,7 @@ export const PROFILES = {
   }
 };
 
-// Elige el perfil a partir de lo que se cargó y de la modalidad indicada al subir el estudio.
+// Elige el perfil a partir de lo que se cargó y de la modalidad indicada al subir el examen.
 export function pickProfile(studyModality, data) {
   if (data.volumes.length) return 'cbct';
   const m = (studyModality || '').toLowerCase();

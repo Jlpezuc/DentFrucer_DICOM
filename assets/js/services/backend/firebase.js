@@ -4,7 +4,7 @@
 import { firebaseConfig } from '../../config/firebase-config.js';
 import { patientAccess } from '../../config/patient-access.js';
 import { agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
-import { normalizePatient } from '../people.js';
+import { normalizeAccountName, normalizePatient } from '../people.js';
 import {
   AccessDisabledError, agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, friendlyAuthError, sizeOf, studyCode, studyEdits, studyPatientFields
 } from './shared.js';
@@ -107,6 +107,15 @@ export async function createFirebaseBackend() {
 
     signOut: () => signOut(auth),
 
+    // Cambia el nombre visible de la cuenta en sesión (users/{uid}.name).
+    async updateMyName(input) {
+      const { data: name, error } = normalizeAccountName(input);
+      if (error) throw new Error(error);
+      if (!auth.currentUser) throw new Error('La sesión expiró. Vuelva a ingresar.');
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), { name });
+      return profileOf(auth.currentUser);
+    },
+
     async resetPassword(email) {
       try { await sendPasswordResetEmail(auth, email); } catch (e) { throw new Error(friendlyAuthError(e)); }
     },
@@ -145,7 +154,7 @@ export async function createFirebaseBackend() {
       return r.id;
     },
 
-    // Actualiza la ficha y los datos del paciente copiados en sus estudios.
+    // Actualiza la ficha y los datos del paciente copiados en sus exámenes.
     async updatePatient(id, input) {
       const data = fail(normalizePatient(input));
       const batch = writeBatch(db);
@@ -155,14 +164,14 @@ export async function createFirebaseBackend() {
       await batch.commit();
     },
 
-    // --- Estudios: cada uno tiene su paciente y su médico ------------------------
+    // --- Exámenes: cada uno tiene su paciente y su médico ------------------------
     // Las reglas exigen el filtro por doctorId para los médicos.
     async listStudies({ doctorId } = {}) {
       const c = collection(db, 'studies');
       return (await list(doctorId ? query(c, where('doctorId', '==', doctorId)) : c)).sort(byDateDesc);
     },
 
-    // Un estudio = un examen (modalidad + archivos). Los exámenes del mismo
+    // Un examen (documento de "studies") = modalidad + archivos. Los exámenes del mismo
     // paciente, médico y fecha forman un grupo (ver services/groups.js).
     async uploadStudy({ patient, doctorId, modality, description, date, files, onProgress }) {
       const r = doc(collection(db, 'studies'));
@@ -313,11 +322,11 @@ export async function createFirebaseBackend() {
     },
 
     // --- Resultados para pacientes ------------------------------------------------------
-    // Estudio que un paciente abre con el enlace recibido por correo:
+    // Examen que un paciente abre con el enlace recibido por correo:
     //   { study, files: [{ name, url }] }
     // Desactivado (config/patient-access.js). Para activarlo se planea guardar, al
     // enviar el correo, un documento shares/{token} con un token aleatorio largo,
-    // los datos del estudio y los enlaces de descarga; las reglas permitirían
+    // los datos del examen y los enlaces de descarga; las reglas permitirían
     // "get" (nunca "list") de ese documento, y el enlace caducaría (expiresAt).
     async getSharedStudy() {
       if (!patientAccess.enabled) throw new AccessDisabledError();

@@ -259,7 +259,7 @@ function lateralProjection(vol) {
   return { width: ny, height: nz, data: out };
 }
 
-// Datos de demostración según la modalidad del estudio (mismo formato que loadStudy).
+// Datos de demostración según la modalidad del examen (mismo formato que loadStudy).
 export async function demoStudyData(modality, onProgress) {
   const { vol, curve } = await buildPhantom(onProgress);
   const m = (modality || '').toLowerCase();

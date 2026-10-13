@@ -5,8 +5,8 @@ El portal usa tres servicios de Firebase:
 | Servicio | Para qué |
 | --- | --- |
 | **Authentication** (correo y contraseña) | Inicio de sesión de médicos y administradores |
-| **Cloud Firestore** | Médicos, pacientes, estudios y agenda (`users`, `patients`, `studies`, `appointments`, `slots`) |
-| **Cloud Storage** | Archivos DICOM de cada estudio (`studies/{id}/…`) |
+| **Cloud Firestore** | Médicos, pacientes, exámenes y agenda (`users`, `patients`, `studies`, `appointments`, `slots`) |
+| **Cloud Storage** | Archivos DICOM de cada examen (`studies/{id}/…`) |
 | **Hosting** (opcional) | Publicar la página, gratis y con HTTPS |
 
 Mientras `assets/js/config/firebase-config.js` tenga los valores `TU_…`, el sitio funciona en **modo demostración**, con datos de ejemplo.
@@ -36,11 +36,13 @@ Las cuentas de médicos se crean desde el panel, pero el primer administrador se
 
 Para entrar como administrador use **`/admin-login.html`**. Esa página no está enlazada desde la landing.
 
+Para agregar **otro administrador** repita los dos pasos con su correo. Cada uno ve su correo en el panel y puede cambiar su nombre visible desde *Mi cuenta* (el lápiz junto al correo); las reglas actuales ya lo permiten, no hay que volver a publicarlas.
+
 ## 4. Publicar reglas de seguridad y la página
 
-Las reglas (`firestore.rules`, `storage.rules`) garantizan que cada médico solo lea **sus** estudios y sus archivos (los que tiene asignados), y que solo un administrador pueda subir, asignar o borrar. También permiten que cualquier persona, sin cuenta, **cree** una cita desde `agendar.html`, pero no que lea, cambie o borre citas o pacientes.
+Las reglas (`firestore.rules`, `storage.rules`) garantizan que cada médico solo lea **sus** exámenes y sus archivos (los que tiene asignados), y que solo un administrador pueda subir, asignar o borrar. También permiten que cualquier persona, sin cuenta, **cree** una cita desde `agendar.html`, pero no que lea, cambie o borre citas o pacientes.
 
-> **Importante:** cada vez que cambie `firestore.rules` en el repositorio, vuelva a publicarlas. La agenda y el modelo actual (médico por estudio) necesitan las reglas actuales: con unas anteriores, agendar falla con *"No se pudo agendar la cita"*.
+> **Importante:** cada vez que cambie `firestore.rules` en el repositorio, vuelva a publicarlas. La agenda y el modelo actual (médico por examen) necesitan las reglas actuales: con unas anteriores, agendar falla con *"No se pudo agendar la cita"*.
 
 Con la [CLI de Firebase](https://firebase.google.com/docs/cli) (necesita Node.js):
 
@@ -75,7 +77,7 @@ Si falta este paso, el visor muestra: *"No se pudieron descargar las imágenes�
 
 ## El visor
 
-Al abrir un estudio, el visor elige el modo según su contenido:
+Al abrir un examen, el visor elige el modo según su contenido:
 
 | Contenido | Modo |
 | --- | --- |
@@ -100,9 +102,9 @@ Formatos que abre: DICOM sin compresión (Explicit/Implicit VR, Big Endian, Defl
 ## Uso diario
 
 1. **Agenda**: revise las citas del día; cree, edite o borre citas (por ejemplo las que llegan por teléfono).
-2. **Cargar estudio**: use *Cargar estudio* en la cita (o elija el paciente), elija el **médico que recibe los exámenes** (se sugiere el que el paciente indicó al agendar, o el de su último estudio) y agregue uno o varios exámenes con sus archivos (DICOM, ZIP, imágenes o informes PDF). Quedan agrupados por paciente, médico y fecha, aparecen de inmediato en el portal de ese médico y la cita queda como atendida.
-3. **Explorador**: abra un grupo desde la tabla *Estudios*, o los exámenes de un paciente o de un médico con el icono de carpeta. Allí se ven, editan, renombran, descargan y eliminan archivos, y se suben archivos o exámenes nuevos al grupo (por ejemplo el informe, días después).
-4. **Pacientes**: se crean solos al agendar; *Nuevo paciente* es para quien no agendó en línea. Con el lápiz se completan el expediente y la edad, que se copian también en sus estudios.
+2. **Cargar examen**: use *Cargar examen* en la cita (o elija el paciente), elija el **médico que recibe los exámenes** (se sugiere el que el paciente indicó al agendar, o el de su último examen) y agregue uno o varios exámenes con sus archivos (DICOM, ZIP, imágenes o informes PDF). Quedan agrupados por paciente, médico y fecha, aparecen de inmediato en el portal de ese médico y la cita queda como atendida.
+3. **Explorador**: abra un grupo desde la tabla *Exámenes*, o los exámenes de un paciente o de un médico con el icono de carpeta. Allí se ven, editan, renombran, descargan y eliminan archivos, y se suben archivos o exámenes nuevos al grupo (por ejemplo el informe, días después).
+4. **Pacientes**: se crean solos al agendar; *Nuevo paciente* es para quien no agendó en línea. Con el lápiz se completan el expediente y la edad, que se copian también en sus exámenes.
 5. **Nuevo médico**: crea su cuenta. Comparta el correo y la contraseña inicial por un canal seguro; el médico puede cambiarla con *¿Olvidó su contraseña?*.
 
 ## Modelo de datos
@@ -121,15 +123,15 @@ slots/{fecha_hora} date, time, appointmentId      (turnos ocupados, lectura púb
 Storage          studies/{studyId}/{archivo}
 ```
 
-Si su base tiene pacientes anteriores con un campo `doctorId`, ya no se usa: el médico de cada estudio está en `studies.doctorId`, que no cambia.
+Si su base tiene pacientes anteriores con un campo `doctorId`, ya no se usa: el médico de cada examen está en `studies.doctorId`, que no cambia.
 
 ## Acceso de pacientes (pendiente)
 
-La página `resultados.html` y el visor de solo lectura están hechos, pero el acceso está **desactivado** en `assets/js/config/patient-access.js`. Mientras `enabled` sea `false`, la página no carga el backend ni muestra datos (en modo demostración muestra estudios de ejemplo).
+La página `resultados.html` y el visor de solo lectura están hechos, pero el acceso está **desactivado** en `assets/js/config/patient-access.js`. Mientras `enabled` sea `false`, la página no carga el backend ni muestra datos (en modo demostración muestra exámenes de ejemplo).
 
 Para activarlo falta, en este orden:
 
-1. **Crear el enlace al entregar el estudio**: un documento `shares/{token}` con un token aleatorio largo (no adivinable), los datos del estudio (`study`), los archivos con sus enlaces de descarga (`files: [{ name, url }]`) y una fecha de caducidad (`expiresAt`).
+1. **Crear el enlace al entregar el examen**: un documento `shares/{token}` con un token aleatorio largo (no adivinable), los datos del examen (`study`), los archivos con sus enlaces de descarga (`files: [{ name, url }]`) y una fecha de caducidad (`expiresAt`).
 2. **Reglas**: permitir solo `get` de `shares/{token}` (nunca `list`) mientras no haya caducado; crear y borrar solo el administrador.
 3. **Enviar el correo** con `https://SU-DOMINIO/resultados.html?t=TOKEN`, por ejemplo con la extensión *Trigger Email* de Firebase o una Cloud Function.
 4. **Implementar `getSharedStudy(token)`** en `assets/js/services/backend/firebase.js` (leer `shares/{token}` y devolver `{ study, files }`) y poner `enabled: true`.

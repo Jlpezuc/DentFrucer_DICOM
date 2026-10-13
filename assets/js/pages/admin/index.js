@@ -4,9 +4,10 @@
 //   explorer.js  explorador: médico → paciente → grupo → exámenes y archivos
 //   upload.js    carga de exámenes (paciente + médico + fecha + archivos)
 //   people.js    pacientes (alta, edición, sus visitas) y médicos
+//   account.js   mi cuenta: correo y nombre del administrador en sesión
 //
 // Todas comparten el mismo estado y se vuelven a dibujar con ctx.reload().
-// El menú lateral muestra una sección a la vez (views.js): #agenda, #estudios,
+// El menú lateral muestra una sección a la vez (views.js): #agenda, #examenes,
 // #carga, #pacientes, #medicos.
 
 import { backend } from '../../services/backend.js';
@@ -14,6 +15,7 @@ import { setText, toast } from '../../ui/dom.js';
 import { today } from '../../ui/format.js';
 import { requireRole } from '../session.js';
 import { initViews } from '../views.js';
+import { createAccount } from './account.js';
 import { createAgenda } from './agenda.js';
 import { createExplorer } from './explorer.js';
 import { createPeople } from './people.js';
@@ -21,7 +23,9 @@ import { createStudies } from './studies.js';
 import { createUpload } from './upload.js';
 
 export async function init() {
-  if (!(await requireRole('admin'))) return;
+  const user = await requireRole('admin');
+  if (!user) return;
+  createAccount(user);
 
   const views = initViews({ fallback: 'agenda', title: document.getElementById('view-title'), subtitle: document.getElementById('view-desc') });
   const state = { studies: [], patients: [], doctors: [], appointments: [] };

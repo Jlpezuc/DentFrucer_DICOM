@@ -23,7 +23,7 @@ export const agendaConfig = {
   // Días sin atención (feriados, vacaciones): 'AAAA-MM-DD'.
   closedDates: ['2026-12-25', '2027-01-01'],
 
-  // Tipos de examen. "id" coincide con la modalidad al cargar el estudio.
+  // Tipos de examen. "id" coincide con la modalidad al cargar el examen.
   // Si agrega o renombra un id, actualice también la lista "exam in [...]" de firestore.rules.
   exams: [
     { id: 'CBCT', label: 'Tomografía Cone Beam (CBCT)', detail: 'Volumen 3D de maxilar, mandíbula, ATM o senos maxilares.' },
@@ -41,7 +41,7 @@ export const agendaConfig = {
   },
   instructions: [
     'Llegue 10 minutos antes de su hora.',
-    'Traiga la orden de su médico y estudios anteriores, si los tiene.',
+    'Traiga la orden de su médico y exámenes anteriores, si los tiene.',
     'Antes del examen se le pedirá retirar aretes, piercings, lentes y prótesis removibles.'
   ]
 };

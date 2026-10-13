@@ -1,4 +1,4 @@
-// Carga de un estudio: descarga, descompresión de ZIP y clasificación.
+// Carga de un examen: descarga, descompresión de ZIP y clasificación.
 //
 // Resultado:
 //   {

@@ -4,7 +4,7 @@
 //   pages/      lógica de cada página (landing, login, admin, portal, agenda, results)
 //   services/   acceso a datos (Firebase o modo demostración)
 //   ui/         utilidades de interfaz compartidas (iconos, modales, formatos)
-//   viewer/     visor de estudios DICOM e imágenes
+//   viewer/     visor de exámenes DICOM e imágenes
 //   config/     configuración de Firebase, la agenda y el acceso de pacientes
 
 import { renderIcons } from './ui/icons.js';

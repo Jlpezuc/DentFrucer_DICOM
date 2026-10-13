@@ -1,6 +1,6 @@
 // Agenda pública (agendar.html): el paciente elige examen, día y hora y deja
 // sus datos, sin crear una cuenta. Al confirmar se guardan la cita y el
-// paciente, que queda listo en el panel para cargar sus estudios.
+// paciente, que queda listo en el panel para cargar sus exámenes.
 
 import { agendaConfig } from '../config/agenda-config.js';
 import { backend } from '../services/backend.js';

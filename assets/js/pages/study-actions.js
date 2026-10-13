@@ -1,4 +1,4 @@
-// Acciones sobre un estudio compartidas por el portal y el panel de administración:
+// Acciones sobre un examen compartidas por el portal y el panel de administración:
 // abrir el visor y listar los archivos para descargar.
 
 import { backend, isDemo } from '../services/backend.js';
@@ -23,7 +23,7 @@ export function initFilesModal() {
       const files = await backend.fileUrls(study);
       list.innerHTML = files.length
         ? files.map((f) => '<li><a href="' + escapeHtml(f.url) + '" target="_blank" rel="noopener" download>' + icon('download') + ' ' + escapeHtml(f.name) + '</a></li>').join('')
-        : '<li class="muted">Este estudio no tiene archivos.</li>';
+        : '<li class="muted">Este examen no tiene archivos.</li>';
     } catch (e) {
       list.innerHTML = '<li class="muted">No se pudieron obtener los archivos.</li>';
     }

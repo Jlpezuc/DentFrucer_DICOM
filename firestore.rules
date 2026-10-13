@@ -2,9 +2,9 @@ rules_version = '2';
 
 // DentFrucer — reglas de Firestore.
 // - Administradores (users/{uid}.role == 'admin'): acceso total.
-// - Médicos: solo leen sus estudios (studies.doctorId == su uid) y solo pueden
+// - Médicos: solo leen sus exámenes (studies.doctorId == su uid) y solo pueden
 //   marcarlos como 'Visto'. Los datos del paciente que necesitan van copiados
-//   en el estudio; la colección de pacientes es solo de la clínica.
+//   en el examen; la colección de pacientes es solo de la clínica.
 // - Público (agendar.html, sin cuenta): puede CREAR una cita, su turno y el
 //   paciente, con campos validados. No puede leer, cambiar ni borrar nada; solo
 //   ve qué turnos están ocupados (colección "slots", sin datos personales).
@@ -49,7 +49,7 @@ service cloud.firestore {
     }
 
     // Pacientes: solo identidad y contacto. No tienen médico: el médico se
-    // asigna a cada estudio.
+    // asigna a cada examen.
     match /patients/{patientId} {
       allow read, update, delete: if isAdmin();
       // Paciente creado al agendar: sin expediente ni edad (los completa la clínica).

@@ -1,4 +1,4 @@
-// Visor de estudios DentFrucer — punto de entrada.
+// Visor de exámenes DentFrucer — punto de entrada.
 //
 //   openViewer(study, { backend, isDemo, viewOnly, fileUrls })
 //
@@ -8,7 +8,7 @@
 //             backend.fileUrls(study) (médicos y administración)
 //
 // 1. Abre la carcasa del visor (shell.js) con la pantalla de carga.
-// 2. Obtiene los archivos del estudio (Firebase) o genera datos de demostración.
+// 2. Obtiene los archivos del examen (Firebase) o genera datos de demostración.
 // 3. Elige el modo según el contenido y el tipo de examen:
 //      volumen (CBCT)     -> modes/volume-mode.js
 //      imágenes 2D        -> modes/image-mode.js
@@ -32,10 +32,33 @@ import { addDocumentsTab, startDocumentMode } from './modes/document-mode.js';
 
 let current = null;
 
+// El visor ocupa una entrada del historial: el botón "atrás" del navegador lo
+// cierra (con mediciones sin guardar, pregunta antes).
+const HISTORY_STATE = { dentfrucerViewer: true };
+let historyEntry = false;
+window.addEventListener('popstate', () => {
+  if (!historyEntry) return;
+  historyEntry = false;
+  const shell = current;
+  if (!shell) return;
+  // Mientras se decide, el visor recupera su entrada para que "atrás" siga funcionando.
+  if (shell.closeWarning()) { history.pushState(HISTORY_STATE, ''); historyEntry = true; }
+  shell.requestClose();
+});
+
 export async function openViewer(study, { backend, isDemo, viewOnly = false, fileUrls = () => backend.fileUrls(study) }) {
-  if (current) current.close();
-  const shell = createShell({ study, viewOnly, onClose: () => { current = null; } });
+  // Si ya había un examen abierto, se cierra y el nuevo reutiliza su entrada del historial.
+  if (current) { const prev = current; current = null; prev.close(); }
+  const shell = createShell({
+    study, viewOnly,
+    onClose: () => {
+      if (current !== shell) return;
+      current = null;
+      if (historyEntry) { historyEntry = false; history.back(); }
+    }
+  });
   current = shell;
+  if (!historyEntry) { history.pushState(HISTORY_STATE, ''); historyEntry = true; }
   let closed = false;
   shell.on('close', () => { closed = true; });
 
@@ -51,13 +74,13 @@ export async function openViewer(study, { backend, isDemo, viewOnly = false, fil
   try {
     let data;
     if (isDemo) {
-      shell.setLoading({ title: 'Preparando estudio de demostración', detail: 'Generando imágenes sintéticas…', progress: 0 });
+      shell.setLoading({ title: 'Preparando examen de demostración', detail: 'Generando imágenes sintéticas…', progress: 0 });
       const { demoStudyData } = await import('./demo/phantom.js');
       data = await demoStudyData(study.modality, (p) => shell.setLoading({ progress: p }));
     } else {
-      shell.setLoading({ title: 'Preparando estudio', detail: 'Obteniendo archivos…', progress: null });
+      shell.setLoading({ title: 'Preparando examen', detail: 'Obteniendo archivos…', progress: null });
       files.list = await fileUrls();
-      if (!files.list.length) throw new Error('Este estudio no tiene archivos.');
+      if (!files.list.length) throw new Error('Este examen no tiene archivos.');
       data = await loadStudy(files.list, (p) => {
         if (closed) return;
         if (p.phase === 'download') shell.setLoading({ detail: `Descargando ${p.done} de ${p.total} archivo(s) · ${fmtSize(p.bytes)}`, progress: p.done / p.total });
@@ -87,7 +110,7 @@ export async function openViewer(study, { backend, isDemo, viewOnly = false, fil
     console.error(err);
     const isNet = err instanceof DownloadError;
     shell.showError({
-      title: isNet ? 'No se pudieron descargar las imágenes' : 'No se pudo abrir el estudio',
+      title: isNet ? 'No se pudieron descargar las imágenes' : 'No se pudo abrir el examen',
       message: err.message,
       actions: [
         { label: 'Descargar archivos', onClick: download },

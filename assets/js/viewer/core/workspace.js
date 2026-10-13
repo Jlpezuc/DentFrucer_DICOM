@@ -68,7 +68,7 @@ export class Workspace {
     shell.setCloseGuard(() => {
       const n = this.store.items.length;
       if (!n) return '';
-      return `Hay ${n === 1 ? '1 medición' : n + ' mediciones'} en este estudio. Al cerrar el visor se pierden: si las necesita, use Copiar resumen o Exportar antes de cerrar.`;
+      return `Hay ${n === 1 ? '1 medición' : n + ' mediciones'} en este examen. Al cerrar el visor se pierden: si las necesita, use Copiar resumen o Exportar antes de cerrar.`;
     });
   }
 
@@ -258,7 +258,7 @@ export class Workspace {
         return;
       }
       if (e.target.closest('[data-clear]')) {
-        this.shell.confirm({ title: 'Borrar todas las mediciones', message: 'Se borrarán todas las mediciones y notas de este estudio. Puede deshacerlo con Ctrl+Z.', okLabel: 'Borrar todas' })
+        this.shell.confirm({ title: 'Borrar todas las mediciones', message: 'Se borrarán todas las mediciones y notas de este examen. Puede deshacerlo con Ctrl+Z.', okLabel: 'Borrar todas' })
           .then((ok) => { if (ok) this.store.clear(); });
         return;
       }

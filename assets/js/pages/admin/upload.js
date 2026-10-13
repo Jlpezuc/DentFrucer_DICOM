@@ -3,7 +3,7 @@
 // informes PDF). Los exámenes del mismo paciente, médico y fecha quedan en el
 // mismo grupo, aunque se suban en momentos distintos.
 //
-// Si el paciente tiene una cita pendiente (o se llega desde "Cargar estudio"
+// Si el paciente tiene una cita pendiente (o se llega desde "Cargar examen"
 // en la agenda), se rellenan examen y fecha, se sugiere el médico que indicó
 // al agendar y, al subir, la cita queda como atendida.
 
@@ -34,10 +34,13 @@ export function createUpload(ctx) {
 
   // --- Bloques de examen -------------------------------------------------------------
   // Cada bloque tiene su modalidad, descripción y archivos (block.files).
+  // Cada bloque tiene su modalidad, descripción, archivos (block.files: DICOM,
+  // ZIP, fotos…) y su informe PDF (block.report), que se guarda en el mismo examen.
   function addExamBlock(modality = 'CBCT') {
     const block = document.createElement('div');
     block.className = 'exam-block';
     block.files = [];
+    block.report = [];
     block.innerHTML = `
       <div class="exam-block-head">
         <strong data-title></strong>
@@ -47,30 +50,47 @@ export function createUpload(ctx) {
         <div class="field"><label>Modalidad <select class="input select" data-modality>${STUDY_MODALITIES.map((m) => `<option${m === modality ? ' selected' : ''}>${m}</option>`).join('')}</select></label></div>
         <div class="field"><label>Descripción <input class="input" data-desc placeholder="Ej.: Cone Beam · maxilar completo"></label></div>
       </div>
-      <label class="dropzone compact">
+      <div class="dropzone compact" data-dropzone>
         ${icon('cloud')}
-        <p style="margin:0"><strong>Arrastre aquí los archivos de este examen</strong></p>
-        <p style="margin:4px 0 12px;font-size:14px">DICOM (.dcm), .zip, imágenes o informes PDF</p>
+        <p style="margin:0"><strong>Arrastre aquí las imágenes de este examen</strong></p>
+        <p style="margin:4px 0 12px;font-size:14px">DICOM (.dcm), .zip, fotos u otras imágenes</p>
         <span class="links">
-          <span class="btn btn-outline btn-sm">Seleccionar archivos</span>
+          <button type="button" class="btn btn-outline btn-sm" data-pick-files>Seleccionar archivos</button>
           <button type="button" class="btn btn-ghost btn-sm" data-pick-folder>Seleccionar carpeta</button>
         </span>
-        <input type="file" multiple class="sr-only" data-files>
-        <input type="file" webkitdirectory multiple class="sr-only" data-folder>
-      </label>
-      <div class="file-summary" data-summary aria-live="polite"></div>`;
-    const dz = block.querySelector('.dropzone');
+        <input type="file" multiple class="sr-only" tabindex="-1" data-files>
+        <input type="file" webkitdirectory multiple class="sr-only" tabindex="-1" data-folder>
+      </div>
+      <div class="file-summary" data-summary aria-live="polite"></div>
+      <div class="report-field">
+        <span class="file-icon pdf">${icon('file')}</span>
+        <span><strong>Informe del examen</strong> <span class="opt">(PDF, opcional; también se puede subir después)</span><small data-report-name></small></span>
+        <button type="button" class="btn btn-outline btn-sm" data-pick-report>Elegir PDF</button>
+        <input type="file" accept="application/pdf,.pdf" multiple class="sr-only" tabindex="-1" data-report>
+      </div>`;
+    const $b = (sel) => block.querySelector(sel);
+    const dz = $b('[data-dropzone]');
     const setFiles = (list) => {
-      block.files = Array.from(list || []).filter((f) => !f.name.startsWith('.'));
-      block.querySelector('[data-summary]').textContent = block.files.length ? block.files.length + ' archivo(s) · ' + fmtSize(block.files.reduce((n, f) => n + f.size, 0)) : '';
+      const all = Array.from(list || []).filter((f) => !f.name.startsWith('.'));
+      // Un PDF soltado junto con las imágenes se toma como informe.
+      block.report = [...block.report, ...all.filter((f) => /\.pdf$/i.test(f.name))];
+      block.files = all.filter((f) => !/\.pdf$/i.test(f.name));
+      $b('[data-summary]').textContent = block.files.length ? block.files.length + ' archivo(s) · ' + fmtSize(block.files.reduce((n, f) => n + f.size, 0)) : '';
+      showReport();
     };
+    const showReport = () => { $b('[data-report-name]').textContent = block.report.length ? block.report.map((f) => f.name).join(', ') : ''; };
     ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('drag'); }));
     ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('drag'); }));
     dz.addEventListener('drop', (e) => setFiles(e.dataTransfer && e.dataTransfer.files));
-    block.querySelector('[data-files]').addEventListener('change', (e) => setFiles(e.target.files));
-    block.querySelector('[data-folder]').addEventListener('change', (e) => setFiles(e.target.files));
-    block.querySelector('[data-pick-folder]').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); block.querySelector('[data-folder]').click(); });
-    block.querySelector('[data-remove]').addEventListener('click', () => { block.remove(); renumber(); });
+    // Clic en la zona (fuera de los botones) = elegir archivos.
+    dz.addEventListener('click', (e) => { if (!e.target.closest('button, input')) $b('[data-files]').click(); });
+    $b('[data-pick-files]').addEventListener('click', () => $b('[data-files]').click());
+    $b('[data-pick-folder]').addEventListener('click', () => $b('[data-folder]').click());
+    $b('[data-files]').addEventListener('change', (e) => setFiles(e.target.files));
+    $b('[data-folder]').addEventListener('change', (e) => setFiles(e.target.files));
+    $b('[data-pick-report]').addEventListener('click', () => $b('[data-report]').click());
+    $b('[data-report]').addEventListener('change', (e) => { block.report = Array.from(e.target.files || []); showReport(); });
+    $b('[data-remove]').addEventListener('click', () => { block.remove(); renumber(); });
     examList.appendChild(block);
     renumber();
     return block;
@@ -86,7 +106,7 @@ export function createUpload(ctx) {
     examList.innerHTML = '';
     addExamBlock(modality);
   }
-  $('add-exam').addEventListener('click', () => addExamBlock('Informe'));
+  $('add-exam').addEventListener('click', () => addExamBlock('Panorámica'));
   resetBlocks();
 
   // --- Selectores ----------------------------------------------------------------------
@@ -131,7 +151,7 @@ export function createUpload(ctx) {
   }
 
   // Médico propuesto: el que indicó el paciente en la cita (si está registrado)
-  // o, si no, el de su último estudio.
+  // o, si no, el de su último examen.
   function suggestDoctor(patientId) {
     const byReferrer = appt && appt.referrer ? matchDoctor(state.doctors, appt.referrer) : undefined;
     const last = state.studies.filter((s) => s.patientId === patientId && s.doctorId).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
@@ -140,7 +160,7 @@ export function createUpload(ctx) {
       doctorHint.textContent = 'Sugerido: el paciente indicó «' + appt.referrer + '» al agendar.';
     } else if (last) {
       doctorSel.value = last.doctorId;
-      doctorHint.textContent = 'Sugerido: el médico de su último estudio.';
+      doctorHint.textContent = 'Sugerido: el médico de su último examen.';
     } else {
       doctorSel.value = '';
       doctorHint.textContent = appt && appt.referrer ? 'Indicó «' + appt.referrer + '», que no está registrado como médico.' : DOCTOR_HINT;
@@ -175,10 +195,10 @@ export function createUpload(ctx) {
     const patient = ctx.patientById(patientSel.value);
     const doctorId = doctorSel.value;
     const date = dateInput.value || today();
-    const exams = [...examList.children].filter((b) => b.files.length).map((b) => ({
+    const exams = [...examList.children].filter((b) => b.files.length || b.report.length).map((b) => ({
       modality: b.querySelector('[data-modality]').value,
       description: b.querySelector('[data-desc]').value.trim(),
-      files: b.files
+      files: [...b.files, ...b.report]
     }));
     showError(err, '');
     if (!patient) { showError(err, 'Seleccione un paciente (o regístrelo primero).'); return; }

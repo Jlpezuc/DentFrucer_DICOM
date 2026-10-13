@@ -1,6 +1,6 @@
 // Pacientes y médicos. Los pacientes solo guardan identidad y contacto (no
 // tienen médico); los que agendan en línea aparecen solos con la etiqueta
-// "Agenda". Al editar un paciente se actualizan también sus estudios.
+// "Agenda". Al editar un paciente se actualizan también sus exámenes.
 // "Exámenes" abre el explorador: las visitas del paciente o los pacientes del médico.
 
 import { backend } from '../../services/backend.js';
@@ -84,7 +84,7 @@ function createPatients(ctx) {
       toast(editing ? 'Paciente actualizado.' : 'Paciente registrado.');
       m.close();
       await ctx.reload();
-      // Recién registrado: queda elegido para cargar su estudio.
+      // Recién registrado: queda elegido para cargar su examen.
       if (!editing) document.getElementById('u-patient').value = id;
     } catch (ex) { showError(err, ex.message); }
     busy(btn, false);

@@ -27,7 +27,7 @@ export function normalizePerson(input) {
 }
 
 // Ficha de paciente (panel): persona + expediente y edad. Los pacientes no
-// tienen médico: el médico se asigna a cada estudio.
+// tienen médico: el médico se asigna a cada examen.
 export function normalizePatient(input) {
   const { data, error } = normalizePerson(input);
   if (error) return { error };
@@ -36,6 +36,14 @@ export function normalizePatient(input) {
   const age = input.age === '' || input.age == null ? null : Number(input.age);
   if (age !== null && !(Number.isInteger(age) && age >= 0 && age <= 120)) return { error: 'La edad no es válida.' };
   return { data: { ...data, code, age } };
+}
+
+// Nombre visible de una cuenta (administración o médico). Devuelve { data } o { error }.
+export function normalizeAccountName(input) {
+  const name = String(input || '').replace(/\s+/g, ' ').trim();
+  if (name.length < 2) return { error: 'Escriba el nombre de la cuenta.' };
+  if (name.length > LIMITS.name) return { error: 'El nombre es demasiado largo.' };
+  return { data: name };
 }
 
 // Para comparar nombres sin tildes ni mayúsculas.

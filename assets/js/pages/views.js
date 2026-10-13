@@ -1,7 +1,7 @@
 // Vistas de una página con menú lateral (panel de administración, portal del
 // médico): cada enlace "#vista" del menú muestra solo los elementos con
 // data-section="vista" y oculta el resto. La vista va en la dirección (#agenda,
-// #estudios…), así que se conserva al recargar y funcionan atrás/adelante.
+// #examenes…), así que se conserva al recargar y funcionan atrás/adelante.
 //
 //   const views = initViews({ fallback: 'agenda', title: h1, subtitle: p });
 //

@@ -1,4 +1,4 @@
-// Informes PDF del estudio. Si el estudio solo tiene documentos, ocupan el
+// Informes PDF del examen. Si el examen solo tiene documentos, ocupan el
 // escenario; si además tiene imágenes, aparecen en la pestaña "Informes".
 
 import { escapeHtml } from '../../ui/dom.js';
@@ -14,7 +14,7 @@ function viewerFrame(doc) {
   return `<iframe class="dv-pdf" src="${doc.url}#view=FitH" title="${escapeHtml(doc.name)}"></iframe>`;
 }
 
-// Estudio con solo informes.
+// Examen con solo informes.
 export function startDocumentMode(shell, { study, data }) {
   const docs = data.documents;
   shell.setModeLabel('Informe');

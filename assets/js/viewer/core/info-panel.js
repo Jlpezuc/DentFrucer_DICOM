@@ -1,4 +1,4 @@
-// Panel "Información": datos del estudio y etiquetas DICOM más relevantes,
+// Panel "Información": datos del examen y etiquetas DICOM más relevantes,
 // con una lista completa desplegable y un buscador.
 
 import { escapeHtml } from '../../ui/dom.js';
@@ -10,7 +10,7 @@ const KEY_TAGS = [
   ['00100020', 'ID del paciente'],
   ['00100030', 'Nacimiento', formatDicomDate],
   ['00100040', 'Sexo', (v) => ({ M: 'Masculino', F: 'Femenino', O: 'Otro' }[v] || v)],
-  ['00080020', 'Fecha del estudio', formatDicomDate],
+  ['00080020', 'Fecha del examen', formatDicomDate],
   ['00080060', 'Modalidad DICOM'],
   ['00081030', 'Descripción'],
   ['0008103e', 'Serie'],
@@ -35,7 +35,7 @@ export function renderInfo(container, { study, dataset, extra = [], allTags = tr
     ['Paciente', study.patientName],
     ['Expediente', study.patientCode],
     ['Edad', study.patientAge ? study.patientAge + ' años' : ''],
-    ['Estudio', study.description],
+    ['Examen', study.description],
     ['Tipo', study.modality],
     ['Fecha', study.date ? new Date(study.date + 'T12:00:00').toLocaleDateString('es') : ''],
     ['Código', study.code]
@@ -52,7 +52,7 @@ export function renderInfo(container, { study, dataset, extra = [], allTags = tr
     if (allTags) all = dataset.describe().map((t) => `<tr><td class="mono">${t.tag}</td><td>${escapeHtml(t.name)}</td><td>${escapeHtml(t.value)}</td></tr>`).join('');
   }
   container.innerHTML = `
-    <section class="dv-sec"><h4>Estudio</h4>${studyRows}</section>
+    <section class="dv-sec"><h4>Examen</h4>${studyRows}</section>
     ${extra.length ? `<section class="dv-sec"><h4>Imagen</h4>${rows(extra)}</section>` : ''}
     ${dicomRows ? `<section class="dv-sec"><h4>Datos DICOM</h4>${dicomRows}</section>` : ''}
     ${all ? `<details class="dv-sec dv-alltags"><summary>Todas las etiquetas DICOM</summary>
