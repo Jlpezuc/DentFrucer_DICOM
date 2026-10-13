@@ -42,10 +42,10 @@ function seed() {
     files: Array.from({ length: Math.min(images, 3) }, (_, i) => ({ name: names ? names[i] : 'IMG' + String(i + 1).padStart(4, '0') + '.dcm', path: 'demo/' + id + '/' + i, size: (mb * MB) / images }))
   });
   const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return isoDate(d); };
-  const appointment = (id, pid, exam, date, time, referrer) => {
+  const appointment = (id, pid, exam, date, time, referrer, status) => {
     const p = patient(pid);
     return {
-      id, code: appointmentCode(id), ...appointmentFields({ ...p, referrer, exam, date, time }),
+      id, code: appointmentCode(id), ...appointmentFields({ ...p, referrer, exam, date, time, status }),
       slotId: slotId(date, time), patientId: pid
     };
   };
@@ -67,7 +67,14 @@ function seed() {
     appointments: [
       appointment('demoa1', 'ag_demo1', 'Panorámica', day(0), '10:20', 'Dra. Laura Méndez'),
       appointment('demoa2', 'ag_demo2', 'CBCT', day(0), '11:00', 'Dr. Carlos Rivas'),
-      appointment('demoa3', 'p2', 'Cefalometría', day(1), '09:00', 'Dra. Laura Méndez')
+      appointment('demoa3', 'p2', 'Cefalometría', day(1), '09:00', 'Dra. Laura Méndez'),
+      appointment('demoa4', 'p3', 'Periapical', day(0), '09:20', 'Dra. Ana Torres', 'Atendida'),
+      appointment('demoa5', 'p4', 'CBCT', day(1), '15:40', 'Dr. Carlos Rivas'),
+      appointment('demoa6', 'p5', 'Panorámica', day(2), '10:00', ''),
+      appointment('demoa7', 'p6', 'Panorámica', day(2), '16:20', 'Dra. Laura Méndez', 'Cancelada'),
+      appointment('demoa8', 'p7', 'CBCT', day(3), '11:40', 'Dr. Carlos Rivas'),
+      appointment('demoa9', 'p1', 'Otro', day(-1), '12:00', 'Dra. Laura Méndez', 'No asistió'),
+      appointment('demoa10', 'p4', 'Cefalometría', day(6), '09:40', '')
     ]
   };
 }

@@ -46,7 +46,7 @@
         </div>
       </div>
 
-      <div class="stats five" data-section="agenda" data-section-desc="Citas de hoy, próximas y anteriores. Cree, edite o cancele citas.">
+      <div class="stats five" data-section="agenda" data-section-desc="Citas en lista, por semana o por mes. Filtre por día y cree, edite o cancele citas.">
         <div class="stat"><div class="k">Citas de hoy</div><div class="v" id="stat-today">–</div></div>
         <div class="stat"><div class="k">Exámenes</div><div class="v" id="stat-studies">–</div></div>
         <div class="stat"><div class="k">Pacientes</div><div class="v" id="stat-patients">–</div></div>
@@ -57,22 +57,42 @@
       <!-- Agenda -->
       <section class="panel" id="agenda" data-section="agenda">
         <div class="panel-head">
-          <div class="tabs" id="agenda-tabs" role="tablist">
-            <button type="button" data-filter="today" aria-selected="true">Hoy</button>
-            <button type="button" data-filter="next" aria-selected="false">Próximas</button>
-            <button type="button" data-filter="past" aria-selected="false">Anteriores</button>
+          <div class="view-switch" id="agenda-views" role="tablist" aria-label="Vista de la agenda">
+            <button type="button" role="tab" data-agenda-view="list" aria-selected="true"><i data-icon="list"></i> Lista</button>
+            <button type="button" role="tab" data-agenda-view="week" aria-selected="false"><i data-icon="calendar"></i> Semana</button>
+            <button type="button" role="tab" data-agenda-view="month" aria-selected="false"><i data-icon="grid"></i> Mes</button>
           </div>
           <div class="panel-actions">
             <button class="btn btn-ghost btn-sm" type="button" id="copy-booking-link" title="Copiar el enlace de la agenda en línea para compartirlo con los pacientes"><i data-icon="link"></i> Copiar enlace</button>
             <button class="btn btn-primary btn-sm" type="button" data-open="appointment"><i data-icon="plus"></i> Nueva cita</button>
           </div>
         </div>
-        <div class="table-wrap">
-          <table class="data">
-            <thead><tr><th>Fecha</th><th>Paciente</th><th>Examen</th><th>Lo envía</th><th>Estado</th><th></th></tr></thead>
-            <tbody id="agenda-body"><tr><td colspan="6"><div class="empty">Cargando…</div></td></tr></tbody>
-          </table>
+
+        <!-- Lista: hoy, próximas, anteriores o un día cualquiera -->
+        <div id="agenda-list">
+          <div class="agenda-bar">
+            <div class="tabs" id="agenda-tabs" role="tablist">
+              <button type="button" data-filter="today" aria-selected="true">Hoy</button>
+              <button type="button" data-filter="next" aria-selected="false">Próximas</button>
+              <button type="button" data-filter="past" aria-selected="false">Anteriores</button>
+            </div>
+            <div class="day-nav" aria-label="Filtrar por día">
+              <button type="button" class="icon-btn" data-day-step="-1" title="Día anterior" aria-label="Día anterior"><i data-icon="chevronLeft"></i></button>
+              <label><span class="sr-only">Día</span><input class="input input-sm" id="agenda-day" type="date" title="Ver las citas de un día"></label>
+              <button type="button" class="icon-btn" data-day-step="1" title="Día siguiente" aria-label="Día siguiente"><i data-icon="chevronRight"></i></button>
+            </div>
+            <p class="agenda-summary" id="agenda-summary" aria-live="polite"></p>
+          </div>
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>Fecha</th><th>Paciente</th><th>Examen</th><th>Lo envía</th><th>Estado</th><th></th></tr></thead>
+              <tbody id="agenda-body"><tr><td colspan="6"><div class="empty">Cargando…</div></td></tr></tbody>
+            </table>
+          </div>
         </div>
+
+        <!-- Calendario: semana y mes -->
+        <div id="agenda-calendar" class="cal" hidden></div>
       </section>
 
       <!-- Exámenes -->

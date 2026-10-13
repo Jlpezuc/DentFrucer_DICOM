@@ -1,27 +1,45 @@
-// Agenda en el panel: citas de hoy, próximas y anteriores; crear, editar,
-// cambiar de estado y borrar. Cambiar el día, la hora o cancelar mueve o libera
-// el turno, así que la agenda pública siempre muestra la disponibilidad real.
+// Agenda en el panel: lista (hoy, próximas, anteriores o un día cualquiera) y
+// calendario de semana y de mes (calendar.js); crear, editar, cambiar de estado
+// y borrar citas. Cambiar el día, la hora o cancelar mueve o libera el turno,
+// así que la agenda pública siempre muestra la disponibilidad real.
 
 import { agendaConfig } from '../../config/agenda-config.js';
-import { adminDayTimes, APPOINTMENT_STATUSES, examLabel, isActive, slotId } from '../../services/agenda.js';
+import { addDays, adminDayTimes, APPOINTMENT_STATUSES, examLabel, isActive, parseIso, slotId } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
-import { bindTabs, contactOf, formValues, personCell } from './common.js';
+import { createCalendar } from './calendar.js';
+import { contactOf, formValues, personCell } from './common.js';
 
-const EMPTY = { today: 'No hay citas para hoy.', next: 'No hay citas próximas.', past: 'No hay citas anteriores.' };
+const EMPTY = { today: 'No hay citas para hoy.', next: 'No hay citas próximas.', past: 'No hay citas anteriores.', day: 'No hay citas este día.' };
+const VIEW_KEY = 'dentfrucer.agenda.view';
+const longDay = (iso) => parseIso(iso).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 export function createAgenda(ctx) {
   const { state } = ctx;
-  const body = document.getElementById('agenda-body');
-  let filter = 'today';
+  const $ = (id) => document.getElementById(id);
+  const body = $('agenda-body');
+  const dayInput = $('agenda-day');
+  const summary = $('agenda-summary');
+  let filter = 'today'; // 'today' | 'next' | 'past' | 'day' (el de dayInput)
+  let view = 'list';    // 'list' | 'week' | 'month'
 
   // --- Lista ---------------------------------------------------------------------------
   function rowsFor(f) {
     const t = today();
-    const rows = state.appointments.filter((a) => (f === 'today' ? a.date === t : f === 'next' ? a.date > t && isActive(a) : a.date < t));
+    const day = f === 'today' ? t : f === 'day' ? dayInput.value : null;
+    const rows = state.appointments.filter((a) => (day ? a.date === day : f === 'next' ? a.date > t && isActive(a) : a.date < t));
     return f === 'past' ? rows.reverse() : rows;
+  }
+
+  // Pestañas y día: "Hoy" es el día de hoy; elegir otro día deja las pestañas sin marcar.
+  function setFilter(f, day) {
+    if (f === 'day' && day === today()) f = 'today';
+    filter = f;
+    dayInput.value = f === 'today' ? today() : f === 'day' ? day : '';
+    document.querySelectorAll('#agenda-tabs [data-filter]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.filter === f)));
+    renderList();
   }
 
   function statusSelect(a) {
@@ -30,14 +48,19 @@ export function createAgenda(ctx) {
       APPOINTMENT_STATUSES.map((st) => '<option' + (st === a.status ? ' selected' : '') + '>' + st + '</option>').join('') + '</select>';
   }
 
-  function render() {
+  function renderList() {
     const rows = rowsFor(filter);
+    const oneDay = filter === 'today' || filter === 'day';
+    const active = rows.filter(isActive).length;
+    summary.textContent = oneDay
+      ? longDay(dayInput.value).replace(/^./, (c) => c.toUpperCase()) + ' · ' + (active ? active + ' cita' + (active > 1 ? 's' : '') : 'sin citas') + (rows.length > active ? ' (' + (rows.length - active) + ' cancelada' + (rows.length - active > 1 ? 's' : '') + ')' : '')
+      : rows.length + ' cita' + (rows.length === 1 ? '' : 's');
     if (!rows.length) {
       body.innerHTML = '<tr><td colspan="6"><div class="empty">' + EMPTY[filter] + ' Cree una con <strong>Nueva cita</strong> o comparta la <a href="agendar.html" target="_blank" rel="noopener">agenda en línea</a>.</div></td></tr>';
       return;
     }
     body.innerHTML = rows.map((a) => {
-      const when = escapeHtml(a.time) + (filter === 'today' ? '' : '<small>' + fmtDate(a.date) + '</small>');
+      const when = escapeHtml(a.time) + (oneDay ? '' : '<small>' + fmtDate(a.date) + '</small>');
       const id = escapeHtml(a.id);
       return '<tr class="appt-row' + (isActive(a) ? '' : ' done') + '">' +
         '<td><span class="appt-time">' + when + '</span></td>' +
@@ -54,7 +77,36 @@ export function createAgenda(ctx) {
     }).join('');
   }
 
-  bindTabs('agenda-tabs', (f) => { filter = f; render(); });
+  document.querySelectorAll('#agenda-tabs [data-filter]').forEach((b) => b.addEventListener('click', () => setFilter(b.dataset.filter)));
+  dayInput.addEventListener('change', () => setFilter(dayInput.value ? 'day' : 'today', dayInput.value));
+  document.querySelectorAll('[data-day-step]').forEach((b) => b.addEventListener('click', () => {
+    setFilter('day', addDays(dayInput.value || today(), Number(b.dataset.dayStep)));
+  }));
+
+  // --- Vistas: lista, semana, mes -----------------------------------------------------------
+  const calendar = createCalendar($('agenda-calendar'), {
+    appointments: () => state.appointments,
+    onEdit: (id) => form.open(find(id)),
+    onNew: (date, time) => form.open(null, { date, time }),
+    onPickDay: (day) => { setView('list'); setFilter('day', day); }
+  });
+
+  function setView(v) {
+    view = v;
+    try { localStorage.setItem(VIEW_KEY, v); } catch (e) { /* almacenamiento no disponible */ }
+    document.querySelectorAll('#agenda-views [data-agenda-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.agendaView === v)));
+    $('agenda-list').hidden = v !== 'list';
+    $('agenda-calendar').hidden = v === 'list';
+    // El calendario abre en el día que se estaba mirando en la lista.
+    if (v !== 'list') calendar.goTo(filter === 'day' ? dayInput.value : null);
+    render();
+  }
+  document.querySelectorAll('#agenda-views [data-agenda-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.agendaView)));
+
+  function render() {
+    if (view === 'list') renderList();
+    else calendar.render(view);
+  }
 
   const find = (id) => state.appointments.find((a) => a.id === id);
   body.addEventListener('click', (e) => {
@@ -105,6 +157,10 @@ export function createAgenda(ctx) {
   const form = createAppointmentForm(ctx, { onDelete: remove });
   document.querySelectorAll('[data-open="appointment"]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); form.open(null); }));
 
+  try { const saved = localStorage.getItem(VIEW_KEY); if (saved === 'week' || saved === 'month') view = saved; } catch (e) { /* sin almacenamiento */ }
+  setFilter('today');
+  setView(view);
+
   return { render };
 }
 
@@ -147,7 +203,8 @@ function createAppointmentForm(ctx, { onDelete }) {
     fields.phone.value = p.phone || '';
   });
 
-  function open(appt) {
+  // preset: { date, time } para una cita nueva desde el calendario.
+  function open(appt, preset = {}) {
     editing = appt;
     el.reset();
     showError(err, '');
@@ -158,7 +215,7 @@ function createAppointmentForm(ctx, { onDelete }) {
     // En una cita existente el paciente no cambia (se editan los datos de la cita).
     fields.patient.disabled = !!appt;
     document.getElementById('doctor-names').innerHTML = state.doctors.map((d) => '<option value="' + escapeHtml(d.name) + '">').join('');
-    const a = appt || { exam: agendaConfig.exams[0].id, date: today(), status: 'Pendiente' };
+    const a = appt || { exam: agendaConfig.exams[0].id, date: preset.date || today(), time: preset.time, status: 'Pendiente' };
     fields.patient.value = a.patientId || '';
     fields.first.value = a.firstName || '';
     fields.last.value = a.lastName || '';
