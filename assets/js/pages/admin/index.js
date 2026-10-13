@@ -6,11 +6,14 @@
 //   people.js    pacientes (alta, edición, sus visitas) y médicos
 //
 // Todas comparten el mismo estado y se vuelven a dibujar con ctx.reload().
+// El menú lateral muestra una sección a la vez (views.js): #agenda, #estudios,
+// #carga, #pacientes, #medicos.
 
 import { backend } from '../../services/backend.js';
 import { setText, toast } from '../../ui/dom.js';
 import { today } from '../../ui/format.js';
 import { requireRole } from '../session.js';
+import { initViews } from '../views.js';
 import { createAgenda } from './agenda.js';
 import { createExplorer } from './explorer.js';
 import { createPeople } from './people.js';
@@ -20,10 +23,12 @@ import { createUpload } from './upload.js';
 export async function init() {
   if (!(await requireRole('admin'))) return;
 
+  const views = initViews({ fallback: 'agenda', title: document.getElementById('view-title'), subtitle: document.getElementById('view-desc') });
   const state = { studies: [], patients: [], doctors: [], appointments: [] };
   const ctx = {
     state,
     reload: load,
+    go: (view) => views.go(view),
     doctorName: (id) => (state.doctors.find((d) => d.id === id) || {}).name,
     patientById: (id) => state.patients.find((p) => p.id === id)
   };

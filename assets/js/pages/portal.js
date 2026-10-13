@@ -8,11 +8,13 @@ import { escapeHtml, setText, toast } from '../ui/dom.js';
 import { fmtDate, fmtSize, initials } from '../ui/format.js';
 import { icon } from '../ui/icons.js';
 import { requireRole } from './session.js';
+import { initViews } from './views.js';
 import { initFilesModal, openStudy } from './study-actions.js';
 
 export async function init() {
   const user = await requireRole('doctor');
   if (!user) return;
+  const views = initViews({ fallback: 'estudios' });
   const openFiles = initFilesModal();
   const $ = (id) => document.getElementById(id);
   const grid = $('study-grid');
@@ -100,7 +102,7 @@ export async function init() {
     if (!b) return;
     patientFilter = b.dataset.patient;
     render();
-    $('estudios').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    views.go('estudios');
   });
   chip.addEventListener('click', (e) => { if (e.target.closest('[data-clear-patient]')) { patientFilter = null; render(); } });
 
