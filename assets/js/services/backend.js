@@ -9,7 +9,7 @@
 //  studies/{id}       { code, patientId, patientName, patientCode, patientAge, doctorId,
 //                       modality, description, date: 'YYYY-MM-DD', files: [{ name, path, size }],
 //                       totalSize, status: 'Nuevo' | 'Visto', createdAt }
-//                     Cada estudio pertenece a un paciente y a un médico (doctorId), que lo ve en su portal.
+//                     Cada examen pertenece a un paciente y a un médico (doctorId), que lo ve en su portal.
 //  appointments/{id}  { code, firstName, lastName, name, email, phone, referrer, exam,
 //                       date: 'YYYY-MM-DD', time: 'HH:MM', slotId, patientId,
 //                       status: 'Pendiente' | 'Atendida' | 'No asistió' | 'Cancelada', createdAt }

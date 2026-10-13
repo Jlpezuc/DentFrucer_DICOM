@@ -30,7 +30,7 @@ export function createShell({ study, onClose, viewOnly = false }) {
   root.className = 'dv-root';
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-modal', 'true');
-  root.setAttribute('aria-label', 'Visor de estudios');
+  root.setAttribute('aria-label', 'Visor de exámenes');
   root.innerHTML = `
     <header class="dv-header">
       <div class="dv-brand">
@@ -40,7 +40,7 @@ export function createShell({ study, onClose, viewOnly = false }) {
       <div class="dv-study">
         <div class="dv-patient">${escapeHtml(study.patientName || 'Paciente')}</div>
         <div class="dv-study-meta">
-          <span class="dv-chip dv-chip-mod" data-mode-label>${escapeHtml(study.modality || 'Estudio')}</span>
+          <span class="dv-chip dv-chip-mod" data-mode-label>${escapeHtml(study.modality || 'Examen')}</span>
           ${study.patientCode ? `<span>${escapeHtml(study.patientCode)}</span>` : ''}
           ${study.patientAge ? `<span>${escapeHtml(study.patientAge)} años</span>` : ''}
           ${study.date ? `<span>${escapeHtml(new Date(study.date + 'T12:00:00').toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }))}</span>` : ''}
@@ -82,7 +82,7 @@ export function createShell({ study, onClose, viewOnly = false }) {
     <div class="dv-loading">
       <div class="dv-loading-card">
         <div class="dv-loading-logo"><img src="assets/img/logo-dentfrucer-circular.png" alt=""></div>
-        <h3>Preparando estudio</h3>
+        <h3>Preparando examen</h3>
         <p class="dv-loading-detail">Conectando…</p>
         <div class="dv-progress"><span></span></div>
       </div>
@@ -455,6 +455,7 @@ export function createShell({ study, onClose, viewOnly = false }) {
 
     // guard() -> texto de aviso (o vacío) antes de cerrar el visor.
     setCloseGuard(guard) { closeGuard = guard; },
+    closeWarning: () => (closeGuard && closeGuard()) || '',
     requestClose,
 
     close() {
@@ -466,7 +467,7 @@ export function createShell({ study, onClose, viewOnly = false }) {
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       emit('close');
       root.classList.add('dv-closing');
-      setTimeout(() => { root.remove(); document.body.classList.remove('dv-open'); }, 180);
+      setTimeout(() => { root.remove(); if (!document.querySelector('.dv-root')) document.body.classList.remove('dv-open'); }, 180);
       if (onClose) onClose();
     }
   };

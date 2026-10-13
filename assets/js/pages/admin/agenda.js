@@ -46,7 +46,7 @@ export function createAgenda(ctx) {
         '<td>' + (a.referrer ? escapeHtml(a.referrer) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + statusSelect(a) + '</td>' +
         '<td><div class="row-actions">' +
-          (isActive(a) ? '<button class="btn btn-outline btn-sm" type="button" data-upload="' + id + '" title="Cargar el estudio de esta cita">' + icon('upload') + ' Cargar estudio</button>' : '') +
+          (isActive(a) ? '<button class="btn btn-outline btn-sm" type="button" data-upload="' + id + '" title="Cargar el examen de esta cita">' + icon('upload') + ' Cargar examen</button>' : '') +
           '<button class="icon-btn" type="button" data-edit="' + id + '" title="Editar cita" aria-label="Editar cita">' + icon('edit') + '</button>' +
           '<button class="icon-btn" type="button" data-delete="' + id + '" title="Borrar cita" aria-label="Borrar cita">' + icon('trash') + '</button>' +
         '</div></td>' +

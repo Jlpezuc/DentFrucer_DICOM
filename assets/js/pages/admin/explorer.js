@@ -3,10 +3,10 @@
 //   Médico    sus pacientes y, de cada uno, los grupos (fechas) de ese médico
 //   Paciente  todas sus visitas (grupos), con búsqueda por fecha, médico o examen
 //   Grupo     los exámenes de un paciente, para un médico, en una fecha:
-//             ver, editar datos, agregar exámenes (p. ej. el informe PDF),
-//             subir más archivos, renombrar, descargar y eliminar archivos.
+//             ver, editar datos, agregar exámenes, subir más imágenes o el
+//             informe PDF de cada examen, renombrar, descargar y eliminar archivos.
 //
-// Se abre desde la tabla de estudios (grupo), de pacientes o de médicos.
+// Se abre desde la tabla de exámenes (grupo), de pacientes o de médicos.
 
 import { backend, isDemo } from '../../services/backend.js';
 import { fileKind, groupKey, groupSearchText, groupStudies, searchTerm, STUDY_MODALITIES } from '../../services/groups.js';
@@ -130,7 +130,7 @@ export function createExplorer(ctx) {
   }
 
   function examForm(s, g) {
-    const v = s || { modality: 'Informe', description: '', date: g.date, doctorId: g.doctorId };
+    const v = s || { modality: 'Panorámica', description: '', date: g.date, doctorId: g.doctorId };
     return `
       <form class="exam-form" data-exam-form="${s ? escapeHtml(s.id) : ''}">
         <div class="form-row ${s ? 'four' : 'three'}">
@@ -138,47 +138,64 @@ export function createExplorer(ctx) {
           <div class="field"><label>Descripción <input class="input" name="description" value="${escapeHtml(v.description || '')}"></label></div>
           ${s ? `<div class="field"><label>Fecha <input class="input" type="date" name="date" value="${escapeHtml(v.date)}"></label></div>
           <div class="field"><label>Médico <select class="input select" name="doctorId">${doctorOptions(state.doctors, v.doctorId)}</select></label></div>`
-          : `<div class="field"><label>Archivos <input class="input" type="file" name="files" multiple required></label></div>`}
+          : `<div class="field"><label>Imágenes <span class="opt">(DICOM, fotos…)</span> <input class="input" type="file" name="files" multiple data-exam-files></label></div>`}
         </div>
+        ${s ? '' : `<div class="field"><label>Informe <span class="opt">(PDF, opcional)</span> <input class="input" type="file" name="report" accept="application/pdf,.pdf" multiple data-exam-report></label></div>`}
         ${s ? '<p class="hint">Si cambia la fecha o el médico, el examen pasa al grupo que corresponda.</p>' : ''}
         <div class="exam-form-actions"><button type="button" class="btn btn-ghost btn-sm" data-cancel>Cancelar</button><button type="submit" class="btn btn-primary btn-sm">${s ? 'Guardar' : 'Subir examen'}</button></div>
         <div class="progress" hidden><span></span></div>
       </form>`;
   }
 
+  function fileRow(f) {
+    const pdf = fileKind(f) === 'pdf';
+    return `
+          <li data-path="${escapeHtml(f.path)}">
+            <span class="file-icon ${fileKind(f)}">${icon(pdf ? 'file' : 'image')}</span>
+            <span class="file-name">${escapeHtml(f.name)}</span>
+            <span class="mono">${fmtSize(f.size)}</span>
+            <span class="row-actions">
+              ${pdf ? `<button type="button" class="icon-btn" data-open-file title="Abrir PDF" aria-label="Abrir PDF">${icon('eye')}</button>` : ''}
+              <button type="button" class="icon-btn" data-download title="Descargar" aria-label="Descargar">${icon('download')}</button>
+              <button type="button" class="icon-btn" data-rename title="Renombrar" aria-label="Renombrar">${icon('edit')}</button>
+              <button type="button" class="icon-btn" data-delete-file title="Eliminar archivo" aria-label="Eliminar archivo">${icon('trash')}</button>
+            </span>
+          </li>`;
+  }
+
+  // Cada examen: sus imágenes (DICOM, fotos…) y su informe PDF, por separado.
   function examCard(s) {
     const id = escapeHtml(s.id);
     const files = s.files || [];
+    const images = files.filter((f) => fileKind(f) !== 'pdf');
+    const reports = files.filter((f) => fileKind(f) === 'pdf');
+    const isReportOnly = s.modality === 'Informe';
     return `
       <article class="exam-card" data-study="${id}">
         <header>
           <div>
-            <span class="badge ${s.modality === 'Informe' ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span>
+            <span class="badge ${isReportOnly ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span>
             <strong>${escapeHtml(s.description || s.modality)}</strong>
             <small class="mono">${escapeHtml(s.code || '')}</small>
             ${s.status === 'Nuevo' ? '<span class="badge amber" title="El médico aún no lo abre">No visto</span>' : ''}
+            ${!isReportOnly && !reports.length ? '<span class="badge gray" title="Este examen aún no tiene su informe PDF">Sin informe</span>' : ''}
           </div>
           <div class="row-actions">
             <button type="button" class="btn btn-outline btn-sm" data-view title="Abrir en el visor">${icon('eye')} Ver</button>
-            <button type="button" class="btn btn-outline btn-sm" data-add-files title="Subir más archivos a este examen (p. ej. el informe)">${icon('upload')} Agregar archivos</button>
+            <button type="button" class="btn btn-outline btn-sm" data-add-files title="Subir más imágenes a este examen">${icon('upload')} Agregar archivos</button>
             <button type="button" class="icon-btn" data-edit title="Editar examen" aria-label="Editar examen">${icon('edit')}</button>
             <button type="button" class="icon-btn" data-delete-study title="Eliminar examen" aria-label="Eliminar examen">${icon('trash')}</button>
           </div>
         </header>
         ${ui.editing === s.id ? examForm(s) : ''}
         <div class="progress" data-progress hidden><span></span></div>
-        ${files.length ? `<ul class="exam-files">${files.map((f) => `
-          <li data-path="${escapeHtml(f.path)}">
-            <span class="file-icon ${fileKind(f)}">${icon(fileKind(f) === 'pdf' ? 'file' : 'image')}</span>
-            <span class="file-name">${escapeHtml(f.name)}</span>
-            <span class="mono">${fmtSize(f.size)}</span>
-            <span class="row-actions">
-              ${fileKind(f) === 'pdf' ? `<button type="button" class="icon-btn" data-open-file title="Abrir PDF" aria-label="Abrir PDF">${icon('eye')}</button>` : ''}
-              <button type="button" class="icon-btn" data-download title="Descargar" aria-label="Descargar">${icon('download')}</button>
-              <button type="button" class="icon-btn" data-rename title="Renombrar" aria-label="Renombrar">${icon('edit')}</button>
-              <button type="button" class="icon-btn" data-delete-file title="Eliminar archivo" aria-label="Eliminar archivo">${icon('trash')}</button>
-            </span>
-          </li>`).join('')}</ul>` : '<p class="muted exam-empty">Sin archivos. Use «Agregar archivos».</p>'}
+        ${isReportOnly ? '' : `<h5 class="exam-sub">Imágenes</h5>
+        ${images.length ? `<ul class="exam-files">${images.map(fileRow).join('')}</ul>` : '<p class="muted exam-empty">Sin imágenes. Use «Agregar archivos».</p>'}`}
+        <div class="exam-sub exam-sub-report">
+          <h5>Informe</h5>
+          <button type="button" class="btn btn-ghost btn-sm" data-add-report>${icon('upload')} ${reports.length ? 'Agregar otro PDF' : 'Subir informe (PDF)'}</button>
+        </div>
+        ${reports.length ? `<ul class="exam-files">${reports.map(fileRow).join('')}</ul>` : '<p class="muted exam-empty">Aún no se subió el informe de este examen.</p>'}
       </article>`;
   }
 
@@ -234,7 +251,12 @@ export function createExplorer(ctx) {
       return openStudy(study);
     }
     if (t.hasAttribute('data-edit')) { ui = { editing: study.id }; return render(); }
-    if (t.hasAttribute('data-add-files')) { uploadTarget = study; fileInput.value = ''; return fileInput.click(); }
+    if (t.hasAttribute('data-add-files') || t.hasAttribute('data-add-report')) {
+      uploadTarget = study;
+      fileInput.value = '';
+      fileInput.accept = t.hasAttribute('data-add-report') ? 'application/pdf,.pdf' : '';
+      return fileInput.click();
+    }
     if (t.hasAttribute('data-delete-study')) {
       if (!confirm('¿Eliminar el examen «' + (study.description || study.modality) + '» (' + study.code + ') y todos sus archivos?')) return;
       try { await backend.deleteStudy(study); await refresh('Examen eliminado.'); } catch (ex) { toast('No se pudo eliminar: ' + ex.message); }
@@ -299,8 +321,8 @@ export function createExplorer(ctx) {
         followStudy(id);
       } else {
         const g = currentGroup();
-        const files = [...f.querySelector('input[type=file]').files];
-        if (!files.length) { toast('Elija los archivos del examen.'); btn.disabled = false; return; }
+        const files = [...f.querySelector('[data-exam-files]').files, ...f.querySelector('[data-exam-report]').files];
+        if (!files.length) { toast('Elija las imágenes o el informe del examen.'); btn.disabled = false; return; }
         const patient = ctx.patientById(g.patientId) || { id: g.patientId, name: g.patientName, code: g.patientCode, age: g.patientAge };
         const bar = f.querySelector('.progress');
         bar.hidden = false;

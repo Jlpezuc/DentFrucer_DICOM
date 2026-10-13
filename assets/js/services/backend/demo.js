@@ -1,10 +1,10 @@
 // Backend de demostración: datos de ejemplo, sin Firebase. Misma interfaz que
-// firebase.js. Los cambios (citas, pacientes, estudios) se guardan en la
+// firebase.js. Los cambios (citas, pacientes, exámenes) se guardan en la
 // sesión del navegador, para poder pasar de agendar.html al panel y ver lo
 // agendado; al cerrar la pestaña se vuelve a los datos de ejemplo.
 
 import { isoDate, agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
-import { normalizePatient } from '../people.js';
+import { normalizeAccountName, normalizePatient } from '../people.js';
 import { agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, sizeOf, studyEdits, studyPatientFields } from './shared.js';
 
 const SESSION_KEY = 'dentfrucer.demo.session';
@@ -92,13 +92,26 @@ export function createDemoBackend() {
     async currentUser() { return session.read(); },
     async signIn(email, password) {
       await wait(250);
-      const u = USERS[email.trim().toLowerCase()];
+      const key = email.trim().toLowerCase();
+      const u = USERS[key];
       if (!u || password !== 'demo1234') throw new Error('Correo o contraseña incorrectos.');
-      const profile = { ...u, email, title: u.role === 'admin' ? 'Administrador' : u.specialty };
+      const name = (store.accountNames || {})[key] || u.name;
+      const profile = { ...u, name, email: key, title: u.role === 'admin' ? 'Administrador' : u.specialty };
       session.write(profile);
       return profile;
     },
     async signOut() { session.write(null); },
+    async updateMyName(input) {
+      const { data: name, error } = normalizeAccountName(input);
+      if (error) throw new Error(error);
+      const me = session.read();
+      if (!me) throw new Error('La sesión expiró. Vuelva a ingresar.');
+      store.accountNames = { ...store.accountNames, [me.email]: name };
+      save();
+      const profile = { ...me, name };
+      session.write(profile);
+      return profile;
+    },
     async resetPassword() { await wait(200); },
 
     // --- Médicos ----------------------------------------------------------------
@@ -125,7 +138,7 @@ export function createDemoBackend() {
       save();
     },
 
-    // --- Estudios ----------------------------------------------------------------
+    // --- Exámenes ----------------------------------------------------------------
     async listStudies({ doctorId } = {}) {
       return studies.filter((s) => !doctorId || s.doctorId === doctorId).sort(byDateDesc);
     },
@@ -205,7 +218,7 @@ export function createDemoBackend() {
     async deleteAppointment(appt) { appointments.splice(appointments.findIndex((a) => a.id === appt.id), 1); save(); },
 
     // --- Resultados para pacientes ------------------------------------------------------
-    // En demostración el "token" es el código del estudio de ejemplo.
+    // En demostración el "token" es el código del examen de ejemplo.
     async getSharedStudy(token) {
       await wait(300);
       const study = studies.find((s) => s.id === token);

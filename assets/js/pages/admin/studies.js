@@ -1,4 +1,4 @@
-// Estudios agrupados: cada fila es un grupo (paciente + médico + fecha) con sus
+// Exámenes agrupados: cada fila es un grupo (paciente + médico + fecha) con sus
 // exámenes. Se busca por paciente, médico, código, examen o fecha, y se filtra
 // por un día. Al abrir un grupo se ve el explorador (explorer.js).
 

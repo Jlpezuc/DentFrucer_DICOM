@@ -1,6 +1,6 @@
 # DentFrucer · Portal DICOM
 
-Portal web de **DentFrucer – Imagenología Dento Maxilo Facial** para consultar estudios DICOM.
+Portal web de **DentFrucer – Imagenología Dento Maxilo Facial** para consultar exámenes DICOM.
 
 > Landing, inicio de sesión y paneles conectados a **Firebase** (Authentication, Firestore, Storage), con visor DICOM integrado.
 
@@ -11,9 +11,9 @@ Portal web de **DentFrucer – Imagenología Dento Maxilo Facial** para consulta
 | `index.html` | Landing pública de la clínica; el acceso es para médicos |
 | `agendar.html` | Agenda en línea para pacientes, sin crear cuenta |
 | `login.html` | Inicio de sesión de médicos |
-| `portal.html` | Portal del médico: solo los estudios asignados a él |
+| `portal.html` | Portal del médico: solo los exámenes asignados a él |
 | `admin-login.html` | Acceso de administración (no enlazado desde la landing) |
-| `admin.html` | Panel: agenda, carga de estudios, pacientes y médicos |
+| `admin.html` | Panel: agenda, carga de exámenes, pacientes y médicos |
 | `resultados.html` | Resultados para pacientes con visor de solo lectura (**acceso desactivado**, ver abajo) |
 
 ## Firebase
@@ -35,40 +35,44 @@ En **`agendar.html`** el paciente elige el examen, el día y la hora libres y de
 - se crea el **paciente** en la lista de la clínica (si ya había agendado con el mismo nombre y correo/teléfono, no se duplica);
 - el paciente ve un código de cita y puede agregarla a su calendario (.ics).
 
-En el panel de administración, la sección **Agenda** muestra las citas de hoy, las próximas y las anteriores, y permite **crear, editar y borrar citas** (cambiar el día o la hora mueve el turno; cancelar o borrar lo libera). **Cargar estudio** desde una cita rellena el paciente, la modalidad y la fecha, sugiere el médico que indicó el paciente y, al subir los archivos, la cita queda como *Atendida*.
+En el panel de administración, la sección **Agenda** muestra las citas de hoy, las próximas y las anteriores, y permite **crear, editar y borrar citas** (cambiar el día o la hora mueve el turno; cancelar o borrar lo libera). **Cargar examen** desde una cita rellena el paciente, la modalidad y la fecha, sugiere el médico que indicó el paciente y, al subir los archivos, la cita queda como *Atendida*.
 
 Horarios, duración de los turnos, días cerrados, tipos de examen e indicaciones se editan en `assets/js/config/agenda-config.js`. En modo demostración (`agendar.html?demo=1`) las citas se guardan solo en la pestaña del navegador. Un enlace como `agendar.html?examen=CBCT` deja el examen preseleccionado.
 
 ## Navegación
 
-En el panel de administración (Agenda, Estudios, Cargar estudio, Pacientes, Médicos) y en el portal del médico (Estudios, Mis pacientes), cada opción del menú lateral muestra **solo su sección**. La sección va en la dirección (`admin.html#estudios`), así que se conserva al recargar, se puede guardar como marcador y funcionan atrás/adelante. Lo resuelve `assets/js/pages/views.js` con los elementos marcados `data-section`.
+En el panel de administración (Agenda, Exámenes, Cargar examen, Pacientes, Médicos) y en el portal del médico (Exámenes, Mis pacientes), cada opción del menú lateral muestra **solo su sección**. La sección va en la dirección (`admin.html#examenes`), así que se conserva al recargar, se puede guardar como marcador y funcionan atrás/adelante. Con un examen abierto en el visor, el botón **atrás** del navegador cierra el visor (si hay mediciones sin guardar, pregunta antes). Lo resuelve `assets/js/pages/views.js` con los elementos marcados `data-section`.
 
-## Pacientes, estudios y médicos
+## Pacientes, exámenes y médicos
 
-Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (nombre, apellido, expediente, edad, correo, teléfono) y se edita desde la tabla *Pacientes*. Cada **estudio** pertenece a un paciente **y** a un médico, que se elige al cargarlo y se puede cambiar en la tabla *Estudios*. El médico ve en su portal los estudios que tiene asignados, y su lista *Mis pacientes* sale de esos estudios. Un mismo paciente puede tener estudios para médicos distintos.
+Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (nombre, apellido, expediente, edad, correo, teléfono) y se edita desde la tabla *Pacientes*. Cada **examen** pertenece a un paciente **y** a un médico, que se elige al cargarlo y se puede cambiar en la tabla *Exámenes*. El médico ve en su portal los exámenes que tiene asignados, y su lista *Mis pacientes* sale de esos exámenes. Un mismo paciente puede tener exámenes para médicos distintos.
 
 ### Grupos de exámenes y explorador
 
 - Los exámenes de un mismo **paciente**, para un mismo **médico** y en la misma **fecha** forman un **grupo**, se suban juntos o por separado. El grupo se calcula a partir de los exámenes: si uno cambia de médico o de fecha, pasa solo al grupo que corresponde.
-- **Cargar estudio** admite varios exámenes en una subida (por ejemplo CBCT + panorámica + informe PDF), cada uno con su modalidad y sus archivos, y avisa si se sumarán a un grupo existente.
-- La tabla de **estudios** muestra un grupo por fila. Se busca por paciente, médico, código, examen o **fecha** ("08/10/2026", "8 oct 2026", "oct 2026") y se filtra por un día.
+- **Cargar examen** admite varios exámenes en una subida (por ejemplo CBCT + panorámica), cada uno con su modalidad, sus imágenes (archivos sueltos o una carpeta) y **su informe PDF**, y avisa si se sumarán a un grupo existente.
+- La tabla de **exámenes** muestra un grupo por fila. Se busca por paciente, médico, código, examen o **fecha** ("08/10/2026", "8 oct 2026", "oct 2026") y se filtra por un día.
 - El **explorador** se abre desde un grupo, desde un paciente (todas sus visitas por fecha) o desde un médico (sus pacientes y las visitas de cada uno), con migas de pan para moverse entre niveles.
 - **Dentro de un grupo** se puede:
-  - **Exámenes**: verlos en el visor, editar modalidad, descripción, fecha y médico, agregar otro examen (por ejemplo el informe) y eliminarlos.
+  - **Exámenes**: verlos en el visor, editar modalidad, descripción, fecha y médico, agregar otro examen y eliminarlos. Cada examen muestra por separado sus **imágenes** y su **informe**; si aún no tiene informe aparece «Sin informe» y el botón *Subir informe (PDF)*.
   - **Archivos**: subir más, abrir los PDF, descargar, renombrar y eliminar.
   - **Médico**: cambiar el de todo el grupo de una vez.
-- En el **portal del médico** los exámenes también se ven agrupados por **visita** (paciente + fecha), con sus informes, búsqueda por paciente, examen o fecha, filtro por día y por modalidad, y «Ver exámenes» desde *Mis pacientes*.
-- Los **informes PDF** se suben como un examen de modalidad *Informe* o como archivos de otro examen; en el visor aparecen en la pestaña *Informes*.
+- En el **portal del médico** los exámenes también se ven agrupados por **visita** (paciente + fecha); cada examen indica si tiene informe y, si lo tiene, el botón *Informe* lo abre directamente. Hay búsqueda por paciente, examen o fecha, filtro por día y por modalidad, y «Ver exámenes» desde *Mis pacientes*.
+- Los **informes PDF** van con su examen (o, si es un informe suelto, como examen de modalidad *Informe*); en el visor aparecen en la pestaña *Informes*.
+
+### Cuentas de administración
+
+Puede haber varios administradores: el panel muestra el **correo** de la cuenta en sesión y, con el lápiz junto a él (*Mi cuenta*), se cambia el **nombre** visible (`users/{uid}.name`). El correo no se cambia desde el panel.
 
 ## Resultados para pacientes (desactivado)
 
-`resultados.html?t=…` muestra al paciente su estudio y abre el **visor de solo lectura**: navegar, contraste, lupa, girar e invertir, **guardar la imagen** (PNG) y **descargar los archivos** originales; sin mediciones, notas, implantes ni etiquetas DICOM completas. Está pensado para abrirse con un enlace enviado por correo.
+`resultados.html?t=…` muestra al paciente su examen y abre el **visor de solo lectura**: navegar, contraste, lupa, girar e invertir, **guardar la imagen** (PNG) y **descargar los archivos** originales; sin mediciones, notas, implantes ni etiquetas DICOM completas. Está pensado para abrirse con un enlace enviado por correo.
 
-El acceso está **desactivado** (`assets/js/config/patient-access.js`, `enabled: false`): la página responde "Acceso no disponible" y no carga ningún dato. Solo se puede probar en modo demostración, con un estudio de ejemplo: `resultados.html?demo=1&t=EST-2026-0418` (CBCT) o `…&t=EST-2026-0415` (panorámica). Lo que falta para activarlo está en [FIREBASE.md](FIREBASE.md#acceso-de-pacientes-pendiente).
+El acceso está **desactivado** (`assets/js/config/patient-access.js`, `enabled: false`): la página responde "Acceso no disponible" y no carga ningún dato. Solo se puede probar en modo demostración, con un examen de ejemplo: `resultados.html?demo=1&t=EST-2026-0418` (CBCT) o `…&t=EST-2026-0415` (panorámica). Lo que falta para activarlo está en [FIREBASE.md](FIREBASE.md#acceso-de-pacientes-pendiente).
 
 ## Visor
 
-Se abre con **Abrir** en el portal (o el ojo en el panel de administración) y elige el modo según el estudio:
+Se abre con **Abrir** en el portal (o el ojo en el panel de administración) y elige el modo según el examen:
 
 - **CBCT**: axial, coronal y sagital enlazados con cruz de navegación; espesor de corte (MIP); 3D (hueso, piel, rayos X); panorámica reconstruida trazando una curva sobre el arco; cortes transversales.
 - **Distribución Implantes** (CBCT): axial con la curva, panorámica reconstruida y una tira de 5 cortes transversales consecutivos (cada 0,5/1/2/3 mm) con zoom sincronizado; la línea del corte axial se ve en la panorámica y en los cortes.
@@ -110,7 +114,7 @@ assets/js/
     people.js            validación de nombres y contacto de pacientes
   ui/                    utilidades compartidas: iconos, modales, formatos
   pages/                 lógica de cada página: landing, login, portal, agenda, results
-    admin/               panel: index (estado) + agenda, studies, upload, people
+    admin/               panel: index (estado) + agenda, studies, explorer, upload, people, account
   viewer/
     index.js             abre el visor (completo o de solo lectura) y elige el modo
     shell.js             estructura visual: encabezado, barras, paneles

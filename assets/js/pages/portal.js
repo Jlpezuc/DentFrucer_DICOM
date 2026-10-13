@@ -3,7 +3,7 @@
 // tienen médico; cada examen sí.
 
 import { backend } from '../services/backend.js';
-import { groupSearchText, groupStudies, searchTerm } from '../services/groups.js';
+import { fileKind, groupSearchText, groupStudies, searchTerm } from '../services/groups.js';
 import { escapeHtml, setText, toast } from '../ui/dom.js';
 import { fmtDate, fmtSize, initials } from '../ui/format.js';
 import { icon } from '../ui/icons.js';
@@ -14,7 +14,7 @@ import { initFilesModal, openStudy } from './study-actions.js';
 export async function init() {
   const user = await requireRole('doctor');
   if (!user) return;
-  const views = initViews({ fallback: 'estudios' });
+  const views = initViews({ fallback: 'examenes' });
   const openFiles = initFilesModal();
   const $ = (id) => document.getElementById(id);
   const grid = $('study-grid');
@@ -35,15 +35,25 @@ export async function init() {
         '<div><h3>' + escapeHtml(g.patientName) + '</h3><small>' + (sub ? sub + ' · ' : '') + fmtDate(g.date) + '</small></div>' +
         (g.hasNew ? '<span class="badge blue">Nuevo</span>' : '') +
       '</header>' +
-      '<ul class="visit-exams">' + g.studies.map((s) => '<li>' +
-        '<span class="badge ' + (s.modality === 'Informe' ? 'green' : 'blue') + '">' + escapeHtml(s.modality) + '</span>' +
-        '<span class="visit-exam-name">' + escapeHtml(s.description || s.modality) + '<small>' + (s.files || []).length + ' archivo(s) · ' + fmtSize(s.totalSize) + '</small></span>' +
-        (s.status === 'Nuevo' ? '<span class="dot-new" title="Sin revisar"></span>' : '') +
-        '<button class="btn btn-primary btn-sm" type="button" data-view="' + escapeHtml(s.id) + '">' + icon('eye') + ' ' + (s.modality === 'Informe' ? 'Leer' : 'Abrir') + '</button>' +
-      '</li>').join('') + '</ul>' +
+      '<ul class="visit-exams">' + g.studies.map(examItem).join('') + '</ul>' +
       '<footer><span class="muted">' + g.fileCount + ' archivo(s) · ' + fmtSize(g.totalSize) + '</span>' +
         '<button class="btn btn-ghost btn-sm" type="button" data-files>' + icon('download') + ' Descargar todo</button></footer>' +
     '</article>';
+  }
+
+  // Cada examen: abrir en el visor y, si ya tiene informe PDF, leerlo directamente.
+  function examItem(s) {
+    const id = escapeHtml(s.id);
+    const isReport = s.modality === 'Informe';
+    const hasReport = !isReport && reportsOf(s).length > 0;
+    return '<li>' +
+      '<span class="badge ' + (isReport ? 'green' : 'blue') + '">' + escapeHtml(s.modality) + '</span>' +
+      '<span class="visit-exam-name">' + escapeHtml(s.description || s.modality) + '<small>' + (s.files || []).length + ' archivo(s) · ' + fmtSize(s.totalSize) +
+        (isReport ? '' : hasReport ? ' · con informe' : ' · informe pendiente') + '</small></span>' +
+      (s.status === 'Nuevo' ? '<span class="dot-new" title="Sin revisar"></span>' : '') +
+      (hasReport ? '<button class="btn btn-outline btn-sm" type="button" data-report="' + id + '">' + icon('file') + ' Informe</button>' : '') +
+      '<button class="btn btn-primary btn-sm" type="button" data-view="' + id + '">' + icon('eye') + ' ' + (isReport ? 'Leer' : 'Abrir') + '</button>' +
+    '</li>';
   }
 
   function render() {
@@ -87,14 +97,27 @@ export async function init() {
       openFiles({ patientName: g.patientName + ' · ' + fmtDate(g.date), files: g.studies.flatMap((s) => s.files || []) });
       return;
     }
-    const b = e.target.closest('[data-view]');
-    const s = b && g.studies.find((x) => x.id === b.dataset.view);
+    const b = e.target.closest('[data-view], [data-report]');
+    const s = b && g.studies.find((x) => x.id === (b.dataset.view || b.dataset.report));
     if (!s) return;
-    openStudy(s);
+    if (b.dataset.view) openStudy(s);
+    else await openReport(s);
     if (s.status === 'Nuevo') {
       try { await backend.markSeen(s.id); s.status = 'Visto'; render(); } catch (ex) { /* no crítico */ }
     }
   });
+
+  // Informe del examen: si hay uno se abre en otra pestaña; si hay varios, se listan.
+  async function openReport(s) {
+    const reports = reportsOf(s);
+    if (reports.length > 1) { openFiles({ patientName: reportTitle(s), files: reports }); return; }
+    try {
+      const url = await backend.fileUrl(reports[0]);
+      if (!url) { toast('Los informes no se pueden abrir en modo demostración.'); return; }
+      window.open(url, '_blank', 'noopener');
+    } catch (ex) { toast('No se pudo abrir el informe.'); }
+  }
+  const reportTitle = (s) => s.patientName + ' · ' + (s.description || s.modality);
 
   // "Ver exámenes" de un paciente: filtra las visitas y sube a la lista.
   $('patients-body').addEventListener('click', (e) => {
@@ -102,7 +125,7 @@ export async function init() {
     if (!b) return;
     patientFilter = b.dataset.patient;
     render();
-    views.go('estudios');
+    views.go('examenes');
   });
   chip.addEventListener('click', (e) => { if (e.target.closest('[data-clear-patient]')) { patientFilter = null; render(); } });
 
@@ -113,6 +136,8 @@ export async function init() {
   }
   render();
 }
+
+const reportsOf = (s) => (s.files || []).filter((f) => fileKind(f) === 'pdf');
 
 // Pacientes del médico a partir de sus visitas: datos de la más reciente,
 // cuántas visitas tiene y la fecha de la última.

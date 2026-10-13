@@ -1,9 +1,9 @@
 // Resultados para pacientes (resultados.html?t=…): el paciente abre el enlace
-// que recibe por correo, ve los datos de su estudio, lo abre en el visor de
+// que recibe por correo, ve los datos de su examen, lo abre en el visor de
 // solo lectura y descarga los archivos.
 //
 // El acceso está desactivado (config/patient-access.js): mientras lo esté, la
-// página solo funciona en modo demostración, con estudios de ejemplo
+// página solo funciona en modo demostración, con exámenes de ejemplo
 // (p. ej. resultados.html?demo=1&t=EST-2026-0418).
 
 import { agendaConfig } from '../config/agenda-config.js';
@@ -42,7 +42,7 @@ export async function init() {
   try {
     shared = await backend.getSharedStudy(token);
   } catch (e) {
-    message('No se pudo abrir el estudio', e.message);
+    message('No se pudo abrir el examen', e.message);
     return;
   }
 
@@ -53,7 +53,7 @@ export async function init() {
     <h1>${escapeHtml(examLabel(study.modality))}</h1>
     <dl class="results-details">
       <dt>Paciente</dt><dd>${escapeHtml(study.patientName || '')}</dd>
-      <dt>Estudio</dt><dd>${escapeHtml(study.description || study.modality)}</dd>
+      <dt>Examen</dt><dd>${escapeHtml(study.description || study.modality)}</dd>
       <dt>Fecha</dt><dd>${fmtDate(study.date)}</dd>
       <dt>Código</dt><dd class="mono">${escapeHtml(study.code || '')}</dd>
     </dl>
@@ -64,7 +64,7 @@ export async function init() {
       <h2>Archivos</h2>
       ${files.length
         ? `<ul class="file-list">${files.map((f) => `<li><a href="${escapeHtml(f.url)}" download target="_blank" rel="noopener">${icon('download')} ${escapeHtml(f.name)}</a></li>`).join('')}</ul>`
-        : `<p class="muted">${isDemo ? 'En modo demostración no hay archivos para descargar.' : 'Este estudio no tiene archivos para descargar.'}</p>`}
+        : `<p class="muted">${isDemo ? 'En modo demostración no hay archivos para descargar.' : 'Este examen no tiene archivos para descargar.'}</p>`}
       <p class="hint">Los archivos DICOM se abren con el software de su odontólogo. Para verlos aquí use «Ver imágenes».</p>
     </div>`;
   card.querySelector('[data-open-viewer]').addEventListener('click', async () => {

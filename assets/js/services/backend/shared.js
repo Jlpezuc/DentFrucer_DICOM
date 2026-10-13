@@ -10,7 +10,7 @@ export const agendaPatient = (a) => ({
   name: a.name, firstName: a.firstName, lastName: a.lastName, email: a.email, phone: a.phone, code: '', age: null, source: 'agenda'
 });
 
-// Datos del paciente copiados en cada estudio (los usa el portal del médico).
+// Datos del paciente copiados en cada examen (los usa el portal del médico).
 export const studyPatientFields = (p) => ({ patientName: p.name, patientCode: p.code || '', patientAge: p.age || null });
 
 // Archivos de un examen.

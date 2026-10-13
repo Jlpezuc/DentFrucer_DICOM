@@ -1,7 +1,7 @@
 // Acceso de los pacientes a sus resultados (resultados.html?t=…).
 //
 // La página y el visor de solo lectura ya están hechos, pero el acceso está
-// DESACTIVADO: con enabled = false, resultados.html no muestra ningún estudio
+// DESACTIVADO: con enabled = false, resultados.html no muestra ningún examen
 // real (solo los de ejemplo en modo demostración).
 //
 // Para activarlo falta el envío del enlace por correo y la resolución del

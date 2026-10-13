@@ -1,5 +1,5 @@
 // Lector mínimo de archivos ZIP (sin compresión o "deflate"), suficiente para
-// abrir las exportaciones de estudios que entregan los equipos de imagen.
+// abrir las exportaciones de exámenes que entregan los equipos de imagen.
 
 export function isZip(buffer) {
   const u8 = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));

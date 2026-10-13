@@ -19,14 +19,15 @@
       <nav class="side-nav" aria-label="Administración">
         <span class="label">General</span>
         <a href="#agenda"><i data-icon="calendar"></i> Agenda</a>
-        <a href="#estudios"><i data-icon="folder"></i> Estudios</a>
-        <a href="#carga"><i data-icon="upload"></i> Cargar estudio</a>
+        <a href="#examenes"><i data-icon="folder"></i> Exámenes</a>
+        <a href="#carga"><i data-icon="upload"></i> Cargar examen</a>
         <a href="#pacientes"><i data-icon="users"></i> Pacientes</a>
         <a href="#medicos"><i data-icon="stethoscope"></i> Médicos</a>
       </nav>
       <div class="side-user">
         <span class="avatar" data-user-initials>AD</span>
-        <div class="who"><strong data-user-name>Administración</strong><span data-user-title>Administrador</span></div>
+        <div class="who"><strong data-user-name>Administración</strong><span data-user-email>Administrador</span></div>
+        <button type="button" data-open="account" title="Mi cuenta: cambiar el nombre" aria-label="Mi cuenta"><i data-icon="edit"></i></button>
         <button type="button" data-logout title="Cerrar sesión" aria-label="Cerrar sesión"><i data-icon="logout"></i></button>
       </div>
     </aside>
@@ -35,22 +36,22 @@
       <div class="topbar">
         <div>
           <h1 id="view-title">Panel de administración</h1>
-          <p id="view-desc">Gestione la agenda, los estudios DICOM, los pacientes y los médicos.</p>
+          <p id="view-desc">Gestione la agenda, los exámenes DICOM, los pacientes y los médicos.</p>
         </div>
         <div class="actions">
           <button class="btn btn-outline btn-sm" type="button" data-open="appointment"><i data-icon="calendar"></i> Nueva cita</button>
           <button class="btn btn-outline btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo paciente</button>
           <button class="btn btn-outline btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo médico</button>
-          <a class="btn btn-primary btn-sm" href="#carga"><i data-icon="upload"></i> Cargar estudio</a>
+          <a class="btn btn-primary btn-sm" href="#carga"><i data-icon="upload"></i> Cargar examen</a>
         </div>
       </div>
 
       <div class="stats five" data-section="agenda" data-section-desc="Citas de hoy, próximas y anteriores. Cree, edite o cancele citas.">
         <div class="stat"><div class="k">Citas de hoy</div><div class="v" id="stat-today">–</div></div>
-        <div class="stat"><div class="k">Estudios</div><div class="v" id="stat-studies">–</div></div>
+        <div class="stat"><div class="k">Exámenes</div><div class="v" id="stat-studies">–</div></div>
         <div class="stat"><div class="k">Pacientes</div><div class="v" id="stat-patients">–</div></div>
         <div class="stat"><div class="k">Médicos</div><div class="v" id="stat-doctors">–</div></div>
-        <div class="stat"><div class="k">Estudios sin médico</div><div class="v" id="stat-unassigned" style="color:var(--warning)">–</div></div>
+        <div class="stat"><div class="k">Exámenes sin médico</div><div class="v" id="stat-unassigned" style="color:var(--warning)">–</div></div>
       </div>
 
       <!-- Agenda -->
@@ -74,8 +75,8 @@
         </div>
       </section>
 
-      <!-- Estudios -->
-      <section class="panel" id="estudios" data-section="estudios" data-section-desc="Exámenes agrupados por paciente, médico y fecha. Abra un grupo para ver, editar o agregar archivos.">
+      <!-- Exámenes -->
+      <section class="panel" id="examenes" data-section="examenes" data-section-desc="Exámenes agrupados por paciente, médico y fecha. Abra un grupo para ver, editar o agregar archivos.">
         <div class="panel-head">
           <div class="tabs" id="study-tabs" role="tablist">
             <button type="button" data-filter="all" aria-selected="true">Todos</button>
@@ -85,7 +86,7 @@
           </div>
           <div class="panel-actions">
             <label class="search">
-              <span class="sr-only">Buscar estudios</span>
+              <span class="sr-only">Buscar exámenes</span>
               <i data-icon="search"></i>
               <input class="input" id="admin-search" type="search" placeholder="Paciente, médico, ID o fecha (08/10/2026)">
             </label>
@@ -101,9 +102,9 @@
         </div>
       </section>
 
-      <!-- Carga de estudios -->
+      <!-- Carga de exámenes -->
       <section class="panel" id="carga" data-section="carga" data-section-desc="Suba uno o varios exámenes de un paciente, con sus archivos e informes PDF.">
-        <div class="panel-head"><h2>Cargar estudio</h2></div>
+        <div class="panel-head"><h2>Cargar examen</h2></div>
         <form class="panel-body" id="upload-form" novalidate>
           <div class="form-error" role="alert"></div>
           <div class="upload-appt" id="upload-appt" hidden></div>
@@ -114,9 +115,9 @@
               <span class="hint">Los pacientes que agendaron ya están en la lista. ¿No aparece? <a href="#" data-open="patient">Registrar paciente</a>.</span>
             </div>
             <div class="field">
-              <label for="u-doctor">Médico que recibe el estudio</label>
+              <label for="u-doctor">Médico que recibe el examen</label>
               <select class="input select" id="u-doctor"></select>
-              <span class="hint" id="u-doctor-hint">El estudio aparecerá en el portal de este médico.</span>
+              <span class="hint" id="u-doctor-hint">El examen aparecerá en el portal de este médico.</span>
             </div>
           </div>
           <div class="form-row">
@@ -124,7 +125,7 @@
             <div class="field"><span class="field-label">Grupo</span><span class="hint" id="u-group-hint">Elija paciente, médico y fecha. Los exámenes del mismo paciente, médico y día se agrupan.</span></div>
           </div>
           <div class="exam-list" id="exam-list"></div>
-          <button type="button" class="btn btn-ghost btn-sm" id="add-exam"><i data-icon="plus"></i> Agregar otro examen (o el informe PDF)</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="add-exam"><i data-icon="plus"></i> Agregar otro examen</button>
           <div class="progress" id="upload-progress" hidden><span></span></div>
           <button class="btn btn-primary" type="submit" style="margin-top:12px"><i data-icon="upload"></i> Subir exámenes</button>
         </form>
@@ -221,8 +222,22 @@
           <div class="field"><label for="np-email">Correo <span class="opt">(opcional)</span></label><input class="input" id="np-email" name="email" type="email" maxlength="120"></div>
           <div class="field"><label for="np-phone">Teléfono <span class="opt">(opcional)</span></label><input class="input" id="np-phone" name="phone" type="tel" maxlength="30"></div>
         </div>
-        <p class="hint">El médico no se asigna al paciente sino a cada estudio, al cargarlo.</p>
+        <p class="hint">El médico no se asigna al paciente sino a cada examen, al cargarlo.</p>
         <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Guardar paciente</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Mi cuenta: nombre visible de la cuenta en sesión -->
+  <div class="modal-backdrop" id="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
+    <div class="modal sm">
+      <div class="modal-head"><h3 id="account-modal-title">Mi cuenta</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <form class="modal-body" id="account-form" novalidate>
+        <div class="form-error" role="alert"></div>
+        <div class="field"><label for="ac-email">Correo de ingreso</label><input class="input" id="ac-email" readonly></div>
+        <div class="field"><label for="ac-name">Nombre de la cuenta</label><input class="input" id="ac-name" name="name" required maxlength="60" autocomplete="name"></div>
+        <p class="hint">Es el nombre que se ve en el panel. El correo no se puede cambiar desde aquí.</p>
+        <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Guardar</button></div>
       </form>
     </div>
   </div>
@@ -255,7 +270,7 @@
   <input type="file" id="explorer-file-input" multiple class="sr-only" tabindex="-1">
 
   <!-- Archivos -->
-  <div class="modal-backdrop" id="files-modal" role="dialog" aria-modal="true" aria-label="Archivos del estudio">
+  <div class="modal-backdrop" id="files-modal" role="dialog" aria-modal="true" aria-label="Archivos del examen">
     <div class="modal sm">
       <div class="modal-head"><h3>Archivos</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
       <div class="modal-body"><ul class="file-list"></ul></div>

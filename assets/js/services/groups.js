@@ -1,6 +1,6 @@
-// Grupos de exámenes: los exámenes (estudios) de un mismo paciente, para un
+// Grupos de exámenes: los exámenes (exámenes) de un mismo paciente, para un
 // mismo médico y en la misma fecha forman un grupo, se hayan subido juntos o
-// por separado. El grupo no se guarda: se calcula a partir de los estudios,
+// por separado. El grupo no se guarda: se calcula a partir de los exámenes,
 // así que si un examen cambia de médico o de fecha pasa solo a su nuevo grupo.
 
 export const groupKey = (s) => [s.patientId, s.doctorId || '', s.date].join('|');
