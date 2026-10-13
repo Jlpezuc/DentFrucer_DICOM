@@ -1,9 +1,11 @@
-// Portal del médico: los estudios asignados a su cuenta y, a partir de ellos,
-// sus pacientes (los pacientes no tienen médico; cada estudio sí).
+// Portal del médico: sus exámenes agrupados por visita (paciente + fecha; ver
+// services/groups.js) y, a partir de ellos, sus pacientes. Los pacientes no
+// tienen médico; cada examen sí.
 
 import { backend } from '../services/backend.js';
+import { groupSearchText, groupStudies, searchTerm } from '../services/groups.js';
 import { escapeHtml, setText, toast } from '../ui/dom.js';
-import { fmtDate, fmtSize, initials, statusBadge } from '../ui/format.js';
+import { fmtDate, fmtSize, initials } from '../ui/format.js';
 import { icon } from '../ui/icons.js';
 import { requireRole } from './session.js';
 import { initFilesModal, openStudy } from './study-actions.js';
@@ -12,78 +14,113 @@ export async function init() {
   const user = await requireRole('doctor');
   if (!user) return;
   const openFiles = initFilesModal();
-  let mine = [];
-  let patients = [];
+  const $ = (id) => document.getElementById(id);
+  const grid = $('study-grid');
+  const search = $('portal-search');
+  const dateInput = $('portal-date');
+  const mod = $('modality-filter');
+  const chip = $('patient-chip');
+  let mine = [];       // exámenes del médico
+  let visits = [];     // grupos (paciente + fecha)
+  let patientFilter = null;
 
-  const grid = document.getElementById('study-grid');
-  const search = document.getElementById('portal-search');
-  const mod = document.getElementById('modality-filter');
+  // --- Visitas ----------------------------------------------------------------------------
+  function visitCard(g) {
+    const sub = [g.patientCode, g.patientAge ? g.patientAge + ' años' : ''].filter(Boolean).map(escapeHtml).join(' · ');
+    return '<article class="visit-card' + (g.hasNew ? ' is-new' : '') + '" data-key="' + escapeHtml(g.key) + '">' +
+      '<header>' +
+        '<span class="avatar">' + initials(g.patientName) + '</span>' +
+        '<div><h3>' + escapeHtml(g.patientName) + '</h3><small>' + (sub ? sub + ' · ' : '') + fmtDate(g.date) + '</small></div>' +
+        (g.hasNew ? '<span class="badge blue">Nuevo</span>' : '') +
+      '</header>' +
+      '<ul class="visit-exams">' + g.studies.map((s) => '<li>' +
+        '<span class="badge ' + (s.modality === 'Informe' ? 'green' : 'blue') + '">' + escapeHtml(s.modality) + '</span>' +
+        '<span class="visit-exam-name">' + escapeHtml(s.description || s.modality) + '<small>' + (s.files || []).length + ' archivo(s) · ' + fmtSize(s.totalSize) + '</small></span>' +
+        (s.status === 'Nuevo' ? '<span class="dot-new" title="Sin revisar"></span>' : '') +
+        '<button class="btn btn-primary btn-sm" type="button" data-view="' + escapeHtml(s.id) + '">' + icon('eye') + ' ' + (s.modality === 'Informe' ? 'Leer' : 'Abrir') + '</button>' +
+      '</li>').join('') + '</ul>' +
+      '<footer><span class="muted">' + g.fileCount + ' archivo(s) · ' + fmtSize(g.totalSize) + '</span>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-files>' + icon('download') + ' Descargar todo</button></footer>' +
+    '</article>';
+  }
 
   function render() {
+    visits = groupStudies(mine);
+    const patients = patientsOf(visits);
     setText('stat-my-patients', patients.length);
     setText('stat-my-studies', mine.length);
     setText('stat-my-new', mine.filter((s) => s.status === 'Nuevo').length);
 
-    const q = search.value.trim().toLowerCase();
-    const rows = mine.filter((s) => (!mod.value || s.modality === mod.value) && (!q || [s.patientName, s.patientCode, s.description].join(' ').toLowerCase().includes(q)));
-    grid.innerHTML = rows.length ? rows.map((s) => {
-      const shape = s.modality === 'Panorámica' ? 'pano' : (s.modality === 'CBCT' ? 'axial' : '');
-      return '<article class="study-card">' +
-        '<div class="study-thumb"><span class="badge blue mod">' + escapeHtml(s.modality) + '</span><div class="vm-shape ' + shape + '"></div></div>' +
-        '<div class="study-body">' +
-          '<h3>' + escapeHtml(s.patientName) + '</h3>' +
-          '<div class="meta">' + escapeHtml(s.description) + '</div>' +
-          '<div class="meta">' + fmtDate(s.date) + ' · ' + (s.files || []).length + ' archivo(s) · ' + fmtSize(s.totalSize) + '</div>' +
-        '</div>' +
-        '<div class="study-foot">' + statusBadge(s.status) +
-          '<div class="row-actions">' +
-            '<button class="icon-btn" title="Descargar" data-files="' + escapeHtml(s.id) + '">' + icon('download') + '</button>' +
-            '<button class="btn btn-primary btn-sm" data-view="' + escapeHtml(s.id) + '">' + icon('eye') + ' Abrir</button>' +
-          '</div>' +
-        '</div>' +
-      '</article>';
-    }).join('') : '<div class="empty">' + (mine.length ? 'No hay estudios que coincidan.' : 'Aún no tiene estudios disponibles. Aparecerán aquí en cuanto DentFrucer los cargue.') + '</div>';
+    const q = searchTerm(search.value);
+    const rows = visits.filter((g) => (!patientFilter || g.patientId === patientFilter) &&
+      (!dateInput.value || g.date === dateInput.value) &&
+      (!mod.value || g.modalities.includes(mod.value)) &&
+      (!q || groupSearchText(g).includes(q)));
+    chip.hidden = !patientFilter;
+    if (patientFilter) {
+      const p = patients.find((x) => x.id === patientFilter);
+      chip.innerHTML = 'Paciente: <strong>' + escapeHtml(p ? p.name : '') + '</strong> <button type="button" aria-label="Quitar filtro" data-clear-patient>' + icon('x') + '</button>';
+    }
+    grid.innerHTML = rows.length ? rows.map(visitCard).join('')
+      : '<div class="empty">' + (mine.length ? 'No hay visitas que coincidan.' : 'Aún no tiene exámenes disponibles. Aparecerán aquí en cuanto DentFrucer los cargue.') + '</div>';
 
-    const pBody = document.getElementById('patients-body');
-    pBody.innerHTML = patients.length ? patients.map((p) => {
+    $('patients-body').innerHTML = patients.length ? patients.map((p) => {
       const sub = [p.code, p.age ? p.age + ' años' : ''].filter(Boolean).map(escapeHtml).join(' · ');
       return '<tr><td><div class="cell-patient"><span class="avatar">' + initials(p.name) + '</span><div><strong>' + escapeHtml(p.name) + '</strong><small>' + (sub || '&nbsp;') + '</small></div></div></td>' +
-        '<td>' + p.count + '</td><td>' + fmtDate(p.last) + '</td></tr>';
-    }).join('') : '<tr><td colspan="3"><div class="empty">Aún no tiene pacientes con estudios.</div></td></tr>';
+        '<td>' + p.visits + '</td><td>' + fmtDate(p.last) + '</td>' +
+        '<td><div class="row-actions"><button class="btn btn-outline btn-sm" type="button" data-patient="' + escapeHtml(p.id) + '">' + icon('folder') + ' Ver exámenes</button></div></td></tr>';
+    }).join('') : '<tr><td colspan="4"><div class="empty">Aún no tiene pacientes con exámenes.</div></td></tr>';
   }
 
   search.addEventListener('input', render);
+  dateInput.addEventListener('change', render);
   mod.addEventListener('change', render);
+
+  // Abrir un examen lo marca como revisado; "Descargar todo" lista los archivos de la visita.
   grid.addEventListener('click', async (e) => {
-    const find = (attr) => { const b = e.target.closest('[' + attr + ']'); return b && mine.find((s) => s.id === b.getAttribute(attr)); };
-    const f = find('data-files'); if (f) openFiles(f);
-    const v = find('data-view');
-    if (v) {
-      openStudy(v);
-      if (v.status === 'Nuevo') {
-        try { await backend.markSeen(v.id); v.status = 'Visto'; render(); } catch (ex) { /* no crítico */ }
-      }
+    const card = e.target.closest('[data-key]');
+    const g = card && visits.find((x) => x.key === card.dataset.key);
+    if (!g) return;
+    if (e.target.closest('[data-files]')) {
+      openFiles({ patientName: g.patientName + ' · ' + fmtDate(g.date), files: g.studies.flatMap((s) => s.files || []) });
+      return;
+    }
+    const b = e.target.closest('[data-view]');
+    const s = b && g.studies.find((x) => x.id === b.dataset.view);
+    if (!s) return;
+    openStudy(s);
+    if (s.status === 'Nuevo') {
+      try { await backend.markSeen(s.id); s.status = 'Visto'; render(); } catch (ex) { /* no crítico */ }
     }
   });
 
+  // "Ver exámenes" de un paciente: filtra las visitas y sube a la lista.
+  $('patients-body').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-patient]');
+    if (!b) return;
+    patientFilter = b.dataset.patient;
+    render();
+    $('estudios').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  chip.addEventListener('click', (e) => { if (e.target.closest('[data-clear-patient]')) { patientFilter = null; render(); } });
+
   try {
     mine = await backend.listStudies({ doctorId: user.uid });
-    patients = patientsOf(mine);
   } catch (e) {
-    toast('No se pudieron cargar sus estudios: ' + e.message);
+    toast('No se pudieron cargar sus exámenes: ' + e.message);
   }
   render();
 }
 
-// Pacientes del médico: los de sus estudios, con los datos copiados en cada estudio
-// (el más reciente manda), cuántos estudios tiene y la fecha del último.
-function patientsOf(studies) {
+// Pacientes del médico a partir de sus visitas: datos de la más reciente,
+// cuántas visitas tiene y la fecha de la última.
+function patientsOf(visits) {
   const map = new Map();
-  for (const s of studies) {
-    const p = map.get(s.patientId) || { id: s.patientId, count: 0, last: '' };
-    p.count++;
-    if (s.date >= p.last) Object.assign(p, { name: s.patientName, code: s.patientCode, age: s.patientAge, last: s.date });
-    map.set(s.patientId, p);
+  for (const g of visits) {
+    const p = map.get(g.patientId) || { id: g.patientId, visits: 0, last: '' };
+    p.visits++;
+    if (g.date >= p.last) Object.assign(p, { name: g.patientName, code: g.patientCode, age: g.patientAge, last: g.date });
+    map.set(g.patientId, p);
   }
   return [...map.values()].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
 }

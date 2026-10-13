@@ -53,6 +53,7 @@ Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (
   - **Exámenes**: verlos en el visor, editar modalidad, descripción, fecha y médico, agregar otro examen (por ejemplo el informe) y eliminarlos.
   - **Archivos**: subir más, abrir los PDF, descargar, renombrar y eliminar.
   - **Médico**: cambiar el de todo el grupo de una vez.
+- En el **portal del médico** los exámenes también se ven agrupados por **visita** (paciente + fecha), con sus informes, búsqueda por paciente, examen o fecha, filtro por día y por modalidad, y «Ver exámenes» desde *Mis pacientes*.
 - Los **informes PDF** se suben como un examen de modalidad *Informe* o como archivos de otro examen; en el visor aparecen en la pestaña *Informes*.
 
 ## Resultados para pacientes (desactivado)
