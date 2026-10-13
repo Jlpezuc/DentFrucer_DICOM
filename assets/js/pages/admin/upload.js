@@ -165,7 +165,7 @@ export function createUpload(ctx) {
     patientSel.value = a.patientId;
     setAppointment(a);
     suggestDoctor(a.patientId);
-    $('carga').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    ctx.go('carga');
   }
 
   // --- Subir ------------------------------------------------------------------------------

@@ -18,7 +18,7 @@
       <a class="brand" href="admin.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
       <nav class="side-nav" aria-label="Administración">
         <span class="label">General</span>
-        <a href="#agenda" class="active"><i data-icon="calendar"></i> Agenda</a>
+        <a href="#agenda"><i data-icon="calendar"></i> Agenda</a>
         <a href="#estudios"><i data-icon="folder"></i> Estudios</a>
         <a href="#carga"><i data-icon="upload"></i> Cargar estudio</a>
         <a href="#pacientes"><i data-icon="users"></i> Pacientes</a>
@@ -34,8 +34,8 @@
     <main class="main">
       <div class="topbar">
         <div>
-          <h1>Panel de administración</h1>
-          <p>Gestione la agenda, los estudios DICOM, los pacientes y los médicos.</p>
+          <h1 id="view-title">Panel de administración</h1>
+          <p id="view-desc">Gestione la agenda, los estudios DICOM, los pacientes y los médicos.</p>
         </div>
         <div class="actions">
           <button class="btn btn-outline btn-sm" type="button" data-open="appointment"><i data-icon="calendar"></i> Nueva cita</button>
@@ -45,7 +45,7 @@
         </div>
       </div>
 
-      <div class="stats five">
+      <div class="stats five" data-section="agenda" data-section-desc="Citas de hoy, próximas y anteriores. Cree, edite o cancele citas.">
         <div class="stat"><div class="k">Citas de hoy</div><div class="v" id="stat-today">–</div></div>
         <div class="stat"><div class="k">Estudios</div><div class="v" id="stat-studies">–</div></div>
         <div class="stat"><div class="k">Pacientes</div><div class="v" id="stat-patients">–</div></div>
@@ -54,7 +54,7 @@
       </div>
 
       <!-- Agenda -->
-      <section class="panel" id="agenda">
+      <section class="panel" id="agenda" data-section="agenda">
         <div class="panel-head">
           <div class="tabs" id="agenda-tabs" role="tablist">
             <button type="button" data-filter="today" aria-selected="true">Hoy</button>
@@ -75,7 +75,7 @@
       </section>
 
       <!-- Estudios -->
-      <section class="panel" id="estudios">
+      <section class="panel" id="estudios" data-section="estudios" data-section-desc="Exámenes agrupados por paciente, médico y fecha. Abra un grupo para ver, editar o agregar archivos.">
         <div class="panel-head">
           <div class="tabs" id="study-tabs" role="tablist">
             <button type="button" data-filter="all" aria-selected="true">Todos</button>
@@ -102,7 +102,7 @@
       </section>
 
       <!-- Carga de estudios -->
-      <section class="panel" id="carga">
+      <section class="panel" id="carga" data-section="carga" data-section-desc="Suba uno o varios exámenes de un paciente, con sus archivos e informes PDF.">
         <div class="panel-head"><h2>Cargar estudio</h2></div>
         <form class="panel-body" id="upload-form" novalidate>
           <div class="form-error" role="alert"></div>
@@ -130,39 +130,37 @@
         </form>
       </section>
 
-      <div class="grid-2">
-        <!-- Pacientes -->
-        <section class="panel" id="pacientes">
-          <div class="panel-head">
-            <h2>Pacientes</h2>
-            <div class="panel-actions">
-              <label class="search search-sm">
-                <span class="sr-only">Buscar pacientes</span>
-                <i data-icon="search"></i>
-                <input class="input" id="patient-search" type="search" placeholder="Buscar">
-              </label>
-              <button class="btn btn-ghost btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo</button>
-            </div>
+      <!-- Pacientes -->
+      <section class="panel" id="pacientes" data-section="pacientes" data-section-desc="Fichas de los pacientes y sus visitas.">
+        <div class="panel-head">
+          <h2>Pacientes</h2>
+          <div class="panel-actions">
+            <label class="search search-sm">
+              <span class="sr-only">Buscar pacientes</span>
+              <i data-icon="search"></i>
+              <input class="input" id="patient-search" type="search" placeholder="Buscar">
+            </label>
+            <button class="btn btn-ghost btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo</button>
           </div>
-          <div class="table-wrap">
-            <table class="data">
-              <thead><tr><th>Paciente</th><th>Contacto</th><th>Visitas</th><th></th></tr></thead>
-              <tbody id="patients-body"></tbody>
-            </table>
-          </div>
-        </section>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Paciente</th><th>Contacto</th><th>Visitas</th><th></th></tr></thead>
+            <tbody id="patients-body"></tbody>
+          </table>
+        </div>
+      </section>
 
-        <!-- Médicos -->
-        <section class="panel" id="medicos">
-          <div class="panel-head"><h2>Médicos</h2><button class="btn btn-ghost btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo</button></div>
-          <div class="table-wrap">
-            <table class="data">
-              <thead><tr><th>Médico</th><th>Especialidad</th><th>Exámenes</th><th></th></tr></thead>
-              <tbody id="doctors-body"></tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+      <!-- Médicos -->
+      <section class="panel" id="medicos" data-section="medicos" data-section-desc="Médicos con acceso al portal y sus exámenes.">
+        <div class="panel-head"><h2>Médicos</h2><button class="btn btn-ghost btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo</button></div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Médico</th><th>Especialidad</th><th>Exámenes</th><th></th></tr></thead>
+            <tbody id="doctors-body"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 

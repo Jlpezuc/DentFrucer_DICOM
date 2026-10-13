@@ -17,7 +17,7 @@
       <a class="brand" href="index.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
       <nav class="side-nav" aria-label="Portal del médico">
         <span class="label">Mi consultorio</span>
-        <a href="#estudios" class="active"><i data-icon="folder"></i> Estudios</a>
+        <a href="#estudios"><i data-icon="folder"></i> Estudios</a>
         <a href="#pacientes"><i data-icon="users"></i> Mis pacientes</a>
       </nav>
       <div class="side-user">
@@ -35,13 +35,13 @@
         </div>
       </div>
 
-      <div class="stats three">
+      <div class="stats three" data-section="estudios">
         <div class="stat"><div class="k">Mis pacientes</div><div class="v" id="stat-my-patients">–</div></div>
         <div class="stat"><div class="k">Exámenes disponibles</div><div class="v" id="stat-my-studies">–</div></div>
         <div class="stat"><div class="k">Nuevos sin revisar</div><div class="v" id="stat-my-new" style="color:var(--blue-700)">–</div></div>
       </div>
 
-      <section class="panel" id="estudios">
+      <section class="panel" id="estudios" data-section="estudios">
         <div class="panel-head">
           <h2>Exámenes por visita</h2>
           <div class="panel-actions">
@@ -63,7 +63,7 @@
         <div class="panel-body"><div class="visit-cards" id="study-grid"></div></div>
       </section>
 
-      <section class="panel" id="pacientes">
+      <section class="panel" id="pacientes" data-section="pacientes">
         <div class="panel-head"><h2>Mis pacientes</h2></div>
         <div class="table-wrap">
           <table class="data">

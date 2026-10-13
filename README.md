@@ -39,6 +39,10 @@ En el panel de administración, la sección **Agenda** muestra las citas de hoy,
 
 Horarios, duración de los turnos, días cerrados, tipos de examen e indicaciones se editan en `assets/js/config/agenda-config.js`. En modo demostración (`agendar.html?demo=1`) las citas se guardan solo en la pestaña del navegador. Un enlace como `agendar.html?examen=CBCT` deja el examen preseleccionado.
 
+## Navegación
+
+En el panel de administración (Agenda, Estudios, Cargar estudio, Pacientes, Médicos) y en el portal del médico (Estudios, Mis pacientes), cada opción del menú lateral muestra **solo su sección**. La sección va en la dirección (`admin.html#estudios`), así que se conserva al recargar, se puede guardar como marcador y funcionan atrás/adelante. Lo resuelve `assets/js/pages/views.js` con los elementos marcados `data-section`.
+
 ## Pacientes, estudios y médicos
 
 Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (nombre, apellido, expediente, edad, correo, teléfono) y se edita desde la tabla *Pacientes*. Cada **estudio** pertenece a un paciente **y** a un médico, que se elige al cargarlo y se puede cambiar en la tabla *Estudios*. El médico ve en su portal los estudios que tiene asignados, y su lista *Mis pacientes* sale de esos estudios. Un mismo paciente puede tener estudios para médicos distintos.
