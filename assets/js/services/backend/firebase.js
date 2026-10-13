@@ -6,7 +6,7 @@ import { patientAccess } from '../../config/patient-access.js';
 import { agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
 import { normalizePatient } from '../people.js';
 import {
-  AccessDisabledError, agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, friendlyAuthError, studyCode, studyPatientFields
+  AccessDisabledError, agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, friendlyAuthError, sizeOf, studyCode, studyEdits, studyPatientFields
 } from './shared.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
@@ -37,6 +37,30 @@ export async function createFirebaseBackend() {
   const list = async (q) => (await getDocs(q)).docs.map((s) => ({ id: s.id, ...s.data() }));
   const isDenied = (e) => String((e && e.code) || '').includes('permission-denied');
   const fail = (result) => { if (result.error) throw new Error(result.error); return result.data; };
+
+  // Sube archivos a studies/{id}/; si el nombre ya existe en el examen se le
+  // agrega un prefijo para no sobrescribir el anterior.
+  async function uploadFiles(studyId, files, existing, onProgress) {
+    const taken = new Set(existing.map((f) => f.path));
+    const total = files.reduce((n, f) => n + f.size, 0) || 1;
+    const done = new Array(files.length).fill(0);
+    const uploaded = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      let path = 'studies/' + studyId + '/' + (f.webkitRelativePath || f.name);
+      if (taken.has(path)) path = 'studies/' + studyId + '/' + Date.now().toString(36) + '-' + f.name;
+      taken.add(path);
+      await new Promise((resolve, reject) => {
+        const task = uploadBytesResumable(ref(storage, path), f, { contentType: f.type || 'application/dicom' });
+        task.on('state_changed', (s) => {
+          done[i] = s.bytesTransferred;
+          if (onProgress) onProgress(done.reduce((a, b) => a + b, 0) / total);
+        }, reject, resolve);
+      });
+      uploaded.push({ name: f.name, path, size: f.size });
+    }
+    return uploaded;
+  }
 
   // Espera la primera respuesta de Auth (sesión restaurada o ninguna).
   const authReady = new Promise((resolve) => {
@@ -138,29 +162,17 @@ export async function createFirebaseBackend() {
       return (await list(doctorId ? query(c, where('doctorId', '==', doctorId)) : c)).sort(byDateDesc);
     },
 
+    // Un estudio = un examen (modalidad + archivos). Los exámenes del mismo
+    // paciente, médico y fecha forman un grupo (ver services/groups.js).
     async uploadStudy({ patient, doctorId, modality, description, date, files, onProgress }) {
       const r = doc(collection(db, 'studies'));
-      const total = files.reduce((n, f) => n + f.size, 0) || 1;
-      const done = new Array(files.length).fill(0);
-      const uploaded = [];
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        const path = 'studies/' + r.id + '/' + (f.webkitRelativePath || f.name);
-        await new Promise((resolve, reject) => {
-          const task = uploadBytesResumable(ref(storage, path), f, { contentType: f.type || 'application/dicom' });
-          task.on('state_changed', (s) => {
-            done[i] = s.bytesTransferred;
-            if (onProgress) onProgress(done.reduce((a, b) => a + b, 0) / total);
-          }, reject, resolve);
-        });
-        uploaded.push({ name: f.name, path, size: f.size });
-      }
+      const uploaded = await uploadFiles(r.id, files, [], onProgress);
       await setDoc(r, {
         code: studyCode(r.id),
         patientId: patient.id, ...studyPatientFields(patient),
         doctorId: doctorId || null,
         modality, description, date,
-        files: uploaded, totalSize: uploaded.reduce((n, f) => n + f.size, 0),
+        files: uploaded, totalSize: sizeOf(uploaded),
         status: 'Nuevo', createdAt: serverTimestamp()
       });
       return r.id;
@@ -168,12 +180,40 @@ export async function createFirebaseBackend() {
 
     setStudyDoctor: (studyId, doctorId) => updateDoc(doc(db, 'studies', studyId), { doctorId: doctorId || null }),
 
+    // Datos del examen: modalidad, descripción, fecha y médico.
+    updateStudy: (study, changes) => updateDoc(doc(db, 'studies', study.id), studyEdits(changes)),
+
+    // Archivos de un examen: agregar (p. ej. el informe PDF), renombrar y eliminar.
+    async addStudyFiles(study, files, onProgress) {
+      const current = study.files || [];
+      const uploaded = await uploadFiles(study.id, files, current, onProgress);
+      const all = [...current, ...uploaded];
+      await updateDoc(doc(db, 'studies', study.id), { files: all, totalSize: sizeOf(all) });
+      return all;
+    },
+
+    async renameStudyFile(study, path, name) {
+      const all = (study.files || []).map((f) => (f.path === path ? { ...f, name: cleanFileName(name) } : f));
+      await updateDoc(doc(db, 'studies', study.id), { files: all });
+      return all;
+    },
+
+    async deleteStudyFile(study, path) {
+      await deleteObject(ref(storage, path)).catch(() => {});
+      const all = (study.files || []).filter((f) => f.path !== path);
+      await updateDoc(doc(db, 'studies', study.id), { files: all, totalSize: sizeOf(all) });
+      return all;
+    },
+
     async deleteStudy(study) {
       await Promise.all((study.files || []).map((f) => deleteObject(ref(storage, f.path)).catch(() => {})));
       await deleteDoc(doc(db, 'studies', study.id));
     },
 
     markSeen: (studyId) => updateDoc(doc(db, 'studies', studyId), { status: 'Visto' }),
+
+    // Enlace de descarga de un archivo (o null si no hay archivo real).
+    fileUrl: (file) => (file.path ? getDownloadURL(ref(storage, file.path)) : null),
 
     async fileUrls(study) {
       return Promise.all((study.files || []).map(async (f) => ({ name: f.name, url: await getDownloadURL(ref(storage, f.path)) })));

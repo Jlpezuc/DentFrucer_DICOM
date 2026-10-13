@@ -1,10 +1,15 @@
-// Carga de estudios: paciente + médico que lo recibe + archivos.
+// Carga de exámenes: un paciente + el médico que los recibe + la fecha, y uno o
+// varios exámenes (cada uno con su modalidad y sus archivos, incluidos los
+// informes PDF). Los exámenes del mismo paciente, médico y fecha quedan en el
+// mismo grupo, aunque se suban en momentos distintos.
+//
 // Si el paciente tiene una cita pendiente (o se llega desde "Cargar estudio"
 // en la agenda), se rellenan examen y fecha, se sugiere el médico que indicó
 // al agendar y, al subir, la cita queda como atendida.
 
 import { examLabel } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
+import { groupKey, STUDY_MODALITIES } from '../../services/groups.js';
 import { busy, escapeHtml, showError, toast } from '../../ui/dom.js';
 import { fmtDate, fmtSize, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -17,13 +22,72 @@ export function createUpload(ctx) {
   const err = form.querySelector('.form-error');
   const patientSel = $('u-patient');
   const doctorSel = $('u-doctor');
+  const dateInput = $('u-date');
   const doctorHint = $('u-doctor-hint');
+  const groupHint = $('u-group-hint');
   const apptBox = $('upload-appt');
+  const examList = $('exam-list');
   const progress = $('upload-progress');
   const DOCTOR_HINT = doctorHint.textContent;
   let appt = null;
-  let files = [];
-  $('u-date').value = today();
+  dateInput.value = today();
+
+  // --- Bloques de examen -------------------------------------------------------------
+  // Cada bloque tiene su modalidad, descripción y archivos (block.files).
+  function addExamBlock(modality = 'CBCT') {
+    const block = document.createElement('div');
+    block.className = 'exam-block';
+    block.files = [];
+    block.innerHTML = `
+      <div class="exam-block-head">
+        <strong data-title></strong>
+        <button type="button" class="icon-btn" data-remove title="Quitar este examen" aria-label="Quitar este examen">${icon('x')}</button>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Modalidad <select class="input select" data-modality>${STUDY_MODALITIES.map((m) => `<option${m === modality ? ' selected' : ''}>${m}</option>`).join('')}</select></label></div>
+        <div class="field"><label>Descripción <input class="input" data-desc placeholder="Ej.: Cone Beam · maxilar completo"></label></div>
+      </div>
+      <label class="dropzone compact">
+        ${icon('cloud')}
+        <p style="margin:0"><strong>Arrastre aquí los archivos de este examen</strong></p>
+        <p style="margin:4px 0 12px;font-size:14px">DICOM (.dcm), .zip, imágenes o informes PDF</p>
+        <span class="links">
+          <span class="btn btn-outline btn-sm">Seleccionar archivos</span>
+          <button type="button" class="btn btn-ghost btn-sm" data-pick-folder>Seleccionar carpeta</button>
+        </span>
+        <input type="file" multiple class="sr-only" data-files>
+        <input type="file" webkitdirectory multiple class="sr-only" data-folder>
+      </label>
+      <div class="file-summary" data-summary aria-live="polite"></div>`;
+    const dz = block.querySelector('.dropzone');
+    const setFiles = (list) => {
+      block.files = Array.from(list || []).filter((f) => !f.name.startsWith('.'));
+      block.querySelector('[data-summary]').textContent = block.files.length ? block.files.length + ' archivo(s) · ' + fmtSize(block.files.reduce((n, f) => n + f.size, 0)) : '';
+    };
+    ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('drag'); }));
+    dz.addEventListener('drop', (e) => setFiles(e.dataTransfer && e.dataTransfer.files));
+    block.querySelector('[data-files]').addEventListener('change', (e) => setFiles(e.target.files));
+    block.querySelector('[data-folder]').addEventListener('change', (e) => setFiles(e.target.files));
+    block.querySelector('[data-pick-folder]').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); block.querySelector('[data-folder]').click(); });
+    block.querySelector('[data-remove]').addEventListener('click', () => { block.remove(); renumber(); });
+    examList.appendChild(block);
+    renumber();
+    return block;
+  }
+  function renumber() {
+    const blocks = [...examList.children];
+    blocks.forEach((b, i) => {
+      b.querySelector('[data-title]').textContent = 'Examen ' + (i + 1);
+      b.querySelector('[data-remove]').hidden = blocks.length === 1;
+    });
+  }
+  function resetBlocks(modality) {
+    examList.innerHTML = '';
+    addExamBlock(modality);
+  }
+  $('add-exam').addEventListener('click', () => addExamBlock('Informe'));
+  resetBlocks();
 
   // --- Selectores ----------------------------------------------------------------------
   function render() {
@@ -40,7 +104,19 @@ export function createUpload(ctx) {
       state.patients.map((p) => option(p)).join('') + (todays ? '</optgroup>' : '');
     patientSel.value = curPatient;
     doctorSel.innerHTML = doctorOptions(state.doctors, curDoctor, 'Sin médico (solo la clínica)');
+    updateGroupHint();
   }
+
+  // ¿Ya hay exámenes de este paciente, médico y fecha? Entonces se suman a ese grupo.
+  function updateGroupHint() {
+    if (!patientSel.value || !dateInput.value) { groupHint.textContent = 'Los exámenes del mismo paciente, médico y día se agrupan.'; return; }
+    const key = groupKey({ patientId: patientSel.value, doctorId: doctorSel.value, date: dateInput.value });
+    const existing = state.studies.filter((s) => groupKey(s) === key);
+    groupHint.innerHTML = existing.length
+      ? icon('folder') + ' Se agregará al grupo del ' + fmtDate(dateInput.value) + ', que ya tiene ' + existing.length + ' examen(es): ' + escapeHtml(existing.map((s) => s.modality).join(', ')) + '.'
+      : 'Se creará un grupo nuevo para el ' + fmtDate(dateInput.value) + '.';
+  }
+  [patientSel, doctorSel, dateInput].forEach((el) => el.addEventListener('change', updateGroupHint));
 
   // --- Cita y médico sugerido -----------------------------------------------------------
   function setAppointment(a) {
@@ -48,9 +124,10 @@ export function createUpload(ctx) {
     apptBox.hidden = !appt;
     if (!appt) return;
     apptBox.innerHTML = icon('calendar') + '<span>Cita del ' + fmtDate(appt.date) + ' a las ' + escapeHtml(appt.time) + ' · ' + escapeHtml(examLabel(appt.exam)) +
-      '. Al subir el estudio se marcará como <strong>atendida</strong>.</span>';
-    $('u-modality').value = appt.exam;
-    $('u-date').value = appt.date <= today() ? appt.date : today();
+      '. Al subir los exámenes se marcará como <strong>atendida</strong>.</span>';
+    const first = examList.querySelector('[data-modality]');
+    if (first) first.value = appt.exam;
+    dateInput.value = appt.date <= today() ? appt.date : today();
   }
 
   // Médico propuesto: el que indicó el paciente en la cita (si está registrado)
@@ -68,6 +145,7 @@ export function createUpload(ctx) {
       doctorSel.value = '';
       doctorHint.textContent = appt && appt.referrer ? 'Indicó «' + appt.referrer + '», que no está registrado como médico.' : DOCTOR_HINT;
     }
+    updateGroupHint();
   }
 
   // Cita pendiente más reciente del paciente (hoy o antes).
@@ -90,53 +168,48 @@ export function createUpload(ctx) {
     $('carga').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // --- Archivos ---------------------------------------------------------------------------
-  const dz = $('dropzone');
-  const fileInput = $('file-input');
-  const folderInput = $('folder-input');
-  function setFiles(list) {
-    files = Array.from(list || []).filter((f) => !f.name.startsWith('.'));
-    $('file-summary').textContent = files.length ? files.length + ' archivo(s) · ' + fmtSize(files.reduce((n, f) => n + f.size, 0)) : '';
-  }
-  ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('drag'); }));
-  ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('drag'); }));
-  dz.addEventListener('drop', (e) => setFiles(e.dataTransfer && e.dataTransfer.files));
-  fileInput.addEventListener('change', () => setFiles(fileInput.files));
-  folderInput.addEventListener('change', () => setFiles(folderInput.files));
-  $('pick-folder').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); folderInput.click(); });
-
   // --- Subir ------------------------------------------------------------------------------
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = form.querySelector('button[type=submit]');
     const patient = ctx.patientById(patientSel.value);
     const doctorId = doctorSel.value;
+    const date = dateInput.value || today();
+    const exams = [...examList.children].filter((b) => b.files.length).map((b) => ({
+      modality: b.querySelector('[data-modality]').value,
+      description: b.querySelector('[data-desc]').value.trim(),
+      files: b.files
+    }));
     showError(err, '');
     if (!patient) { showError(err, 'Seleccione un paciente (o regístrelo primero).'); return; }
-    if (!files.length) { showError(err, 'Agregue los archivos del estudio.'); return; }
-    if (!doctorId && !confirm('El estudio no tiene médico: no aparecerá en ningún portal hasta que se lo asigne. ¿Subirlo igual?')) return;
+    if (!exams.length) { showError(err, 'Agregue los archivos de al menos un examen.'); return; }
+    if (!doctorId && !confirm('Los exámenes no tienen médico: no aparecerán en ningún portal hasta que se lo asigne. ¿Subirlos igual?')) return;
     busy(btn, true, 'Subiendo…');
     progress.hidden = false;
     const bar = progress.querySelector('span');
     bar.style.width = '0%';
+    const total = exams.reduce((n, x) => n + x.files.reduce((m, f) => m + f.size, 0), 0) || 1;
+    let sent = 0;
     try {
-      const modality = $('u-modality').value;
-      await backend.uploadStudy({
-        patient, doctorId, modality,
-        description: $('u-desc').value.trim() || modality,
-        date: $('u-date').value || today(),
-        files,
-        onProgress: (p) => { bar.style.width = Math.round(p * 100) + '%'; }
-      });
-      if (appt && appt.patientId === patient.id) {
-        try { await backend.updateAppointment(appt, { status: 'Atendida' }); } catch (ex) { toast('El estudio se cargó, pero no se pudo marcar la cita como atendida.'); }
+      for (const x of exams) {
+        const size = x.files.reduce((m, f) => m + f.size, 0);
+        await backend.uploadStudy({
+          patient, doctorId, date, modality: x.modality,
+          description: x.description || x.modality,
+          files: x.files,
+          onProgress: (p) => { bar.style.width = Math.round(((sent + p * size) / total) * 100) + '%'; }
+        });
+        sent += size;
       }
-      toast('Estudio cargado' + (doctorId ? ' y visible para ' + ctx.doctorName(doctorId) : '') + '.');
+      if (appt && appt.patientId === patient.id) {
+        try { await backend.updateAppointment(appt, { status: 'Atendida' }); } catch (ex) { toast('Los exámenes se cargaron, pero no se pudo marcar la cita como atendida.'); }
+      }
+      toast(exams.length + ' examen(es) cargado(s) en el grupo del ' + fmtDate(date) + (doctorId ? ', visible(s) para ' + ctx.doctorName(doctorId) : '') + '.');
       form.reset();
-      $('u-date').value = today();
+      dateInput.value = today();
       doctorHint.textContent = DOCTOR_HINT;
       setAppointment(null);
-      setFiles([]);
+      resetBlocks();
       await ctx.reload();
     } catch (ex) { showError(err, 'No se pudo cargar: ' + ex.message); }
     progress.hidden = true;

@@ -43,6 +43,18 @@ Horarios, duración de los turnos, días cerrados, tipos de examen e indicacione
 
 Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (nombre, apellido, expediente, edad, correo, teléfono) y se edita desde la tabla *Pacientes*. Cada **estudio** pertenece a un paciente **y** a un médico, que se elige al cargarlo y se puede cambiar en la tabla *Estudios*. El médico ve en su portal los estudios que tiene asignados, y su lista *Mis pacientes* sale de esos estudios. Un mismo paciente puede tener estudios para médicos distintos.
 
+### Grupos de exámenes y explorador
+
+- Los exámenes de un mismo **paciente**, para un mismo **médico** y en la misma **fecha** forman un **grupo**, se suban juntos o por separado. El grupo se calcula a partir de los exámenes: si uno cambia de médico o de fecha, pasa solo al grupo que corresponde.
+- **Cargar estudio** admite varios exámenes en una subida (por ejemplo CBCT + panorámica + informe PDF), cada uno con su modalidad y sus archivos, y avisa si se sumarán a un grupo existente.
+- La tabla de **estudios** muestra un grupo por fila. Se busca por paciente, médico, código, examen o **fecha** ("08/10/2026", "8 oct 2026", "oct 2026") y se filtra por un día.
+- El **explorador** se abre desde un grupo, desde un paciente (todas sus visitas por fecha) o desde un médico (sus pacientes y las visitas de cada uno), con migas de pan para moverse entre niveles.
+- **Dentro de un grupo** se puede:
+  - **Exámenes**: verlos en el visor, editar modalidad, descripción, fecha y médico, agregar otro examen (por ejemplo el informe) y eliminarlos.
+  - **Archivos**: subir más, abrir los PDF, descargar, renombrar y eliminar.
+  - **Médico**: cambiar el de todo el grupo de una vez.
+- Los **informes PDF** se suben como un examen de modalidad *Informe* o como archivos de otro examen; en el visor aparecen en la pestaña *Informes*.
+
 ## Resultados para pacientes (desactivado)
 
 `resultados.html?t=…` muestra al paciente su estudio y abre el **visor de solo lectura**: navegar, contraste, lupa, girar e invertir, **guardar la imagen** (PNG) y **descargar los archivos** originales; sin mediciones, notas, implantes ni etiquetas DICOM completas. Está pensado para abrirse con un enlace enviado por correo.

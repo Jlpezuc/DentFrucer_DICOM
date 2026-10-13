@@ -1,8 +1,10 @@
 // Pacientes y médicos. Los pacientes solo guardan identidad y contacto (no
 // tienen médico); los que agendan en línea aparecen solos con la etiqueta
 // "Agenda". Al editar un paciente se actualizan también sus estudios.
+// "Exámenes" abre el explorador: las visitas del paciente o los pacientes del médico.
 
 import { backend } from '../../services/backend.js';
+import { groupStudies } from '../../services/groups.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { initials } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -27,15 +29,19 @@ function createPatients(ctx) {
       body.innerHTML = '<tr><td colspan="4"><div class="empty">' + (state.patients.length ? 'No se encontraron pacientes.' : 'Aún no hay pacientes.') + '</div></td></tr>';
       return;
     }
+    const visits = new Map();
+    groupStudies(state.studies).forEach((g) => visits.set(g.patientId, (visits.get(g.patientId) || 0) + 1));
     body.innerHTML = rows.map((p) => {
-      const n = state.studies.filter((s) => s.patientId === p.id).length;
+      const n = visits.get(p.id) || 0;
       const sub = [p.code, p.age ? p.age + ' años' : ''].filter(Boolean).map(escapeHtml).join(' · ') || '<span class="muted">Sin expediente</span>';
       const tag = p.source === 'agenda' ? ' <span class="badge green" title="Se registró al agendar una cita">Agenda</span>' : '';
       return '<tr>' +
         '<td>' + personCell(p.name, sub, tag) + '</td>' +
         '<td class="cell-contact">' + (contactOf(p) || '<span class="muted">—</span>') + '</td>' +
         '<td>' + n + '</td>' +
-        '<td><div class="row-actions"><button class="icon-btn" type="button" data-edit="' + escapeHtml(p.id) + '" title="Editar paciente" aria-label="Editar paciente">' + icon('edit') + '</button></div></td>' +
+        '<td><div class="row-actions">' +
+          (n ? '<button class="icon-btn" type="button" data-browse="' + escapeHtml(p.id) + '" title="Ver sus exámenes por fecha" aria-label="Ver exámenes">' + icon('folder') + '</button>' : '') +
+          '<button class="icon-btn" type="button" data-edit="' + escapeHtml(p.id) + '" title="Editar paciente" aria-label="Editar paciente">' + icon('edit') + '</button></div></td>' +
       '</tr>';
     }).join('');
   }
@@ -61,8 +67,9 @@ function createPatients(ctx) {
   }
   document.querySelectorAll('[data-open="patient"]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); open(null); }));
   body.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-edit]');
-    if (b) open(ctx.patientById(b.dataset.edit));
+    const b = e.target.closest('[data-edit], [data-browse]');
+    if (b && b.dataset.edit) open(ctx.patientById(b.dataset.edit));
+    if (b && b.dataset.browse) ctx.explorer.openPatient(b.dataset.browse);
   });
 
   form.addEventListener('submit', async (e) => {
@@ -92,13 +99,18 @@ function createDoctors(ctx) {
   const body = document.getElementById('doctors-body');
 
   function render() {
-    if (!state.doctors.length) { body.innerHTML = '<tr><td colspan="3"><div class="empty">Aún no hay médicos registrados.</div></td></tr>'; return; }
+    if (!state.doctors.length) { body.innerHTML = '<tr><td colspan="4"><div class="empty">Aún no hay médicos registrados.</div></td></tr>'; return; }
     body.innerHTML = state.doctors.map((d) => {
       const n = state.studies.filter((s) => s.doctorId === d.id).length;
       return '<tr><td><div class="cell-patient"><span class="avatar" style="background:var(--green-600)">' + initials(d.name) + '</span><div><strong>' + escapeHtml(d.name) + '</strong><small>' + escapeHtml(d.email) + '</small></div></div></td>' +
-        '<td>' + escapeHtml(d.specialty || '—') + '</td><td>' + n + '</td></tr>';
+        '<td>' + escapeHtml(d.specialty || '—') + '</td><td>' + n + '</td>' +
+        '<td><div class="row-actions">' + (n ? '<button class="icon-btn" type="button" data-browse="' + escapeHtml(d.id) + '" title="Ver sus exámenes por paciente" aria-label="Ver exámenes">' + icon('folder') + '</button>' : '') + '</div></td></tr>';
     }).join('');
   }
+  body.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-browse]');
+    if (b) ctx.explorer.openDoctor(b.dataset.browse);
+  });
 
   const m = modal('doctor-modal');
   const form = document.getElementById('doctor-form');

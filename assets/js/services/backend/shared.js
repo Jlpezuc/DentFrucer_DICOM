@@ -13,6 +13,23 @@ export const agendaPatient = (a) => ({
 // Datos del paciente copiados en cada estudio (los usa el portal del médico).
 export const studyPatientFields = (p) => ({ patientName: p.name, patientCode: p.code || '', patientAge: p.age || null });
 
+// Archivos de un examen.
+export const sizeOf = (files) => files.reduce((n, f) => n + (f.size || 0), 0);
+export const cleanFileName = (name) => String(name || '').replace(/[\\/]/g, '-').trim().slice(0, 120) || 'archivo';
+
+// Cambios permitidos en un examen desde el panel.
+export function studyEdits({ modality, description, date, doctorId }) {
+  const out = {};
+  if (modality !== undefined) out.modality = String(modality).trim();
+  if (description !== undefined) out.description = String(description).trim() || out.modality || '';
+  if (date !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('La fecha no es válida.');
+    out.date = date;
+  }
+  if (doctorId !== undefined) out.doctorId = doctorId || null;
+  return out;
+}
+
 // Campos de una cita que se guardan (además de code, slotId, patientId, createdAt).
 export const appointmentFields = (a) => ({
   firstName: a.firstName, lastName: a.lastName, name: a.name, email: a.email, phone: a.phone, referrer: a.referrer,
