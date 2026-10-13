@@ -35,7 +35,13 @@ En **`agendar.html`** el paciente elige el examen, el día y la hora libres y de
 - se crea el **paciente** en la lista de la clínica (si ya había agendado con el mismo nombre y correo/teléfono, no se duplica);
 - el paciente ve un código de cita y puede agregarla a su calendario (.ics).
 
-En el panel de administración, la sección **Agenda** muestra las citas de hoy, las próximas y las anteriores, y permite **crear, editar y borrar citas** (cambiar el día o la hora mueve el turno; cancelar o borrar lo libera). **Cargar examen** desde una cita rellena el paciente, la modalidad y la fecha, sugiere el médico que indicó el paciente y, al subir los archivos, la cita queda como *Atendida*.
+En el panel de administración, la sección **Agenda** tiene tres vistas:
+
+- **Lista**: citas de hoy, próximas o anteriores, o las de **un día** elegido en el calendario del filtro (las flechas ‹ › pasan al día anterior o siguiente).
+- **Semana**: franja horaria de lunes a viernes (y fin de semana si hay atención o citas), con el horario de cierre sombreado, la hora actual marcada y un color por tipo de examen. Clic en una cita para editarla; clic en un hueco para crear una cita a esa hora.
+- **Mes**: cada día con sus citas (hasta tres y «+N más»); clic en el día abre su lista.
+
+El panel recuerda la última vista elegida. Desde cualquiera de ellas se puede **crear, editar y borrar citas** (cambiar el día o la hora mueve el turno; cancelar o borrar lo libera). **Cargar examen** desde una cita rellena el paciente, la modalidad y la fecha, sugiere el médico que indicó el paciente y, al subir los archivos, la cita queda como *Atendida*.
 
 Horarios, duración de los turnos, días cerrados, tipos de examen e indicaciones se editan en `assets/js/config/agenda-config.js`. En modo demostración (`agendar.html?demo=1`) las citas se guardan solo en la pestaña del navegador. Un enlace como `agendar.html?examen=CBCT` deja el examen preseleccionado.
 
@@ -114,7 +120,7 @@ assets/js/
     people.js            validación de nombres y contacto de pacientes
   ui/                    utilidades compartidas: iconos, modales, formatos
   pages/                 lógica de cada página: landing, login, portal, agenda, results
-    admin/               panel: index (estado) + agenda, studies, explorer, upload, people, account
+    admin/               panel: index (estado) + agenda, calendar, studies, explorer, upload, people, account
   viewer/
     index.js             abre el visor (completo o de solo lectura) y elige el modo
     shell.js             estructura visual: encabezado, barras, paneles
