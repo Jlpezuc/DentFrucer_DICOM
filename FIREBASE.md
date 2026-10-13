@@ -115,7 +115,7 @@ patients/{id}    name, firstName, lastName, email, phone, code, age, source ('ag
                  sin médico: solo la clínica lee esta colección
 studies/{id}     code, patientId, patientName, patientCode, patientAge, doctorId,
                  modality, description, date (YYYY-MM-DD), files[{name, path, size}],
-                 totalSize, status ('Nuevo' | 'Visto'), createdAt
+                 totalSize, status ('Nuevo' | 'Visto'), createdAt, updatedAt
 appointments/{id}  code, firstName, lastName, name, email, phone, referrer, exam,
                  date (YYYY-MM-DD), time (HH:MM), slotId, patientId,
                  status ('Pendiente' | 'Atendida' | 'No asistió' | 'Cancelada'), createdAt

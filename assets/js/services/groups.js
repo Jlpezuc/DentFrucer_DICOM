@@ -1,4 +1,4 @@
-// Grupos de exámenes: los exámenes (exámenes) de un mismo paciente, para un
+// Grupos de exámenes: los exámenes (documentos de studies) de un mismo paciente, para un
 // mismo médico y en la misma fecha forman un grupo, se hayan subido juntos o
 // por separado. El grupo no se guarda: se calcula a partir de los exámenes,
 // así que si un examen cambia de médico o de fecha pasa solo a su nuevo grupo.
@@ -8,8 +8,15 @@ export const groupKey = (s) => [s.patientId, s.doctorId || '', s.date].join('|')
 const isPdf = (f) => /\.pdf$/i.test(f.name || '');
 export const fileKind = (f) => (isPdf(f) ? 'pdf' : 'image');
 
+// Momento de la última modificación de un examen (subida, archivos agregados,
+// renombrados o borrados, o datos editados), en milisegundos. Firestore guarda
+// Timestamp; el modo demostración, números.
+const millis = (t) => (!t ? 0 : typeof t === 'number' ? t : t.toMillis ? t.toMillis() : (t.seconds || 0) * 1000);
+export const modifiedAt = (s) => millis(s.updatedAt) || millis(s.createdAt);
+
 // [{ key, patientId, patientName, patientCode, patientAge, doctorId, date,
-//    studies, fileCount, totalSize, hasNew, hasReport, modalities }] (más recientes primero)
+//    studies, fileCount, totalSize, hasNew, hasReport, modalities }] (más recientes primero).
+// Dentro de cada grupo, los exámenes van del modificado más recientemente al más antiguo.
 export function groupStudies(studies) {
   const map = new Map();
   for (const s of studies) {
@@ -22,6 +29,7 @@ export function groupStudies(studies) {
     g.studies.push(s);
   }
   return [...map.values()].map((g) => {
+    g.studies.sort((a, b) => modifiedAt(b) - modifiedAt(a));
     const files = g.studies.flatMap((s) => s.files || []);
     return {
       ...g,

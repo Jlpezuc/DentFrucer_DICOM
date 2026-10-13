@@ -48,6 +48,7 @@ export function createShell({ study, onClose, viewOnly = false }) {
         </div>
       </div>
       <div class="dv-header-actions">
+        <button type="button" class="dv-hbtn" data-action="report" title="Informe del examen" hidden>${icon('file')}<span>Informe</span></button>
         <button type="button" class="dv-hbtn" data-action="download" title="Descargar archivos originales">${icon('download')}<span>${viewOnly ? 'Descargar archivos' : 'Descargar'}</span></button>
         <button type="button" class="dv-hbtn" data-action="export" title="Guardar la vista como imagen PNG">${icon('image')}<span>${viewOnly ? 'Guardar imagen' : 'Exportar'}</span></button>
         <button type="button" class="dv-hbtn" data-action="print" title="Imprimir la vista">${icon('printer')}<span>Imprimir</span></button>
@@ -68,6 +69,10 @@ export function createShell({ study, onClose, viewOnly = false }) {
     </div>
     <footer class="dv-footer">
       <div class="dv-presets" aria-label="Contraste"></div>
+      <div class="dv-wl" hidden>
+        <label class="dv-mini-range" title="Brillo de la imagen">${icon('sun')}<span>Brillo</span><input type="range" min="0" max="100" value="50" data-wl="brightness"></label>
+        <label class="dv-mini-range" title="Contraste de la imagen">${icon('contrast')}<span>Contraste</span><input type="range" min="0" max="100" value="50" data-wl="contrast"></label>
+      </div>
       <div class="dv-extra"></div>
       <div class="dv-slice" hidden>
         <button type="button" class="dv-fbtn" data-slice="prev" title="Corte anterior (↑)">${icon('chevronLeft')}</button>
@@ -101,6 +106,10 @@ export function createShell({ study, onClose, viewOnly = false }) {
   const hintEl = $('.dv-hint');
   const cursorEl = $('.dv-cursor');
   const sliceEl = $('.dv-slice');
+  const wlEl = $('.dv-wl');
+  const [brightnessEl, contrastEl] = wlEl.querySelectorAll('input');
+  let onWindowInput = null;
+  let wlFromSlider = false; // el cambio viene de los controles: no reescribirlos
   const range = sliceEl.querySelector('input');
   let sliceCfg = null;
   let playing = null;
@@ -161,6 +170,12 @@ export function createShell({ study, onClose, viewOnly = false }) {
       sliceCfg.onInput(sliceCfg.value >= sliceCfg.max ? 0 : sliceCfg.value + 1);
     }, 70);
   }
+
+  wlEl.addEventListener('input', () => {
+    if (!onWindowInput) return;
+    wlFromSlider = true;
+    try { onWindowInput(Number(brightnessEl.value), Number(contrastEl.value)); } finally { wlFromSlider = false; }
+  });
 
   // --- Teclado ---------------------------------------------------------------------
   const toolKeys = {};
@@ -331,6 +346,13 @@ export function createShell({ study, onClose, viewOnly = false }) {
         el.querySelectorAll('.dv-preset').forEach((x) => x.classList.toggle('active', x === b));
         onPick(list.find((p) => p.id === b.dataset.preset));
       };
+    },
+    // Brillo y contraste (0–100): onInput(brillo, contraste) al mover los controles.
+    setWindowSliders(onInput) { onWindowInput = onInput; wlEl.hidden = !onInput; },
+    setWindowSliderValues(brightness, contrast) {
+      if (wlFromSlider) return;
+      brightnessEl.value = brightness;
+      contrastEl.value = contrast;
     },
     clearPresetSelection() { $('.dv-presets').querySelectorAll('.dv-preset').forEach((x) => x.classList.remove('active')); },
     setExtraControls(node) { const el = $('.dv-extra'); el.innerHTML = ''; if (node) el.appendChild(node); },

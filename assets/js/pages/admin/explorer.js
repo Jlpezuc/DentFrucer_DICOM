@@ -9,7 +9,7 @@
 // Se abre desde la tabla de exámenes (grupo), de pacientes o de médicos.
 
 import { backend, isDemo } from '../../services/backend.js';
-import { fileKind, groupKey, groupSearchText, groupStudies, searchTerm, STUDY_MODALITIES } from '../../services/groups.js';
+import { fileKind, groupKey, groupSearchText, groupStudies, modifiedAt, searchTerm, STUDY_MODALITIES } from '../../services/groups.js';
 import { escapeHtml, modal, toast } from '../../ui/dom.js';
 import { fmtDate, fmtSize } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -163,13 +163,16 @@ export function createExplorer(ctx) {
           </li>`;
   }
 
-  // Cada examen: sus imágenes (DICOM, fotos…) y su informe PDF, por separado.
+  const fmtStamp = (ms) => new Date(ms).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+  // Cada examen (del modificado más recientemente al más antiguo): sus imágenes (DICOM, fotos…) y su informe PDF, por separado.
   function examCard(s) {
     const id = escapeHtml(s.id);
     const files = s.files || [];
     const images = files.filter((f) => fileKind(f) !== 'pdf');
     const reports = files.filter((f) => fileKind(f) === 'pdf');
     const isReportOnly = s.modality === 'Informe';
+    const changed = modifiedAt(s);
     return `
       <article class="exam-card" data-study="${id}">
         <header>
@@ -177,6 +180,7 @@ export function createExplorer(ctx) {
             <span class="badge ${isReportOnly ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span>
             <strong>${escapeHtml(s.description || s.modality)}</strong>
             <small class="mono">${escapeHtml(s.code || '')}</small>
+            ${changed ? `<small class="muted" title="Última modificación: subida, archivos o datos">Modificado ${fmtStamp(changed)}</small>` : ''}
             ${s.status === 'Nuevo' ? '<span class="badge amber" title="El médico aún no lo abre">No visto</span>' : ''}
             ${!isReportOnly && !reports.length ? '<span class="badge gray" title="Este examen aún no tiene su informe PDF">Sin informe</span>' : ''}
           </div>

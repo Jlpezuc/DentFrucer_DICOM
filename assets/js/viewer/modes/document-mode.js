@@ -1,5 +1,7 @@
 // Informes PDF del examen. Si el examen solo tiene documentos, ocupan el
-// escenario; si además tiene imágenes, aparecen en la pestaña "Informes".
+// escenario; si además tiene imágenes, aparecen en la pestaña "Informes" y en
+// el botón "Informe" del encabezado, que se muestran siempre: sin informe,
+// avisan que el examen aún no lo tiene.
 
 import { escapeHtml } from '../../ui/dom.js';
 import { icon } from '../../ui/icons.js';
@@ -35,20 +37,38 @@ export function startDocumentMode(shell, { study, data }) {
   shell.setHint(study.description || '');
 }
 
-// Pestaña de informes junto a las imágenes.
+// Informes junto a las imágenes: pestaña "Informes" y botón "Informe" del encabezado.
 export function addDocumentsTab(shell, docs) {
-  if (!docs.length) return;
   const tab = shell.addTab('docs', 'Informes', 'file');
-  shell.setTabCount('docs', docs.length);
-  tab.innerHTML = docList(docs) + '<p class="dv-muted">Se abren en una ventana sobre el visor.</p>';
-  tab.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-doc]');
-    if (!b) return;
-    const doc = docs[Number(b.dataset.doc)];
+  const button = shell.root.querySelector('[data-action="report"]');
+  button.hidden = false;
+  if (docs.length) {
+    shell.setTabCount('docs', docs.length);
+    tab.innerHTML = docList(docs) + '<p class="dv-muted">Se abren en una ventana sobre el visor.</p>';
+  } else {
+    button.classList.add('dv-missing');
+    button.title = 'Este examen aún no tiene informe';
+    tab.innerHTML = `<div class="dv-noreport">${icon('file')}<strong>Sin informe</strong><p>Este examen aún no tiene su informe PDF. Cuando DentFrucer lo suba, aparecerá aquí.</p></div>`;
+  }
+
+  function open(doc) {
+    shell.root.querySelectorAll('.dv-doclayer').forEach((l) => l.remove());
     const layer = document.createElement('div');
     layer.className = 'dv-doclayer';
     layer.innerHTML = `<div class="dv-doclayer-head"><strong>${escapeHtml(doc.name)}</strong><button type="button" class="dv-fbtn" aria-label="Cerrar">${icon('x')}</button></div>${viewerFrame(doc)}`;
     layer.querySelector('button').addEventListener('click', () => layer.remove());
     shell.root.appendChild(layer);
+  }
+  tab.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-doc]');
+    if (b) open(docs[Number(b.dataset.doc)]);
+  });
+  // Un informe: se abre directamente. Varios o ninguno: la pestaña los lista o avisa.
+  shell.on('header', (a) => {
+    if (a !== 'report') return;
+    if (docs.length === 1) { open(docs[0]); return; }
+    shell.openPanel();
+    shell.showTab('docs');
+    if (!docs.length) shell.toast('Este examen aún no tiene informe.');
   });
 }
