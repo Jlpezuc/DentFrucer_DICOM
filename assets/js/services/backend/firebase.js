@@ -62,6 +62,10 @@ export async function createFirebaseBackend() {
     return uploaded;
   }
 
+  // Cambio hecho por la clínica en un examen: queda la fecha de la última
+  // modificación (los exámenes de un grupo se ordenan por ella).
+  const editStudy = (id, changes) => updateDoc(doc(db, 'studies', id), { ...changes, updatedAt: serverTimestamp() });
+
   // Espera la primera respuesta de Auth (sesión restaurada o ninguna).
   const authReady = new Promise((resolve) => {
     const off = onAuthStateChanged(auth, (u) => { off(); resolve(u); });
@@ -182,35 +186,35 @@ export async function createFirebaseBackend() {
         doctorId: doctorId || null,
         modality, description, date,
         files: uploaded, totalSize: sizeOf(uploaded),
-        status: 'Nuevo', createdAt: serverTimestamp()
+        status: 'Nuevo', createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
       return r.id;
     },
 
-    setStudyDoctor: (studyId, doctorId) => updateDoc(doc(db, 'studies', studyId), { doctorId: doctorId || null }),
+    setStudyDoctor: (studyId, doctorId) => editStudy(studyId, { doctorId: doctorId || null }),
 
     // Datos del examen: modalidad, descripción, fecha y médico.
-    updateStudy: (study, changes) => updateDoc(doc(db, 'studies', study.id), studyEdits(changes)),
+    updateStudy: (study, changes) => editStudy(study.id, studyEdits(changes)),
 
     // Archivos de un examen: agregar (p. ej. el informe PDF), renombrar y eliminar.
     async addStudyFiles(study, files, onProgress) {
       const current = study.files || [];
       const uploaded = await uploadFiles(study.id, files, current, onProgress);
       const all = [...current, ...uploaded];
-      await updateDoc(doc(db, 'studies', study.id), { files: all, totalSize: sizeOf(all) });
+      await editStudy(study.id, { files: all, totalSize: sizeOf(all) });
       return all;
     },
 
     async renameStudyFile(study, path, name) {
       const all = (study.files || []).map((f) => (f.path === path ? { ...f, name: cleanFileName(name) } : f));
-      await updateDoc(doc(db, 'studies', study.id), { files: all });
+      await editStudy(study.id, { files: all });
       return all;
     },
 
     async deleteStudyFile(study, path) {
       await deleteObject(ref(storage, path)).catch(() => {});
       const all = (study.files || []).filter((f) => f.path !== path);
-      await updateDoc(doc(db, 'studies', study.id), { files: all, totalSize: sizeOf(all) });
+      await editStudy(study.id, { files: all, totalSize: sizeOf(all) });
       return all;
     },
 

@@ -97,8 +97,8 @@ body.dv-open { overflow: hidden; }
 .dv-stage { position: relative; min-width: 0; min-height: 0; background: #000; }
 .dv-grid { position: absolute; inset: 0; display: grid; gap: 2px; background: #000; }
 .dv-grid[data-layout="1"] { grid-template-columns: 1fr; }
-.dv-grid[data-layout="2"] { grid-template-columns: 1fr 1fr; }
-.dv-grid[data-layout="4"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.dv-grid[data-layout="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dv-grid[data-layout="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); }
 .dv-grid[data-layout="implant"] { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1.15fr); }
 .dv-grid[data-layout="implant"] > [data-plane="coronal"], .dv-grid[data-layout="implant"] > [data-plane="sagital"] { display: none; }
 .dv-grid[data-layout="implant"] > .dv-strip { display: grid; grid-column: 1 / -1; }
@@ -179,6 +179,9 @@ body.dv-open { overflow: hidden; }
 .dv-tabs button svg { width: 15px; height: 15px; }
 .dv-tabs button:hover { color: var(--dv-text); }
 .dv-tabs button[aria-selected="true"] { color: #fff; border-bottom-color: var(--dv-blue); }
+/* Con cuatro pestañas o más, solo texto para que quepan todas. */
+.dv-tabs:has(> :nth-child(4)) button { padding: 8px 4px; }
+.dv-tabs:has(> :nth-child(4)) button svg { display: none; }
 .dv-tab-count { font-style: normal; font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--dv-lime); color: #10180a; font-weight: 700; }
 .dv-tab-bodies { flex: 1; overflow-y: auto; min-height: 0; -webkit-user-select: text; user-select: text; }
 .dv-tab-body { padding: 14px; }
@@ -219,8 +222,8 @@ body.dv-open { overflow: hidden; }
 .dv-mactions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Miniaturas y documentos */
-.dv-thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.dv-thumb { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 9px; border: 1px solid var(--dv-line); background: var(--dv-surface-2); cursor: pointer; text-align: left; }
+.dv-thumbs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dv-thumb { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 9px; border: 1px solid var(--dv-line); background: var(--dv-surface-2); cursor: pointer; text-align: left; }
 .dv-thumb canvas { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #000; border-radius: 5px; }
 .dv-thumb span { font-size: 11.5px; color: var(--dv-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dv-thumb.visible { border-color: #36505f; }
@@ -238,6 +241,12 @@ body.dv-open { overflow: hidden; }
 .dv-doclayer { position: absolute; inset: 56px 0 0; z-index: 30; display: flex; flex-direction: column; background: var(--dv-surface); }
 .dv-doclayer-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--dv-line); }
 .dv-doclayer .dv-pdf { flex: 1; }
+.dv-noreport { display: grid; justify-items: center; gap: 6px; padding: 22px 12px; border: 1px dashed var(--dv-line); border-radius: 10px; text-align: center; color: var(--dv-muted); }
+.dv-noreport svg { width: 26px; height: 26px; color: #8a9aa8; }
+.dv-noreport strong { color: #c9d4de; font-size: 14px; }
+.dv-noreport p { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.dv-hbtn.dv-missing { color: var(--dv-muted); }
+.dv-hbtn.dv-missing::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #e0a43a; margin-left: 2px; }
 
 /* ---------- Pie ---------- */
 .dv-footer {
@@ -273,6 +282,10 @@ body.dv-open { overflow: hidden; }
 .dv-select-sm { height: 30px; font-size: 12px; color: var(--dv-muted); }
 .dv-mini-range { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dv-muted); }
 .dv-mini-range input { width: 110px; flex: none; }
+.dv-wl { display: flex; align-items: center; gap: 14px; }
+.dv-wl[hidden] { display: none; }
+.dv-wl .dv-mini-range svg { width: 15px; height: 15px; flex: none; }
+.dv-wl .dv-mini-range input { width: 96px; }
 .dv-quad-controls .dv-mini-range input { width: 84px; }
 .dv-mini-range output { min-width: 40px; color: var(--dv-text); font-variant-numeric: tabular-nums; }
 .dv-mobile-views { display: none; }

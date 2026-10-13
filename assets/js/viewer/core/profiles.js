@@ -2,11 +2,13 @@
 // herramienta inicial, preajustes de contraste y avisos para el médico.
 // hints: textos de ayuda propios del perfil que reemplazan a los de core/tools.js.
 
-const NAV = ['pan', 'zoom', 'wl', 'magnify'];
+// El contraste no es una herramienta de arrastre: se ajusta con los controles
+// deslizantes de brillo y contraste del pie (y los preajustes).
+const NAV = ['pan', 'zoom', 'magnify'];
 
 // Visor de solo lectura (pacientes): navegar y ver, sin medir ni anotar.
 export const VIEW_ONLY = {
-  tools: new Set(['crosshair', 'pan', 'zoom', 'wl', 'magnify']),
+  tools: new Set(['crosshair', 'pan', 'zoom', 'magnify']),
   actions: ['rotate', 'invert', 'fit', 'reset']
 };
 

@@ -54,11 +54,11 @@ Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (
 - La tabla de **exámenes** muestra un grupo por fila. Se busca por paciente, médico, código, examen o **fecha** ("08/10/2026", "8 oct 2026", "oct 2026") y se filtra por un día.
 - El **explorador** se abre desde un grupo, desde un paciente (todas sus visitas por fecha) o desde un médico (sus pacientes y las visitas de cada uno), con migas de pan para moverse entre niveles.
 - **Dentro de un grupo** se puede:
-  - **Exámenes**: verlos en el visor, editar modalidad, descripción, fecha y médico, agregar otro examen y eliminarlos. Cada examen muestra por separado sus **imágenes** y su **informe**; si aún no tiene informe aparece «Sin informe» y el botón *Subir informe (PDF)*.
+  - **Exámenes** (del **modificado más recientemente** al más antiguo: subida, archivos agregados, renombrados o eliminados, o datos editados; cada uno muestra «Modificado …»): verlos en el visor, editar modalidad, descripción, fecha y médico, agregar otro examen y eliminarlos. Cada examen muestra por separado sus **imágenes** y su **informe**; si aún no tiene informe aparece «Sin informe» y el botón *Subir informe (PDF)*.
   - **Archivos**: subir más, abrir los PDF, descargar, renombrar y eliminar.
   - **Médico**: cambiar el de todo el grupo de una vez.
 - En el **portal del médico** los exámenes también se ven agrupados por **visita** (paciente + fecha); cada examen indica si tiene informe y, si lo tiene, el botón *Informe* lo abre directamente. Hay búsqueda por paciente, examen o fecha, filtro por día y por modalidad, y «Ver exámenes» desde *Mis pacientes*.
-- Los **informes PDF** van con su examen (o, si es un informe suelto, como examen de modalidad *Informe*); en el visor aparecen en la pestaña *Informes*.
+- Los **informes PDF** van con su examen (o, si es un informe suelto, como examen de modalidad *Informe*); en el visor están siempre el botón **Informe** del encabezado y la pestaña *Informes*: abren el PDF o, si el examen aún no tiene informe, lo avisan.
 
 ### Cuentas de administración
 
@@ -77,7 +77,7 @@ Se abre con **Abrir** en el portal (o el ojo en el panel de administración) y e
 - **CBCT**: axial, coronal y sagital enlazados con cruz de navegación; espesor de corte (MIP); 3D (hueso, piel, rayos X); panorámica reconstruida trazando una curva sobre el arco; cortes transversales.
 - **Distribución Implantes** (CBCT): axial con la curva, panorámica reconstruida y una tira de 5 cortes transversales consecutivos (cada 0,5/1/2/3 mm) con zoom sincronizado; la línea del corte axial se ve en la panorámica y en los cortes.
 - **Panorámica, cefalometría, intraorales**: visor 2D, mosaico de 1/2/4 imágenes, miniaturas.
-- **Herramientas**: mover, zoom, contraste (ventana/nivel con preajustes Hueso/Dental/Tejido blando/Vía aérea), lupa, distancia, ángulo, área con densidad media, densidad puntual, notas con flecha, calibración, girar/voltear/invertir, ocultar datos del paciente (`O`), deshacer.
+- **Herramientas**: mover, zoom, **brillo y contraste con controles deslizantes** en el pie del visor (más los preajustes Hueso/Dental/Tejido blando/Vía aérea; el clic derecho + arrastrar sigue disponible como atajo), lupa, distancia, ángulo, área con densidad media, densidad puntual, notas con flecha, calibración, girar/voltear/invertir, ocultar datos del paciente (`O`), deshacer.
 - **Implante simulado** (`P`): se arrastra de la plataforma al ápice (longitud comercial más cercana), se inclina arrastrando un extremo y se cambia diámetro/longitud con doble clic; muestra el eje protésico y un margen de seguridad de 1,5 mm (2 mm en el ápice).
 - **Entrega**: lista de mediciones (copiar resumen), exportar a PNG lo que se ve en pantalla (todos los paneles, con orientación y escala) con encabezado de la clínica, imprimir, descargar originales, información y etiquetas DICOM. Al cerrar con mediciones, el visor pide confirmación (las mediciones no se guardan).
 - En CBCT los valores de gris no son unidades Hounsfield calibradas: el visor lo indica en las herramientas de densidad.

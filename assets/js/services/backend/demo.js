@@ -76,6 +76,8 @@ export function createDemoBackend() {
   const store = (() => { try { return JSON.parse(sessionStorage.getItem(DB_KEY)); } catch (e) { return null; } })() || seed();
   const { doctors, patients, studies, appointments } = store;
   const save = () => { try { sessionStorage.setItem(DB_KEY, JSON.stringify(store)); } catch (e) { /* modo privado */ } };
+  // Examen modificado por la clínica: queda la fecha del cambio (orden dentro del grupo).
+  const edited = (id) => { const s = studies.find((x) => x.id === id); s.updatedAt = Date.now(); return s; };
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const newId = (prefix) => prefix + Math.random().toString(36).slice(2, 12);
   const fail = (result) => { if (result.error) throw new Error(result.error); return result.data; };
@@ -147,31 +149,31 @@ export function createDemoBackend() {
       const id = 'EST-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000) + 1000);
       studies.push({
         id, code: id, patientId: patient.id, ...studyPatientFields(patient), doctorId: doctorId || null,
-        modality, description, date, status: 'Nuevo',
+        modality, description, date, status: 'Nuevo', createdAt: Date.now(), updatedAt: Date.now(),
         files: files.map((f) => ({ name: f.name, path: 'demo/' + newId('f'), size: f.size })), totalSize: sizeOf(files)
       });
       save();
       return id;
     },
-    async setStudyDoctor(studyId, doctorId) { studies.find((s) => s.id === studyId).doctorId = doctorId || null; save(); },
-    async updateStudy(study, changes) { Object.assign(studies.find((s) => s.id === study.id), studyEdits(changes)); save(); },
+    async setStudyDoctor(studyId, doctorId) { edited(studyId).doctorId = doctorId || null; save(); },
+    async updateStudy(study, changes) { Object.assign(edited(study.id), studyEdits(changes)); save(); },
     // Archivos de demostración: solo nombre y tamaño (no hay nada que descargar).
     async addStudyFiles(study, files, onProgress) {
       for (let i = 1; i <= 5; i++) { await wait(60); if (onProgress) onProgress(i / 5); }
-      const s = studies.find((x) => x.id === study.id);
+      const s = edited(study.id);
       s.files = [...s.files, ...files.map((f) => ({ name: f.name, path: 'demo/' + newId('f'), size: f.size }))];
       s.totalSize = sizeOf(s.files);
       save();
       return s.files;
     },
     async renameStudyFile(study, path, name) {
-      const s = studies.find((x) => x.id === study.id);
+      const s = edited(study.id);
       s.files = s.files.map((f) => (f.path === path ? { ...f, name: cleanFileName(name) } : f));
       save();
       return s.files;
     },
     async deleteStudyFile(study, path) {
-      const s = studies.find((x) => x.id === study.id);
+      const s = edited(study.id);
       s.files = s.files.filter((f) => f.path !== path);
       s.totalSize = sizeOf(s.files);
       save();

@@ -8,7 +8,8 @@
 //                     Solo identidad y contacto: los pacientes NO tienen médico.
 //  studies/{id}       { code, patientId, patientName, patientCode, patientAge, doctorId,
 //                       modality, description, date: 'YYYY-MM-DD', files: [{ name, path, size }],
-//                       totalSize, status: 'Nuevo' | 'Visto', createdAt }
+//                       totalSize, status: 'Nuevo' | 'Visto', createdAt, updatedAt }
+//                     updatedAt: último cambio hecho por la clínica (orden dentro del grupo).
 //                     Cada examen pertenece a un paciente y a un médico (doctorId), que lo ve en su portal.
 //  appointments/{id}  { code, firstName, lastName, name, email, phone, referrer, exam,
 //                       date: 'YYYY-MM-DD', time: 'HH:MM', slotId, patientId,

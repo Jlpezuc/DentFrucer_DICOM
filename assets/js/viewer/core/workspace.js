@@ -46,6 +46,7 @@ export class Workspace {
       toast: (text) => shell.toast(text)
     });
     this.showOverlays = true;
+    shell.setWindowSliders((brightness, contrast) => this.setBrightnessContrast(brightness, contrast));
 
     shell.setModeLabel(this.profile.title);
     if (viewOnly) shell.setTools(viewOnlyTools(this.profile.tools), VIEW_ONLY.actions);
@@ -107,6 +108,38 @@ export class Workspace {
       const wl = applyPreset(p, target);
       this.applyWindow(vp, wl.c, wl.w);
     });
+    this.syncWindowSliders();
+  }
+
+  // Rango de valores de la imagen (o del volumen) activa, base de los controles.
+  windowRange(vp = this.active) {
+    const t = vp && ((this.windowTarget && this.windowTarget(vp)) || vp.frame);
+    if (!t || t.min === undefined || t.max === undefined) return null;
+    return { min: t.min, range: Math.max(1, t.max - t.min) };
+  }
+
+  // Controles de 0 a 100. Brillo: 50 = centro del rango; más brillo baja el
+  // centro de la ventana. Contraste: 50 = ventana del ancho del rango; cada
+  // extremo multiplica o divide el ancho por 8.
+  setBrightnessContrast(brightness, contrast) {
+    const vp = this.active;
+    const r = this.windowRange(vp);
+    if (!r) return;
+    const c = r.min + (1 - brightness / 100) * r.range;
+    const w = r.range * 2 ** ((50 - contrast) / (50 / 3));
+    this.applyWindow(vp, c, w);
+    this.shell.clearPresetSelection();
+  }
+
+  syncWindowSliders() {
+    const vp = this.active;
+    const r = this.windowRange(vp);
+    if (!r || !vp.wl) return;
+    const clamp = (v) => Math.round(Math.max(0, Math.min(100, v)));
+    this.shell.setWindowSliderValues(
+      clamp(100 * (1 - (vp.wl.c - r.min) / r.range)),
+      clamp(50 - Math.log2(vp.wl.w / r.range) * (50 / 3))
+    );
   }
 
   applyWindow(vp, c, w, invert = vp.invert) {
@@ -118,6 +151,7 @@ export class Workspace {
   syncWindowUI() {
     if (this.onWindow && this.active) this.onWindow(this.active, this.active.wl, this.active.invert);
     this.shell.setActionState('invert', this.active && this.active.invert);
+    this.syncWindowSliders();
   }
 
   // --- Acciones de la barra ------------------------------------------------------------
@@ -292,6 +326,7 @@ export class Workspace {
   // --- Encabezado: descargar, exportar, imprimir --------------------------------------
   async header(a) {
     if (a === 'download') { if (this.onDownload) this.onDownload(); return; }
+    if (a !== 'export' && a !== 'print') return;
     // Se exporta lo que se ve: todos los paneles visibles del escenario.
     const visible = this.viewports.filter((v) => v.frame && v.el.getBoundingClientRect().width > 0);
     const snap = snapshotStage(this.shell.stage);
