@@ -630,3 +630,24 @@ body[data-guard] .app { visibility: hidden; }
   .group-badges, .group-files { justify-content: flex-start; }
   .group-list button > svg { display: none; }
 }
+
+/* ---------- Portal del médico: visitas ---------- */
+.visit-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 16px; }
+.visit-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: hidden; }
+.visit-card.is-new { border-color: #9fd3ea; }
+.visit-card > header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.visit-card > header > div { flex: 1; min-width: 0; }
+.visit-card h3 { font-size: 16px; margin: 0; }
+.visit-card header small { color: var(--muted); font-size: 13px; }
+.app.doctor .visit-card .avatar { background: var(--green-600); }
+.visit-exams { list-style: none; margin: 0; padding: 6px 0; flex: 1; }
+.visit-exams li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 8px 16px; }
+.visit-exams li + li { border-top: 1px solid var(--surface-2); }
+.visit-exam-name { font-size: 14px; font-weight: 600; min-width: 0; }
+.visit-exam-name small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.dot-new { width: 8px; height: 8px; border-radius: 50%; background: var(--blue-500); }
+.visit-card > footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px 8px 16px; border-top: 1px solid var(--line); background: var(--surface-2); font-size: 13px; }
+.filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border-radius: 999px; background: var(--lime-50); border: 1px solid #d6ebbb; font-size: 13px; color: #365a14; }
+.filter-chip button { border: 0; background: none; padding: 2px; cursor: pointer; color: inherit; display: grid; }
+.filter-chip svg { width: 14px; height: 14px; }
+@media (max-width: 560px) { .visit-cards { grid-template-columns: 1fr; } }

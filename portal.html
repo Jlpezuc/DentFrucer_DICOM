@@ -31,40 +31,43 @@
       <div class="topbar">
         <div>
           <h1>Hola, <span data-user-name>doctor</span></h1>
-          <p>Estos son los estudios de sus pacientes.</p>
+          <p>Estos son los exámenes de sus pacientes, agrupados por visita.</p>
         </div>
       </div>
 
       <div class="stats three">
         <div class="stat"><div class="k">Mis pacientes</div><div class="v" id="stat-my-patients">–</div></div>
-        <div class="stat"><div class="k">Estudios disponibles</div><div class="v" id="stat-my-studies">–</div></div>
+        <div class="stat"><div class="k">Exámenes disponibles</div><div class="v" id="stat-my-studies">–</div></div>
         <div class="stat"><div class="k">Nuevos sin revisar</div><div class="v" id="stat-my-new" style="color:var(--blue-700)">–</div></div>
       </div>
 
-      <section class="panel" id="estudios" style="padding:0">
+      <section class="panel" id="estudios">
         <div class="panel-head">
-          <h2>Estudios</h2>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <h2>Exámenes por visita</h2>
+          <div class="panel-actions">
+            <span class="filter-chip" id="patient-chip" hidden></span>
             <label class="search">
               <span class="sr-only">Buscar</span>
               <i data-icon="search"></i>
-              <input class="input" id="portal-search" type="search" placeholder="Buscar paciente o estudio">
+              <input class="input" id="portal-search" type="search" placeholder="Paciente, examen o fecha">
             </label>
+            <label class="date-filter"><span class="sr-only">Fecha</span><input class="input input-sm" id="portal-date" type="date" title="Ver solo las visitas de esta fecha"></label>
             <label class="sr-only" for="modality-filter">Modalidad</label>
-            <select class="input select" id="modality-filter" style="width:auto">
+            <select class="input select input-sm" id="modality-filter" style="width:auto">
               <option value="">Todas las modalidades</option>
-              <option>CBCT</option><option>Panorámica</option><option>Cefalometría</option><option>Periapical</option>
+              <option>CBCT</option><option>Panorámica</option><option>Cefalometría</option><option>Periapical</option><option>Informe</option><option>Otro</option>
             </select>
           </div>
         </div>
-        <div class="panel-body"><div class="study-cards" id="study-grid"></div></div>
+        <p class="panel-note">Cada tarjeta es una <strong>visita</strong>: los exámenes de un paciente en una misma fecha, con sus informes.</p>
+        <div class="panel-body"><div class="visit-cards" id="study-grid"></div></div>
       </section>
 
-      <section class="panel" id="pacientes" style="padding:0">
+      <section class="panel" id="pacientes">
         <div class="panel-head"><h2>Mis pacientes</h2></div>
         <div class="table-wrap">
           <table class="data">
-            <thead><tr><th>Paciente</th><th>Estudios</th><th>Último estudio</th></tr></thead>
+            <thead><tr><th>Paciente</th><th>Visitas</th><th>Última visita</th><th></th></tr></thead>
             <tbody id="patients-body"></tbody>
           </table>
         </div>
