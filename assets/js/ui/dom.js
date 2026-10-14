@@ -31,16 +31,34 @@ export function showError(el, msg) {
   el.classList.toggle('show', !!msg);
 }
 
-// Modal simple basado en .modal-backdrop (ver styles.css).
+// Modal simple basado en .modal-backdrop (ver styles.css). Varias ventanas
+// pueden abrirse una sobre otra (por ejemplo, un cobro desde una visita): la
+// última abierta queda encima y Esc cierra solo esa.
+const openModals = [];
+
 export function modal(id) {
   const el = document.getElementById(id);
   if (!el) return null;
-  const close = () => el.classList.remove('open');
+  const close = () => {
+    el.classList.remove('open');
+    const i = openModals.indexOf(el);
+    if (i >= 0) openModals.splice(i, 1);
+  };
   el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('[data-close]')) close(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  document.addEventListener('keydown', (e) => {
+    // Con el visor abierto encima, Esc es del visor.
+    if (e.key === 'Escape' && openModals[openModals.length - 1] === el && !document.body.classList.contains('dv-open')) close();
+  });
   return {
     el,
-    open() { el.classList.add('open'); const f = el.querySelector('input, select, button[data-close]'); if (f) f.focus(); },
+    open() {
+      close();
+      openModals.push(el);
+      el.style.zIndex = 100 + openModals.length;
+      el.classList.add('open');
+      const f = el.querySelector('input, select, button[data-close]');
+      if (f) f.focus();
+    },
     close
   };
 }
