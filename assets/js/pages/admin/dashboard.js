@@ -3,19 +3,22 @@
 //
 //   Indicadores   ingresos (y cambio frente al período anterior de igual largo),
 //                 exámenes, citas y citas atendidas sin cobro
-//   Gráficos      ingresos en el tiempo (columnas por día, semana o mes) y
-//                 barras horizontales: ingresos por medio de pago y por servicio,
-//                 exámenes por servicio y por médico
+//   Gráficos      ingresos en el tiempo (columnas por día, semana o mes),
+//                 anillos (pastel) de ingresos por medio de pago y por servicio, y
+//                 barras horizontales de exámenes por servicio y por médico
 //   Por cobrar    visitas del período que no están pagadas y citas atendidas sin
 //                 visita ni cobro
 //
 // Las barras usan un solo color: comparan magnitudes, no identifican series.
-// Cada gráfico tiene su tabla equivalente para lectores de pantalla.
+// En los anillos cada color identifica un medio de pago o servicio: el color va
+// con el elemento (no con su lugar en el orden) y la leyenda muestra nombre,
+// monto y porcentaje, así que nada depende solo del color.
+// Cada gráfico tiene su tabla o lista equivalente para lectores de pantalla.
 
 import { addDays, examLabel, isoDate, parseIso } from '../../services/agenda.js';
 import { groupStudies, isReportOnly, PAY_STATE } from '../../services/groups.js';
 import { fmtCLP, PAYMENT_METHODS } from '../../services/payments.js';
-import { studyServiceName } from '../../services/settings.js';
+import { activeServices, studyServiceName } from '../../services/settings.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -24,6 +27,34 @@ import { doctorNames } from './common.js';
 const DAY_MS = 86400000;
 const daysBetween = (a, b) => Math.round((parseIso(b) - parseIso(a)) / DAY_MS) + 1;
 const mondayOf = (iso) => addDays(iso, -((parseIso(iso).getDay() + 6) % 7));
+
+// Colores de los anillos, en orden fijo (validados para daltonismo); "Otros" va en gris.
+const SLICE_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#6250d6'];
+const OTHER_COLOR = '#9aa5ae';
+const MAX_SLICES = SLICE_COLORS.length;
+
+// Deja las porciones mayores y junta el resto en "Otros". Cada porción toma el
+// color de su lugar en `order` (lista fija: medios de pago, servicios), así un
+// mismo elemento conserva su color al cambiar el período; las demás toman los
+// colores libres.
+function slices(rows, order) {
+  const sorted = [...rows].sort((a, b) => b.value - a.value);
+  const keep = sorted.length > MAX_SLICES ? sorted.slice(0, MAX_SLICES - 1) : sorted;
+  const rest = sorted.slice(keep.length);
+  const used = new Set();
+  const out = keep.map((r) => ({ ...r }));
+  out.forEach((r) => {
+    const i = order.indexOf(r.label);
+    if (i >= 0 && i < MAX_SLICES) { r.color = SLICE_COLORS[i]; used.add(i); }
+  });
+  out.filter((r) => !r.color).forEach((r) => {
+    const i = SLICE_COLORS.findIndex((_, k) => !used.has(k));
+    used.add(i);
+    r.color = SLICE_COLORS[i];
+  });
+  if (rest.length) out.push({ label: 'Otros', value: rest.reduce((n, r) => n + r.value, 0), note: rest.length + ' más', color: OTHER_COLOR });
+  return out;
+}
 
 // $1.250.000 -> "$1,3 M"; $85.000 -> "$85 mil".
 function compactCLP(n) {
@@ -111,6 +142,49 @@ export function createDashboard(ctx) {
     </section>`;
   }
 
+  // Anillo (pastel) con leyenda: color, nombre, monto y parte del total.
+  function pieChart(title, rows, { format = (v) => v, empty = 'Sin datos en el período.' } = {}) {
+    const total = rows.reduce((n, r) => n + r.value, 0);
+    if (!rows.length || !total) return `<section class="dash-card"><h3>${title}</h3><p class="muted dash-empty">${empty}</p></section>`;
+    const C = 90;
+    const R = 84;
+    const r = 54;
+    const pt = (rad, a) => `${(C + rad * Math.cos(a)).toFixed(2)},${(C + rad * Math.sin(a)).toFixed(2)}`;
+    // Sector del anillo entre dos ángulos (0 = arriba, sentido horario).
+    const arc = (a0, a1) => {
+      const large = a1 - a0 > Math.PI ? 1 : 0;
+      return `M${pt(R, a0)}A${R},${R} 0 ${large} 1 ${pt(R, a1)}L${pt(r, a1)}A${r},${r} 0 ${large} 0 ${pt(r, a0)}Z`;
+    };
+    let a = -Math.PI / 2;
+    const paths = rows.map((x, i) => {
+      const sweep = (x.value / total) * Math.PI * 2;
+      const a0 = a;
+      a += sweep;
+      // Una sola porción (100 %): dos mitades, porque un arco no puede cerrarse sobre sí mismo.
+      const d = sweep >= Math.PI * 2 - 1e-6 ? arc(a0, a0 + Math.PI) + arc(a0 + Math.PI, a0 + Math.PI * 2) : arc(a0, a);
+      return `<path class="pie-slice" data-i="${i}" d="${d}" fill="${x.color}"></path>`;
+    }).join('');
+    const pct = (v) => Math.round((v / total) * 100) + '%';
+    pieData.push({ rows, total, format });
+    return `<section class="dash-card">
+      <h3>${title}</h3>
+      <div class="pie-chart" data-pie="${pieData.length - 1}">
+        <div class="pie-figure">
+          <svg viewBox="0 0 ${C * 2} ${C * 2}" role="img" aria-label="${escapeHtml(title)}: ${rows.map((x) => escapeHtml(x.label) + ' ' + pct(x.value)).join(', ')}">
+            ${paths}
+            <text class="pie-total" x="${C}" y="${C + 2}" text-anchor="middle">${compactCLP(total)}</text>
+            <text class="pie-caption" x="${C}" y="${C + 20}" text-anchor="middle">total</text>
+          </svg>
+          <div class="tc-tip" hidden></div>
+        </div>
+        <ul class="pie-legend">${rows.map((x, i) => `
+          <li data-i="${i}" title="${escapeHtml(x.label)}"><span class="pie-swatch" style="background:${x.color}"></span>
+            <span class="bl-label">${escapeHtml(x.label)}${x.note ? `<small>${escapeHtml(x.note)}</small>` : ''}</span>
+            <span class="bl-value">${format(x.value)}<small>${pct(x.value)}</small></span></li>`).join('')}</ul>
+      </div>
+    </section>`;
+  }
+
   // Columnas de ingresos en el tiempo (SVG), con su tabla para lectores de pantalla.
   function timeChart(b) {
     const W = 720;
@@ -155,6 +229,7 @@ export function createDashboard(ctx) {
 
   // --- Dibujo ---------------------------------------------------------------------------------
   let currentBuckets = null;
+  let pieData = [];
 
   function render() {
     const from = fromInput.value || today();
@@ -185,13 +260,13 @@ export function createDashboard(ctx) {
     const methodRows = PAYMENT_METHODS.map((m) => {
       const list = pays.filter((x) => x.method === m);
       return { label: m, value: list.reduce((n, x) => n + x.total, 0), note: list.length ? list.length + (list.length === 1 ? ' cobro' : ' cobros') : '' };
-    }).filter((r) => r.value > 0).sort((a, b) => b.value - a.value);
+    }).filter((r) => r.value > 0);
     const services = new Map();
     pays.forEach((x) => {
       const share = x.items.length ? x.discount / x.items.length : 0;
       x.items.forEach((it) => services.set(it.label, (services.get(it.label) || 0) + Math.max(0, it.price - share)));
     });
-    const serviceRows = [...services.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    const serviceRows = [...services.entries()].map(([label, value]) => ({ label, value })).filter((r) => r.value > 0);
     const byService = new Map();
     exams.forEach((s) => { const n = studyServiceName(s); byService.set(n, (byService.get(n) || 0) + 1); });
     const examServiceRows = [...byService.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
@@ -200,6 +275,7 @@ export function createDashboard(ctx) {
     const doctorRows = [...doctors.entries()].map(([id, value]) => ({ label: id ? doctorNames(state.doctors, [id]) : 'Sin médico', value })).sort((a, b) => b.value - a.value);
 
     currentBuckets = buckets(from, to);
+    pieData = [];
     const index = new Map(currentBuckets.list.map((b, i) => [b.key, i]));
     pays.forEach((x) => { const b = currentBuckets.list[index.get(currentBuckets.keyOf(x.date))]; if (b) { b.total += x.total; b.count++; } });
 
@@ -215,8 +291,8 @@ export function createDashboard(ctx) {
       </div>
       <div class="dash-grid">
         ${seeMoney ? timeChart(currentBuckets) : ''}
-        ${seeMoney ? barList('Ingresos por medio de pago', methodRows, { format: fmtCLP, empty: 'Sin cobros en el período.' }) : ''}
-        ${seeMoney ? barList('Ingresos por servicio', serviceRows, { format: fmtCLP, empty: 'Sin cobros en el período.' }) : ''}
+        ${seeMoney ? pieChart('Ingresos por medio de pago', slices(methodRows, PAYMENT_METHODS), { format: fmtCLP, empty: 'Sin cobros en el período.' }) : ''}
+        ${seeMoney ? pieChart('Ingresos por servicio', slices(serviceRows, activeServices().map((x) => x.label)), { format: fmtCLP, empty: 'Sin cobros en el período.' }) : ''}
         ${barList('Exámenes por servicio', examServiceRows, { empty: 'Sin exámenes en el período.' })}
         ${barList('Exámenes por médico', doctorRows, { share: false, empty: 'Sin exámenes en el período.' })}
       </div>
@@ -231,22 +307,45 @@ export function createDashboard(ctx) {
       </section>`;
   }
 
-  // Tooltip de las columnas.
+  // Tooltip: junto al puntero, sin salirse de su recuadro.
+  function showTip(tip, html, e) {
+    tip.innerHTML = html;
+    const box = tip.parentElement.getBoundingClientRect();
+    tip.hidden = false;
+    tip.style.left = Math.min(box.width - tip.offsetWidth, Math.max(0, e.clientX - box.left - tip.offsetWidth / 2)) + 'px';
+    tip.style.top = Math.max(0, e.clientY - box.top - tip.offsetHeight - 12) + 'px';
+  }
+  function hideTips() {
+    out.querySelectorAll('.tc-tip').forEach((t) => { t.hidden = true; });
+    out.querySelectorAll('.tc-col.on, .pie-chart .on').forEach((c) => c.classList.remove('on'));
+  }
+
+  // Anillos: al pasar sobre una porción o su fila de la leyenda se destacan ambas.
+  function pieHover(e) {
+    const chart = e.target.closest('.pie-chart');
+    const item = e.target.closest('.pie-slice, .pie-legend li');
+    out.querySelectorAll('.pie-chart .on').forEach((c) => { if (!item || c.closest('.pie-chart') !== chart || c.dataset.i !== item.dataset.i) c.classList.remove('on'); });
+    out.querySelectorAll('.pie-chart').forEach((c) => c.classList.toggle('focus', c === chart && !!item));
+    out.querySelectorAll('.pie-chart .tc-tip').forEach((t) => { if (!item || !t.closest('.pie-chart').contains(item) || !item.matches('.pie-slice')) t.hidden = true; });
+    if (!item) return;
+    const { rows, total, format } = pieData[Number(chart.dataset.pie)];
+    const x = rows[Number(item.dataset.i)];
+    chart.querySelectorAll(`[data-i="${item.dataset.i}"]`).forEach((c) => c.classList.add('on'));
+    if (item.matches('.pie-slice')) showTip(chart.querySelector('.tc-tip'), `<strong>${escapeHtml(x.label)}</strong><span>${format(x.value)}</span><small>${Math.round((x.value / total) * 100)}% del total${x.note ? ' · ' + escapeHtml(x.note) : ''}</small>`, e);
+  }
+
   out.addEventListener('pointermove', (e) => {
+    pieHover(e);
     const col = e.target.closest('.tc-col');
-    const tip = out.querySelector('.tc-tip');
+    const tip = out.querySelector('.time-chart .tc-tip');
     if (!tip) return;
     out.querySelectorAll('.tc-col.on').forEach((c) => { if (c !== col) c.classList.remove('on'); });
     if (!col || !currentBuckets) { tip.hidden = true; return; }
     col.classList.add('on');
     const b = currentBuckets.list[Number(col.dataset.i)];
-    tip.innerHTML = `<strong>${escapeHtml(currentBuckets.title(b))}</strong><span>${fmtCLP(b.total)}</span><small>${b.count} ${b.count === 1 ? 'cobro' : 'cobros'}</small>`;
-    const box = tip.parentElement.getBoundingClientRect();
-    tip.hidden = false;
-    tip.style.left = Math.min(box.width - tip.offsetWidth, Math.max(0, e.clientX - box.left - tip.offsetWidth / 2)) + 'px';
-    tip.style.top = Math.max(0, e.clientY - box.top - tip.offsetHeight - 12) + 'px';
+    showTip(tip, `<strong>${escapeHtml(currentBuckets.title(b))}</strong><span>${fmtCLP(b.total)}</span><small>${b.count} ${b.count === 1 ? 'cobro' : 'cobros'}</small>`, e);
   });
-  out.addEventListener('pointerleave', () => { const tip = out.querySelector('.tc-tip'); if (tip) tip.hidden = true; out.querySelectorAll('.tc-col.on').forEach((c) => c.classList.remove('on')); });
+  out.addEventListener('pointerleave', () => { hideTips(); out.querySelectorAll('.pie-chart.focus').forEach((c) => c.classList.remove('focus')); });
   out.addEventListener('click', (e) => {
     const v = e.target.closest('[data-pay-visit]');
     const g = v && groupStudies(state.studies).find((x) => x.key === v.dataset.payVisit);
