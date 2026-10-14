@@ -37,3 +37,53 @@ export function bindTabs(containerId, onPick) {
 
 // Valores de un formulario como objeto { name: valor }.
 export function formValues(form) { return Object.fromEntries(new FormData(form)); }
+
+// Nombres de los médicos de un examen o visita ("Sin médico" si no tiene).
+export function doctorNames(doctors, ids, empty = 'Sin médico') {
+  const names = (ids || []).map((id) => (doctors.find((d) => d.id === id) || {}).name || 'Médico eliminado');
+  return names.length ? names.join(', ') : empty;
+}
+
+// --- Selector de varios médicos ---------------------------------------------------------
+// Chips con los médicos elegidos (cada uno con ×) y un menú para agregar otro.
+// El valor va en un <input type="hidden" name="doctorIds"> separado por comas.
+//   html: doctorPickerHtml(doctors, ids)
+//   comportamiento: bindDoctorPickers(contenedor, () => doctors, (picker, ids) => …)
+export function doctorPickerHtml(doctors, ids = [], { name = 'doctorIds', emptyLabel = 'Sin médico: solo lo ve la clínica' } = {}) {
+  const chosen = ids.map((id) => doctors.find((d) => d.id === id) || { id, name: 'Médico eliminado' });
+  const rest = doctors.filter((d) => !ids.includes(d.id));
+  return `<div class="doc-picker" data-doctor-picker>
+    <input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(ids.join(','))}">
+    <div class="doc-chips">${chosen.length ? chosen.map((d) => `<span class="doc-chip">${escapeHtml(d.name)}<button type="button" data-remove-doctor="${escapeHtml(d.id)}" aria-label="Quitar a ${escapeHtml(d.name)}">×</button></span>`).join('') : `<span class="doc-empty">${escapeHtml(emptyLabel)}</span>`}</div>
+    ${rest.length ? `<select class="input select input-sm doc-add" data-add-doctor aria-label="Agregar médico"><option value="">+ Agregar médico…</option>${rest.map((d) => `<option value="${escapeHtml(d.id)}">${escapeHtml(d.name)}</option>`).join('')}</select>` : ''}
+  </div>`;
+}
+
+export const pickerValue = (picker) => (picker.querySelector('input[type=hidden]').value || '').split(',').filter(Boolean);
+
+export function bindDoctorPickers(root, getDoctors, onChange = () => {}) {
+  const redraw = (picker, ids) => {
+    const name = picker.querySelector('input[type=hidden]').name;
+    const empty = picker.querySelector('.doc-empty');
+    const html = doctorPickerHtml(getDoctors(), ids, { name, emptyLabel: empty ? empty.textContent : undefined });
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const next = tmp.firstElementChild;
+    picker.replaceWith(next);
+    onChange(next, ids);
+    return next;
+  };
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-remove-doctor]');
+    const picker = b && b.closest('[data-doctor-picker]');
+    if (!picker) return;
+    redraw(picker, pickerValue(picker).filter((id) => id !== b.dataset.removeDoctor));
+  });
+  root.addEventListener('change', (e) => {
+    const sel = e.target.closest('[data-add-doctor]');
+    const picker = sel && sel.closest('[data-doctor-picker]');
+    if (!picker || !sel.value) return;
+    e.stopPropagation();
+    redraw(picker, [...pickerValue(picker), sel.value]);
+  });
+}

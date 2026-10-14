@@ -4,9 +4,12 @@
 import { firebaseConfig } from '../../config/firebase-config.js';
 import { patientAccess } from '../../config/patient-access.js';
 import { agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
+import { normalizePayment } from '../payments.js';
 import { normalizeAccountName, normalizePatient } from '../people.js';
+import { toStored, validateSettings } from '../settings.js';
 import {
-  AccessDisabledError, agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, friendlyAuthError, sizeOf, studyCode, studyEdits, studyPatientFields
+  AccessDisabledError, agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, friendlyAuthError, normalizeAdmin,
+  sizeOf, studyCode, studyDoctors, studyEdits, studyPatientFields, withDoctors
 } from './shared.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
@@ -71,19 +74,39 @@ export async function createFirebaseBackend() {
     const off = onAuthStateChanged(auth, (u) => { off(); resolve(u); });
   });
 
+  // Perfil de la cuenta en sesión (null si no tiene perfil o está desactivada).
   async function profileOf(user) {
     if (!user) return null;
     const snap = await getDoc(doc(db, 'users', user.uid));
     if (!snap.exists()) return null;
     const d = snap.data();
+    if (d.disabled) return null;
     return {
       uid: user.uid,
       email: user.email,
       name: d.name || user.email,
       role: d.role,
       specialty: d.specialty || '',
-      title: d.role === 'admin' ? 'Administrador' : (d.specialty || 'Médico')
+      description: d.description || '',
+      superadmin: d.superadmin === true,
+      permissions: d.permissions || null,
+      title: d.role === 'admin' ? (d.description || 'Administrador') : (d.specialty || 'Médico')
     };
+  }
+
+  // Crea una cuenta con una segunda instancia de la app, para no cerrar la
+  // sesión de quien la crea, y guarda su perfil en users/{uid}.
+  async function createAccount(email, password, profile) {
+    const secondary = initializeApp(firebaseConfig, 'secondary-' + Date.now());
+    const secAuth = getAuth(secondary);
+    try {
+      const cred = await createUserWithEmailAndPassword(secAuth, email, password);
+      await setDoc(doc(db, 'users', cred.user.uid), { ...profile, email, createdAt: serverTimestamp() });
+      await signOut(secAuth);
+      return cred.user.uid;
+    } catch (e) {
+      throw new Error(friendlyAuthError(e));
+    }
   }
 
   return {
@@ -101,7 +124,7 @@ export async function createFirebaseBackend() {
         const profile = await profileOf(cred.user);
         if (!profile) {
           await signOut(auth);
-          throw new Error('Su cuenta no tiene un perfil asignado. Contacte a DentFrucer.');
+          throw new Error('Su cuenta no tiene acceso (sin perfil o desactivada). Contacte al administrador de DentFrucer.');
         }
         return profile;
       } catch (e) {
@@ -129,22 +152,26 @@ export async function createFirebaseBackend() {
       return (await list(query(collection(db, 'users'), where('role', '==', 'doctor')))).sort(byName);
     },
 
-    // Crea la cuenta del médico con una segunda instancia de la app, para no
-    // cerrar la sesión del administrador.
-    async createDoctor({ name, email, password, specialty }) {
-      const secondary = initializeApp(firebaseConfig, 'secondary-' + Date.now());
-      const secAuth = getAuth(secondary);
-      try {
-        const cred = await createUserWithEmailAndPassword(secAuth, email, password);
-        await setDoc(doc(db, 'users', cred.user.uid), {
-          name, email, specialty: specialty || '', role: 'doctor', createdAt: serverTimestamp()
-        });
-        await signOut(secAuth);
-        return cred.user.uid;
-      } catch (e) {
-        throw new Error(friendlyAuthError(e));
-      }
+    createDoctor: ({ name, email, password, specialty }) => createAccount(email, password, { name, specialty: specialty || '', role: 'doctor' }),
+
+    // --- Cuentas de administración (solo el administrador general) ----------------
+    async listAdmins() {
+      return (await list(query(collection(db, 'users'), where('role', '==', 'admin')))).sort(byName);
     },
+
+    async createAdmin(input) {
+      const data = fail(normalizeAdmin(input));
+      return createAccount(String(input.email || '').trim(), input.password, { ...data, role: 'admin' });
+    },
+
+    // Sin permissions en input (la propia cuenta) solo cambian nombre y descripción.
+    async updateAdmin(uid, input) {
+      const data = fail(normalizeAdmin(input));
+      await updateDoc(doc(db, 'users', uid), input.permissions === undefined ? { name: data.name, description: data.description } : data);
+    },
+
+    // Desactivar no borra la cuenta: deja de poder entrar hasta que se reactive.
+    setAdminDisabled: (uid, disabled) => updateDoc(doc(db, 'users', uid), { disabled: !!disabled }),
 
     // --- Pacientes (solo administración) -------------------------------------------
     async listPatients() {
@@ -168,22 +195,29 @@ export async function createFirebaseBackend() {
       await batch.commit();
     },
 
-    // --- Exámenes: cada uno tiene su paciente y su médico ------------------------
-    // Las reglas exigen el filtro por doctorId para los médicos.
+    // --- Exámenes: cada uno tiene su paciente y uno o varios médicos ---------------
+    // Un médico solo puede pedir los suyos: los que lo incluyen en doctorIds y,
+    // por los exámenes anteriores a doctorIds, los que tienen su doctorId.
     async listStudies({ doctorId } = {}) {
       const c = collection(db, 'studies');
-      return (await list(doctorId ? query(c, where('doctorId', '==', doctorId)) : c)).sort(byDateDesc);
+      if (!doctorId) return (await list(c)).map(withDoctors).sort(byDateDesc);
+      const [many, one] = await Promise.all([
+        list(query(c, where('doctorIds', 'array-contains', doctorId))),
+        list(query(c, where('doctorId', '==', doctorId)))
+      ]);
+      const byId = new Map([...one, ...many].map((s) => [s.id, s]));
+      return [...byId.values()].map(withDoctors).sort(byDateDesc);
     },
 
     // Un examen (documento de "studies") = modalidad + archivos. Los exámenes del mismo
     // paciente, médico y fecha forman un grupo (ver services/groups.js).
-    async uploadStudy({ patient, doctorId, modality, description, date, files, onProgress }) {
+    async uploadStudy({ patient, doctorIds, modality, description, date, files, onProgress }) {
       const r = doc(collection(db, 'studies'));
       const uploaded = await uploadFiles(r.id, files, [], onProgress);
       await setDoc(r, {
         code: studyCode(r.id),
         patientId: patient.id, ...studyPatientFields(patient),
-        doctorId: doctorId || null,
+        ...studyDoctors(doctorIds),
         modality, description, date,
         files: uploaded, totalSize: sizeOf(uploaded),
         status: 'Nuevo', createdAt: serverTimestamp(), updatedAt: serverTimestamp()
@@ -191,7 +225,7 @@ export async function createFirebaseBackend() {
       return r.id;
     },
 
-    setStudyDoctor: (studyId, doctorId) => editStudy(studyId, { doctorId: doctorId || null }),
+    setStudyDoctors: (studyId, doctorIds) => editStudy(studyId, studyDoctors(doctorIds)),
 
     // Datos del examen: modalidad, descripción, fecha y médico.
     updateStudy: (study, changes) => editStudy(study.id, studyEdits(changes)),
@@ -231,6 +265,39 @@ export async function createFirebaseBackend() {
     async fileUrls(study) {
       return Promise.all((study.files || []).map(async (f) => ({ name: f.name, url: await getDownloadURL(ref(storage, f.path)) })));
     },
+
+    // --- Servicios y horario (settings/agenda; lectura pública) ------------------------
+    async getAgendaSettings() {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'agenda'));
+        return snap.exists() ? snap.data() : null;
+      } catch (e) { return null; }
+    },
+
+    async saveAgendaSettings(cfg) {
+      const data = fail(validateSettings(cfg));
+      await setDoc(doc(db, 'settings', 'agenda'), { ...toStored(data), updatedAt: serverTimestamp() });
+      return data;
+    },
+
+    // --- Cobros ------------------------------------------------------------------------
+    async listPayments() {
+      return (await list(collection(db, 'payments'))).sort(byDateDesc);
+    },
+
+    // Crea (id vacío) o reemplaza un cobro.
+    async savePayment(id, input) {
+      const data = fail(normalizePayment(input));
+      if (id) {
+        await updateDoc(doc(db, 'payments', id), { ...data, updatedAt: serverTimestamp() });
+        return id;
+      }
+      const r = doc(collection(db, 'payments'));
+      await setDoc(r, { ...data, createdBy: auth.currentUser ? auth.currentUser.uid : null, createdAt: serverTimestamp() });
+      return r.id;
+    },
+
+    deletePayment: (id) => deleteDoc(doc(db, 'payments', id)),
 
     // --- Agenda: público -----------------------------------------------------------
     // Turnos ocupados entre dos fechas (públicos: no contienen datos personales).

@@ -23,7 +23,8 @@ Siga **[FIREBASE.md](FIREBASE.md)** para crear el proyecto, el primer administra
 Sin configurar Firebase el sitio funciona en **modo demostración** (datos de ejemplo en memoria):
 
 - Médico: `doctor@dentfrucer.com` / `demo1234`
-- Administrador: `admin@dentfrucer.com` / `demo1234`
+- Administrador general: `admin@dentfrucer.com` / `demo1234`
+- Administradores con permisos limitados: `secretaria@dentfrucer.com` (agenda, pacientes, cobros) y `tecnologo@dentfrucer.com` (agenda, exámenes, pacientes), con la misma contraseña
 
 Con Firebase ya configurado, agregue `?demo=1` a la URL (por ejemplo `login.html?demo=1`) para probar la interfaz con datos de ejemplo sin tocar datos reales; `?demo=0` vuelve al modo normal.
 
@@ -43,32 +44,55 @@ En el panel de administración, la sección **Agenda** tiene tres vistas:
 
 El panel recuerda la última vista elegida. Desde cualquiera de ellas se puede **crear, editar y borrar citas** (cambiar el día o la hora mueve el turno; cancelar o borrar lo libera). **Cargar examen** desde una cita rellena el paciente, la modalidad y la fecha, sugiere el médico que indicó el paciente y, al subir los archivos, la cita queda como *Atendida*.
 
-Horarios, duración de los turnos, días cerrados, tipos de examen e indicaciones se editan en `assets/js/config/agenda-config.js`. En modo demostración (`agendar.html?demo=1`) las citas se guardan solo en la pestaña del navegador. Un enlace como `agendar.html?examen=CBCT` deja el examen preseleccionado.
+Los **servicios** (con su precio) y el **horario** de la agenda en línea se editan en el panel, en *Servicios y horarios* (ver más abajo); `assets/js/config/agenda-config.js` tiene los valores iniciales, la dirección, el teléfono y las indicaciones de la cita. En modo demostración (`agendar.html?demo=1`) las citas se guardan solo en la pestaña del navegador. Un enlace como `agendar.html?examen=CBCT` deja el examen preseleccionado.
 
 ## Navegación
 
-En el panel de administración (Agenda, Exámenes, Cargar examen, Pacientes, Médicos) y en el portal del médico (Exámenes, Mis pacientes), cada opción del menú lateral muestra **solo su sección**. La sección va en la dirección (`admin.html#examenes`), así que se conserva al recargar, se puede guardar como marcador y funcionan atrás/adelante. Con un examen abierto en el visor, el botón **atrás** del navegador cierra el visor (si hay mediciones sin guardar, pregunta antes). Lo resuelve `assets/js/pages/views.js` con los elementos marcados `data-section`.
+En el panel de administración (Resumen, Agenda, Exámenes, Cargar examen, Pacientes, Médicos, Cobros, Servicios y horarios, Usuarios) y en el portal del médico (Exámenes, Mis pacientes), cada opción del menú lateral muestra **solo su sección**. La sección va en la dirección (`admin.html#examenes`), así que se conserva al recargar, se puede guardar como marcador y funcionan atrás/adelante. Con un examen abierto en el visor, el botón **atrás** del navegador cierra el visor (si hay mediciones sin guardar, pregunta antes). Lo resuelve `assets/js/pages/views.js` con los elementos marcados `data-section`.
 
 ## Pacientes, exámenes y médicos
 
-Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (nombre, apellido, expediente, edad, correo, teléfono) y se edita desde la tabla *Pacientes*. Cada **examen** pertenece a un paciente **y** a un médico, que se elige al cargarlo y se puede cambiar en la tabla *Exámenes*. El médico ve en su portal los exámenes que tiene asignados, y su lista *Mis pacientes* sale de esos exámenes. Un mismo paciente puede tener exámenes para médicos distintos.
+Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (nombre, apellido, expediente, edad, correo, teléfono) y se edita desde la tabla *Pacientes*. Cada **examen** pertenece a un paciente y a **uno o varios médicos**, que se eligen al cargarlo y se pueden cambiar después. Cada médico ve en su portal los exámenes que tiene asignados, y su lista *Mis pacientes* sale de esos exámenes.
 
-### Grupos de exámenes y explorador
+### Visitas y explorador
 
-- Los exámenes de un mismo **paciente**, para un mismo **médico** y en la misma **fecha** forman un **grupo**, se suban juntos o por separado. El grupo se calcula a partir de los exámenes: si uno cambia de médico o de fecha, pasa solo al grupo que corresponde.
-- **Cargar examen** admite varios exámenes en una subida (por ejemplo CBCT + panorámica), cada uno con su modalidad, sus imágenes (archivos sueltos o una carpeta) y **su informe PDF**, y avisa si se sumarán a un grupo existente.
-- La tabla de **exámenes** muestra un grupo por fila. Se busca por paciente, médico, código, examen o **fecha** ("08/10/2026", "8 oct 2026", "oct 2026") y se filtra por un día.
-- El **explorador** se abre desde un grupo, desde un paciente (todas sus visitas por fecha) o desde un médico (sus pacientes y las visitas de cada uno), con migas de pan para moverse entre niveles.
-- **Dentro de un grupo** se puede:
-  - **Exámenes** (del **modificado más recientemente** al más antiguo: subida, archivos agregados, renombrados o eliminados, o datos editados; cada uno muestra «Modificado …»): verlos en el visor, editar modalidad, descripción, fecha y médico, agregar otro examen y eliminarlos. Cada examen muestra por separado sus **imágenes** y su **informe**; si aún no tiene informe aparece «Sin informe» y el botón *Subir informe (PDF)*.
-  - **Archivos**: subir más, abrir los PDF, descargar, renombrar y eliminar.
-  - **Médico**: cambiar el de todo el grupo de una vez.
+- Los exámenes de un mismo **paciente**, para los mismos **médicos** y en la misma **fecha** forman una **visita**, se suban juntos o por separado. La visita se calcula a partir de los exámenes: si uno cambia de médicos o de fecha, pasa sola a la visita que corresponde.
+- **Cargar examen** admite varios exámenes en una subida (por ejemplo CBCT + panorámica), para uno o varios médicos, cada uno con su modalidad, sus imágenes (archivos sueltos o una carpeta) y **su informe PDF**, y avisa si se sumarán a una visita existente.
+- La tabla de **exámenes** muestra una visita por fila, con sus médicos. Se busca por paciente, médico, código, examen o **fecha** ("08/10/2026", "8 oct 2026", "oct 2026"), se filtra por un día y por *No vistos*, *Sin médico*, *Sin informe* o *CBCT*.
+- El **explorador** se abre desde una visita, desde un **paciente** (clic en su fila o *Ver exámenes*: todas sus visitas con todos sus exámenes, que se abren en el visor desde ahí) o desde un **médico** (sus pacientes y las visitas de cada uno). Arriba, una ruta *Médico › Paciente › Visita* con botón para volver.
+- **Una visita** muestra un resumen (paciente, médicos, contenido y cobro) y sus exámenes numerados (del **modificado más recientemente** al más antiguo). Cada examen indica si falta el informe y si el médico ya lo vio, y separa en dos columnas sus **imágenes** y su **informe**. Se puede:
+  - **Exámenes**: verlos en el visor, editar modalidad, descripción, fecha y médicos, agregar otro examen y eliminarlos.
+  - **Archivos**: subir imágenes o el informe, abrir los PDF, descargar, renombrar y eliminar.
+  - **Médicos**: agregar o quitar médicos de toda la visita de una vez.
+  - **Cobro**: ver lo cobrado ese día al paciente y registrar el cobro con los exámenes de la visita ya propuestos.
+- Sin el permiso *Exámenes*, el explorador es de solo lectura.
 - En el **portal del médico** los exámenes también se ven agrupados por **visita** (paciente + fecha); cada examen indica si tiene informe y, si lo tiene, el botón *Informe* lo abre directamente. Hay búsqueda por paciente, examen o fecha, filtro por día y por modalidad, y «Ver exámenes» desde *Mis pacientes*.
 - Los **informes PDF** van con su examen (o, si es un informe suelto, como examen de modalidad *Informe*); en el visor están siempre el botón **Informe** del encabezado y la pestaña *Informes*: abren el PDF o, si el examen aún no tiene informe, lo avisan.
 
-### Cuentas de administración
+### Cuentas de administración y permisos
 
-Puede haber varios administradores: el panel muestra el **correo** de la cuenta en sesión y, con el lápiz junto a él (*Mi cuenta*), se cambia el **nombre** visible (`users/{uid}.name`). El correo no se cambia desde el panel.
+- El **administrador general** puede hacer todo y es el único que ve la sección **Usuarios**, donde crea cuentas de administración con su **nombre**, una **descripción** libre (secretaria, tecnólogo…) y sus **permisos**: *Resumen*, *Agenda*, *Exámenes* (ver, cargar y editar), *Pacientes*, *Médicos*, *Cobros* y *Servicios y horarios*. Una cuenta también puede ser administrador general.
+- Cada cuenta ve en el menú solo las secciones que tiene permitidas; las reglas de Firestore aplican los mismos permisos.
+- Las cuentas no se borran: se **desactivan** (no pueden entrar) y se pueden reactivar. Nadie puede quitarse sus propios permisos ni desactivarse.
+- El primer administrador (creado a mano, sin permisos guardados) es administrador general.
+- Cada cuenta ve su **correo** en el panel y cambia su **nombre** visible con el lápiz (*Mi cuenta*).
+
+## Cobros
+
+La sección **Cobros** registra lo cobrado en cada atención: paciente, fecha, **servicios** (con el precio de *Servicios y horarios*, editable), **descuento**, **medio de pago** (efectivo, débito, crédito, transferencia, convenio u otro) y el **documento entregado** con su número (boleta, voucher del terminal, factura o ninguno). La página **no emite** boletas ni facturas: solo guarda su número.
+
+- Se registra desde la sección, desde una cita de la agenda (**Cobrar**; la columna *Cobro* muestra lo pagado) o desde una visita (con sus exámenes ya propuestos).
+- La lista se filtra por fechas, medio de pago y búsqueda, con el total del período y por medio de pago.
+
+## Resumen
+
+El **Resumen** muestra, para el período elegido (*Hoy*, *Esta semana*, *Este mes*, *Mes anterior*, *Este año* o **desde / hasta**): ingresos (y su cambio frente al período anterior de igual largo), cantidad de cobros y promedio, exámenes realizados, citas por estado, ingresos por día, semana o mes, ingresos por **medio de pago** y por **servicio**, exámenes por modalidad y por médico, y las **citas atendidas sin cobro** para cobrarlas.
+
+## Servicios y horarios
+
+- **Servicios**: nombre, descripción (la ven los pacientes al agendar), modalidad del examen, **precio** y si se puede agendar en línea. El precio se propone al registrar un cobro.
+- **Horario de la agenda en línea**: días de atención con uno o varios rangos de horas, duración de cada turno, cuántos días adelante se puede agendar, anticipación mínima y días sin atención (feriados, vacaciones).
+- Se guarda en Firestore (`settings/agenda`) y la agenda pública lo usa de inmediato.
 
 ## Resultados para pacientes (desactivado)
 
@@ -118,9 +142,14 @@ assets/js/
     mode.js              ¿modo demostración?
     agenda.js            turnos, estados y validación de las citas
     people.js            validación de nombres y contacto de pacientes
+    groups.js            visitas: exámenes del mismo paciente, médicos y fecha
+    permissions.js       permisos de las cuentas de administración
+    payments.js          cobros: medios de pago, documentos y validación
+    settings.js          servicios y horario guardados (settings/agenda)
   ui/                    utilidades compartidas: iconos, modales, formatos
   pages/                 lógica de cada página: landing, login, portal, agenda, results
-    admin/               panel: index (estado) + agenda, calendar, studies, explorer, upload, people, account
+    admin/               panel: index (estado y permisos) + dashboard, agenda, calendar, studies, explorer,
+                         upload, people, payments, schedule, users, account
   viewer/
     index.js             abre el visor (completo o de solo lectura) y elige el modo
     shell.js             estructura visual: encabezado, barras, paneles

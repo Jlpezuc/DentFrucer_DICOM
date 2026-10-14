@@ -2,19 +2,22 @@
 //   backend/firebase.js  Authentication + Firestore + Storage (cuando firebase-config.js está completo)
 //   backend/demo.js      datos de ejemplo, para ver la interfaz sin Firebase
 //
-// Modelo en Firestore:
-//  users/{uid}        { name, email, role: 'admin' | 'doctor', specialty }
+// Modelo en Firestore (detalle en FIREBASE.md):
+//  users/{uid}        { name, email, role: 'admin' | 'doctor', specialty,
+//                       description, superadmin, permissions, disabled }   (permisos: services/permissions.js)
 //  patients/{id}      { name, firstName, lastName, email, phone, code, age, source: 'agenda' | 'panel', createdAt }
 //                     Solo identidad y contacto: los pacientes NO tienen médico.
-//  studies/{id}       { code, patientId, patientName, patientCode, patientAge, doctorId,
+//  studies/{id}       { code, patientId, patientName, patientCode, patientAge, doctorIds, doctorId,
 //                       modality, description, date: 'YYYY-MM-DD', files: [{ name, path, size }],
 //                       totalSize, status: 'Nuevo' | 'Visto', createdAt, updatedAt }
-//                     updatedAt: último cambio hecho por la clínica (orden dentro del grupo).
-//                     Cada examen pertenece a un paciente y a un médico (doctorId), que lo ve en su portal.
+//                     Cada examen es de un paciente y de uno o varios médicos (doctorIds; doctorId = el primero).
+//                     updatedAt: último cambio hecho por la clínica (orden dentro de la visita).
 //  appointments/{id}  { code, firstName, lastName, name, email, phone, referrer, exam,
 //                       date: 'YYYY-MM-DD', time: 'HH:MM', slotId, patientId,
 //                       status: 'Pendiente' | 'Atendida' | 'No asistió' | 'Cancelada', createdAt }
 //  slots/{fecha_hora} { date, time, appointmentId }   turnos ocupados, sin datos personales
+//  payments/{id}      cobros (services/payments.js)
+//  settings/agenda    servicios y horario de la agenda (services/settings.js)
 // Archivos en Storage: studies/{studyId}/{nombre de archivo}
 
 import { createDemoBackend } from './backend/demo.js';

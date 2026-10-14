@@ -1,20 +1,30 @@
 rules_version = '2';
 
 // DentFrucer — reglas de Storage.
-// Archivos en studies/{studyId}/...: los sube y borra un administrador;
-// los lee un administrador o el médico asignado al examen en Firestore.
+// Archivos en studies/{studyId}/...: los sube y borra un administrador con el
+// permiso "Exámenes" (o el administrador general); los lee cualquier
+// administrador activo o un médico asignado al examen en Firestore (doctorIds,
+// o doctorId en exámenes anteriores).
 service firebase.storage {
   match /b/{bucket}/o {
+    function user() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
     function isAdmin() {
-      return request.auth != null
-        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return request.auth != null && user().role == 'admin' && user().get('disabled', false) != true;
+    }
+    function canExams() {
+      return isAdmin() && (user().get('superadmin', false) == true || !('permissions' in user())
+        || user().permissions.get('examenes', false) == true);
+    }
+    function isStudyDoctor(studyId) {
+      let s = firestore.get(/databases/(default)/documents/studies/$(studyId)).data;
+      return s.get('doctorId', null) == request.auth.uid || request.auth.uid in s.get('doctorIds', []);
     }
 
     match /studies/{studyId}/{allPaths=**} {
-      allow read: if request.auth != null
-        && (isAdmin()
-            || firestore.get(/databases/(default)/documents/studies/$(studyId)).data.doctorId == request.auth.uid);
-      allow write: if isAdmin();
+      allow read: if request.auth != null && (isAdmin() || isStudyDoctor(studyId));
+      allow write: if canExams();
     }
   }
 }
