@@ -117,6 +117,8 @@ service cloud.firestore {
       allow update: if can('examenes')
         // Al editar un paciente se actualizan sus datos copiados en los exámenes.
         || (can('pacientes') && changes().hasOnly(['patientName', 'patientCode', 'patientAge']))
+        // Estado de pago de la visita: lo cambia quien registra cobros.
+        || (can('cobros') && changes().hasOnly(['paid']))
         || (ownsRecord(resource.data) && changes().hasOnly(['status']) && request.resource.data.status == 'Visto');
     }
 

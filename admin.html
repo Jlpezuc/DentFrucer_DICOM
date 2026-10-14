@@ -126,6 +126,7 @@
             <button type="button" data-filter="new" aria-selected="false">No vistos</button>
             <button type="button" data-filter="nodoctor" aria-selected="false">Sin médico</button>
             <button type="button" data-filter="noreport" aria-selected="false">Sin informe</button>
+            <button type="button" data-filter="unpaid" aria-selected="false">Por cobrar</button>
             <button type="button" data-filter="cbct" aria-selected="false">CBCT</button>
           </div>
           <div class="panel-actions">
@@ -140,8 +141,8 @@
         <p class="panel-note">Cada fila es una <strong>visita</strong>: los exámenes que un paciente se hizo un mismo día, para los mismos médicos. Ábrala para ver, editar o agregar archivos.</p>
         <div class="table-wrap">
           <table class="data">
-            <thead><tr><th>Paciente</th><th>Fecha</th><th>Médicos</th><th>Exámenes</th><th>Archivos</th><th></th></tr></thead>
-            <tbody id="studies-body"><tr><td colspan="6"><div class="empty">Cargando…</div></td></tr></tbody>
+            <thead><tr><th>Paciente</th><th>Fecha</th><th>Médicos</th><th>Exámenes</th><th>Archivos</th><th>Pago</th><th></th></tr></thead>
+            <tbody id="studies-body"><tr><td colspan="7"><div class="empty">Cargando…</div></td></tr></tbody>
           </table>
         </div>
       </section>
@@ -346,6 +347,11 @@
         <div class="form-row">
           <div class="field"><label for="py-patient">Paciente</label><select class="input select" id="py-patient" name="patientId" required></select></div>
           <div class="field"><label for="py-date">Fecha</label><input class="input" type="date" id="py-date" name="date" required></div>
+        </div>
+        <div class="field">
+          <label for="py-visit">Visita <span class="opt">(opcional)</span></label>
+          <select class="input select" id="py-visit"></select>
+          <span class="hint" id="py-visit-hint">Elija una visita para cargar sus exámenes como servicios; la visita quedará marcada como pagada. Déjelo en «Sin visita» para cobrar un servicio suelto.</span>
         </div>
         <div class="field">
           <span class="field-label">Servicios cobrados</span>

@@ -6,6 +6,7 @@
 import { agendaConfig } from '../../config/agenda-config.js';
 import { addDays, adminDayTimes, APPOINTMENT_STATUSES, examLabel, isActive, parseIso, slotId } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
+import { groupStudies } from '../../services/groups.js';
 import { fmtCLP } from '../../services/payments.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
@@ -63,12 +64,15 @@ export function createAgenda(ctx) {
     // Cobros de cada cita (los que la mencionan) para mostrar si ya se pagó.
     const paidBy = new Map();
     state.payments.forEach((x) => { if (x.appointmentId) paidBy.set(x.appointmentId, (paidBy.get(x.appointmentId) || 0) + (x.total || 0)); });
+    // Visitas pagadas (paciente + día): la cita cuenta como cobrada aunque el cobro no la mencione.
+    const paidDays = new Set(groupStudies(state.studies).filter((g) => g.payState === 'paid').map((g) => g.patientId + '|' + g.date));
     body.innerHTML = rows.map((a) => {
       const when = escapeHtml(a.time) + (oneDay ? '' : '<small>' + fmtDate(a.date) + '</small>');
       const id = escapeHtml(a.id);
       const paid = paidBy.get(a.id);
       const payCell = paid !== undefined
         ? '<span class="badge green" title="Cobro registrado">' + fmtCLP(paid) + '</span>'
+        : paidDays.has(a.patientId + '|' + a.date) ? '<span class="badge green" title="La visita de este día está pagada">Pagada</span>'
         : (ctx.can('cobros') && isActive(a) && a.status !== 'No asistió' ? '<button class="btn btn-ghost btn-sm" type="button" data-pay="' + id + '" title="Registrar el cobro de esta cita">' + icon('cash') + ' Cobrar</button>' : '');
       return '<tr class="appt-row' + (isActive(a) ? '' : ' done') + '">' +
         '<td><span class="appt-time">' + when + '</span></td>' +

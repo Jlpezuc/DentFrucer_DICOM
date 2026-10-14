@@ -227,6 +227,14 @@ export async function createFirebaseBackend() {
 
     setStudyDoctors: (studyId, doctorIds) => editStudy(studyId, studyDoctors(doctorIds)),
 
+    // Estado de pago de exámenes (una visita). No cuenta como modificación del examen.
+    async setStudiesPaid(ids, paid) {
+      if (!ids.length) return;
+      const batch = writeBatch(db);
+      ids.forEach((id) => batch.update(doc(db, 'studies', id), { paid: !!paid }));
+      await batch.commit();
+    },
+
     // Datos del examen: modalidad, descripción, fecha y médico.
     updateStudy: (study, changes) => editStudy(study.id, studyEdits(changes)),
 

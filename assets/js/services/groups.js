@@ -23,7 +23,10 @@ const millis = (t) => (!t ? 0 : typeof t === 'number' ? t : t.toMillis ? t.toMil
 export const modifiedAt = (s) => millis(s.updatedAt) || millis(s.createdAt);
 
 // [{ key, patientId, patientName, patientCode, patientAge, doctorIds, date,
-//    studies, fileCount, totalSize, hasNew, hasReport, missingReports, modalities }] (más recientes primero).
+//    studies, fileCount, totalSize, hasNew, hasReport, missingReports, modalities,
+//    payState: 'paid' | 'partial' | 'unpaid' }] (más recientes primero).
+// payState: la visita está pagada si todos sus exámenes tienen paid: true (se
+// marcan al registrar un cobro de la visita o a mano desde el explorador).
 // Dentro de cada visita, los exámenes van del modificado más recientemente al más antiguo.
 // byDoctor: false agrupa solo por paciente y fecha (portal del médico).
 export function groupStudies(studies, { byDoctor = true } = {}) {
@@ -47,10 +50,17 @@ export function groupStudies(studies, { byDoctor = true } = {}) {
       hasNew: g.studies.some((s) => s.status === 'Nuevo'),
       hasReport: files.some(isPdf),
       missingReports: g.studies.filter((s) => s.modality !== 'Informe' && !(s.files || []).some(isPdf)).length,
+      payState: payStateOf(g.studies),
       modalities: [...new Set(g.studies.map((s) => s.modality))]
     };
   }).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (a.patientName || '').localeCompare(b.patientName || '', 'es'));
 }
+
+export function payStateOf(studies) {
+  const paid = studies.filter((s) => s.paid === true).length;
+  return paid === 0 ? 'unpaid' : paid === studies.length ? 'paid' : 'partial';
+}
+export const PAY_STATE = { paid: 'Pagada', partial: 'Pago parcial', unpaid: 'Por cobrar' };
 
 // Texto con el que se puede buscar una visita: paciente, expediente, médicos,
 // códigos y modalidades, y la fecha en varios formatos (2026-10-08, 08/10/2026, 8 oct 2026).

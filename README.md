@@ -81,12 +81,14 @@ Los **pacientes no tienen médico**: la ficha guarda solo identidad y contacto (
 
 La sección **Cobros** registra lo cobrado en cada atención: paciente, fecha, **servicios** (con el precio de *Servicios y horarios*, editable), **descuento**, **medio de pago** (efectivo, débito, crédito, transferencia, convenio u otro) y el **documento entregado** con su número (boleta, voucher del terminal, factura o ninguno). La página **no emite** boletas ni facturas: solo guarda su número.
 
-- Se registra desde la sección, desde una cita de la agenda (**Cobrar**; la columna *Cobro* muestra lo pagado) o desde una visita (con sus exámenes ya propuestos).
+- Se registra desde el botón *Registrar cobro* de arriba o de la sección, desde una cita de la agenda (**Cobrar**; la columna *Cobro* muestra lo pagado) o desde una visita.
+- **Visita (opcional)**: al elegir una visita del paciente se cargan sus exámenes como servicios, con su precio, y al guardar la visita queda **pagada**. Con *Sin visita* se cobra un **servicio suelto** (por ejemplo una copia de CD o un servicio sin examen).
+- **Estado de pago de las visitas**: *Pagada*, *Por cobrar* o *Pago parcial* (si se agregó un examen después del cobro). Se ve en la tabla *Exámenes* (con el filtro *Por cobrar*), en las visitas del paciente y en el resumen de la visita, donde también se puede **marcar a mano** como pagada o no pagada (por ejemplo, una visita pagada por convenio). Al eliminar un cobro, su visita vuelve a *Por cobrar* si ningún otro cobro la cubre.
 - La lista se filtra por fechas, medio de pago y búsqueda, con el total del período y por medio de pago.
 
 ## Resumen
 
-El **Resumen** muestra, para el período elegido (*Hoy*, *Esta semana*, *Este mes*, *Mes anterior*, *Este año* o **desde / hasta**): ingresos (y su cambio frente al período anterior de igual largo), cantidad de cobros y promedio, exámenes realizados, citas por estado, ingresos por día, semana o mes, ingresos por **medio de pago** y por **servicio**, exámenes por modalidad y por médico, y las **citas atendidas sin cobro** para cobrarlas.
+El **Resumen** muestra, para el período elegido (*Hoy*, *Esta semana*, *Este mes*, *Mes anterior*, *Este año* o **desde / hasta**): ingresos (y su cambio frente al período anterior de igual largo), cantidad de cobros y promedio, exámenes realizados, citas por estado, ingresos por día, semana o mes, ingresos por **medio de pago** y por **servicio**, exámenes por modalidad y por médico, y lo **por cobrar** (visitas no pagadas y citas atendidas sin visita ni cobro) con su botón para cobrar.
 
 ## Servicios y horarios
 

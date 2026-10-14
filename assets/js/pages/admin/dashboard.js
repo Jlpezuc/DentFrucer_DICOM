@@ -5,12 +5,14 @@
 //                 exámenes, citas y citas atendidas sin cobro
 //   Gráficos      ingresos en el tiempo (columnas por día, semana o mes) y
 //                 barras horizontales por medio de pago, servicio, modalidad y médico
-//   Pendientes    citas atendidas del período que aún no tienen cobro
+//   Por cobrar    visitas del período que no están pagadas y citas atendidas sin
+//                 visita ni cobro
 //
 // Las barras usan un solo color: comparan magnitudes, no identifican series.
 // Cada gráfico tiene su tabla equivalente para lectores de pantalla.
 
 import { addDays, examLabel, isoDate, parseIso } from '../../services/agenda.js';
+import { groupStudies, PAY_STATE } from '../../services/groups.js';
 import { fmtCLP, PAYMENT_METHODS } from '../../services/payments.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
@@ -167,9 +169,13 @@ export function createDashboard(ctx) {
     const exams = state.studies.filter((s) => inRange(s.date) && s.modality !== 'Informe');
     const appts = state.appointments.filter((a) => inRange(a.date));
     const byStatus = (st) => appts.filter((a) => a.status === st).length;
+    // Por cobrar: visitas no pagadas y citas atendidas que no tienen visita ni cobro.
+    const unpaidVisits = groupStudies(state.studies).filter((g) => inRange(g.date) && g.payState !== 'paid');
     const paidAppts = new Set(state.payments.map((x) => x.appointmentId).filter(Boolean));
-    const paidVisits = new Set(state.payments.map((x) => x.patientId + '|' + x.date));
-    const unpaid = appts.filter((a) => a.status === 'Atendida' && !paidAppts.has(a.id) && !paidVisits.has(a.patientId + '|' + a.date));
+    const paidDays = new Set(state.payments.map((x) => x.patientId + '|' + x.date));
+    const visitDays = new Set(state.studies.map((x) => x.patientId + '|' + x.date));
+    const unpaidAppts = appts.filter((a) => a.status === 'Atendida' && !paidAppts.has(a.id) && !paidDays.has(a.patientId + '|' + a.date) && !visitDays.has(a.patientId + '|' + a.date));
+    const pending = unpaidVisits.length + unpaidAppts.length;
     const canPay = ctx.can('cobros');
     const seeMoney = ctx.can('cobros') || ctx.can('resumen');
 
@@ -203,7 +209,7 @@ export function createDashboard(ctx) {
         ${seeMoney ? tile('Cobros', String(pays.length), pays.length ? 'Promedio ' + fmtCLP(income / pays.length) : '') : ''}
         ${tile('Exámenes realizados', String(exams.length), new Set(exams.map((s) => s.patientId)).size + ' pacientes')}
         ${tile('Citas', String(appts.filter((a) => a.status !== 'Cancelada').length), byStatus('Atendida') + ' atendidas · ' + byStatus('No asistió') + ' no asistieron · ' + byStatus('Cancelada') + ' canceladas')}
-        ${tile('Atendidas sin cobro', String(unpaid.length), unpaid.length ? 'Revise la lista de abajo' : 'Todo cobrado', unpaid.length ? 'kpi-warn' : '')}
+        ${tile('Por cobrar', String(pending), pending ? (unpaidVisits.length + ' visitas' + (unpaidAppts.length ? ' · ' + unpaidAppts.length + ' citas' : '') + ' · ver abajo') : 'Todo cobrado', pending ? 'kpi-warn' : '')}
       </div>
       <div class="dash-grid">
         ${seeMoney ? timeChart(currentBuckets) : ''}
@@ -213,11 +219,13 @@ export function createDashboard(ctx) {
         ${barList('Exámenes por médico', doctorRows, { share: false, empty: 'Sin exámenes en el período.' })}
       </div>
       <section class="dash-card dash-wide">
-        <h3>Citas atendidas sin cobro</h3>
-        ${unpaid.length ? `<table class="data compact"><thead><tr><th>Fecha</th><th>Paciente</th><th>Servicio</th><th></th></tr></thead><tbody>${unpaid.map((a) => `
-          <tr><td>${fmtDate(a.date)} <span class="muted">${escapeHtml(a.time)}</span></td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(examLabel(a.exam))}</td>
+        <h3>Por cobrar</h3>
+        ${pending ? `<table class="data compact"><thead><tr><th>Fecha</th><th>Paciente</th><th>Exámenes o servicio</th><th>Estado</th><th></th></tr></thead><tbody>${unpaidVisits.map((g) => `
+          <tr><td>${fmtDate(g.date)}</td><td>${escapeHtml(g.patientName)}</td><td>${escapeHtml(g.modalities.join(', '))}</td><td><span class="badge ${g.payState === 'partial' ? 'amber' : 'gray'}">${PAY_STATE[g.payState]}</span></td>
+          <td><div class="row-actions">${canPay ? `<button class="btn btn-outline btn-sm" type="button" data-pay-visit="${escapeHtml(g.key)}">${icon('cash')} Cobrar</button>` : ''}</div></td></tr>`).join('')}${unpaidAppts.map((a) => `
+          <tr><td>${fmtDate(a.date)} <span class="muted">${escapeHtml(a.time)}</span></td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(examLabel(a.exam))}</td><td><span class="badge gray">Cita sin cobro</span></td>
           <td><div class="row-actions">${canPay ? `<button class="btn btn-outline btn-sm" type="button" data-pay-appt="${escapeHtml(a.id)}">${icon('cash')} Cobrar</button>` : ''}</div></td></tr>`).join('')}</tbody></table>`
-        : '<p class="muted dash-empty">No hay citas atendidas pendientes de cobro en el período.</p>'}
+        : '<p class="muted dash-empty">Todas las visitas y citas atendidas del período están cobradas.</p>'}
       </section>`;
   }
 
@@ -238,6 +246,9 @@ export function createDashboard(ctx) {
   });
   out.addEventListener('pointerleave', () => { const tip = out.querySelector('.tc-tip'); if (tip) tip.hidden = true; out.querySelectorAll('.tc-col.on').forEach((c) => c.classList.remove('on')); });
   out.addEventListener('click', (e) => {
+    const v = e.target.closest('[data-pay-visit]');
+    const g = v && groupStudies(state.studies).find((x) => x.key === v.dataset.payVisit);
+    if (g) { ctx.openPayment({ patientId: g.patientId, date: g.date, visitKey: g.key }); return; }
     const b = e.target.closest('[data-pay-appt]');
     if (!b) return;
     const a = state.appointments.find((x) => x.id === b.dataset.payAppt);
