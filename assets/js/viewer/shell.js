@@ -40,7 +40,7 @@ export function createShell({ study, onClose, viewOnly = false }) {
       <div class="dv-study">
         <div class="dv-patient">${escapeHtml(study.patientName || 'Paciente')}</div>
         <div class="dv-study-meta">
-          <span class="dv-chip dv-chip-mod" data-mode-label>${escapeHtml(study.modality || 'Examen')}</span>
+          <span class="dv-chip dv-chip-mod" data-mode-label>${escapeHtml(study.service || 'Examen')}</span>
           ${study.patientCode ? `<span>${escapeHtml(study.patientCode)}</span>` : ''}
           ${study.patientAge ? `<span>${escapeHtml(study.patientAge)} años</span>` : ''}
           ${study.date ? `<span>${escapeHtml(new Date(study.date + 'T12:00:00').toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }))}</span>` : ''}
@@ -100,7 +100,6 @@ export function createShell({ study, onClose, viewOnly = false }) {
   const $ = (s) => root.querySelector(s);
   const toolbar = $('.dv-toolbar');
   const stage = $('.dv-stage');
-  const panel = $('.dv-panel');
   const tabs = $('.dv-tabs');
   const tabBodies = $('.dv-tab-bodies');
   const hintEl = $('.dv-hint');
@@ -282,7 +281,8 @@ export function createShell({ study, onClose, viewOnly = false }) {
     on(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); },
     toast,
 
-    setModeLabel(text) { $('[data-mode-label]').textContent = text; },
+    // El encabezado muestra el servicio del examen; el modo solo lo nombra si no hay servicio.
+    setModeLabel(text) { if (!study.service) $('[data-mode-label]').textContent = text; },
 
     // Carga y errores
     setLoading({ title, detail, progress } = {}) {

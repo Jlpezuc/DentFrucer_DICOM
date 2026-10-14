@@ -15,8 +15,6 @@
 
 import { createFrame, nextKey } from './frame.js';
 
-export const AXES = ['axial', 'coronal', 'sagital'];
-
 export function createVolume(props) {
   const vol = { key: nextKey('v'), units: '', invert: false, meta: {}, ...props };
   if (vol.min === undefined) {

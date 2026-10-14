@@ -1,6 +1,7 @@
 // Utilidades compartidas por las secciones del panel de administración.
 
 import { plainText } from '../../services/people.js';
+import { activeServices, serviceById } from '../../services/settings.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { initials } from '../../ui/format.js';
 
@@ -11,11 +12,6 @@ export function personCell(name, subHtml, tagHtml = '') {
 }
 
 export const contactOf = (x) => [x.email, x.phone].filter(Boolean).map(escapeHtml).join(' · ');
-
-export function doctorOptions(doctors, selected, emptyLabel = 'Sin médico') {
-  return '<option value="">' + escapeHtml(emptyLabel) + '</option>' +
-    doctors.map((d) => '<option value="' + escapeHtml(d.id) + '"' + (d.id === selected ? ' selected' : '') + '>' + escapeHtml(d.name) + '</option>').join('');
-}
 
 // Médico registrado cuyo nombre coincide con el texto escrito por el paciente
 // ("Dra. Laura Méndez", "laura mendez"…), o undefined.
@@ -86,4 +82,12 @@ export function bindDoctorPickers(root, getDoctors, onChange = () => {}) {
     e.stopPropagation();
     redraw(picker, [...pickerValue(picker), sel.value]);
   });
+}
+
+// Opciones de servicio para un <select>: los servicios activos y, si el examen
+// ya tiene uno desactivado o eliminado, también ese (para no perderlo al editar).
+export function serviceOptions(selectedId = '', selectedName = '') {
+  const list = activeServices().map((sv) => [sv.id, sv.label]);
+  if (selectedId && !list.some(([id]) => id === selectedId)) list.push([selectedId, (serviceById(selectedId) || {}).label || selectedName || selectedId]);
+  return list.map(([id, label]) => `<option value="${escapeHtml(id)}"${id === selectedId ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
 }

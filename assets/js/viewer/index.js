@@ -24,7 +24,7 @@ import { escapeHtml } from '../ui/dom.js';
 import { fmtSize } from '../ui/format.js';
 import { icon } from '../ui/icons.js';
 import { DownloadError, loadStudy } from './data/loader.js';
-import { pickProfile } from './core/profiles.js';
+import { examKind, pickProfile } from './core/profiles.js';
 import { createShell } from './shell.js';
 import { startImageMode } from './modes/image-mode.js';
 import { startVolumeMode } from './modes/volume-mode.js';
@@ -62,6 +62,8 @@ export async function openViewer(study, { backend, isDemo, viewOnly = false, fil
   let closed = false;
   shell.on('close', () => { closed = true; });
 
+  // El tipo de imagen se deduce de los archivos y del nombre del servicio.
+  const serviceText = [study.service, study.serviceId, study.modality, study.description].filter(Boolean).join(' ');
   const files = { list: null };
   const download = async () => {
     try {
@@ -76,7 +78,7 @@ export async function openViewer(study, { backend, isDemo, viewOnly = false, fil
     if (isDemo) {
       shell.setLoading({ title: 'Preparando examen de demostración', detail: 'Generando imágenes sintéticas…', progress: 0 });
       const { demoStudyData } = await import('./demo/phantom.js');
-      data = await demoStudyData(study.modality, (p) => shell.setLoading({ progress: p }));
+      data = await demoStudyData(examKind(serviceText), (p) => shell.setLoading({ progress: p }));
     } else {
       shell.setLoading({ title: 'Preparando examen', detail: 'Obteniendo archivos…', progress: null });
       files.list = await fileUrls();
@@ -99,7 +101,7 @@ export async function openViewer(study, { backend, isDemo, viewOnly = false, fil
     shell.hideLoading();
     const ctx = { study, data, onDownload: download, viewOnly };
     if (data.volumes.length) startVolumeMode(shell, ctx);
-    else if (data.images.length) startImageMode(shell, { ...ctx, profileId: pickProfile(study.modality, data) });
+    else if (data.images.length) startImageMode(shell, { ...ctx, profileId: pickProfile(serviceText, data) });
     else startDocumentMode(shell, ctx);
     if (hasImages) addDocumentsTab(shell, data.documents);
     if (data.warnings.length) {

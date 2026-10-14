@@ -9,7 +9,7 @@ import { normalizeAccountName, normalizePatient } from '../people.js';
 import { toStored, validateSettings } from '../settings.js';
 import {
   AccessDisabledError, agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, friendlyAuthError, normalizeAdmin,
-  sizeOf, studyCode, studyDoctors, studyEdits, studyPatientFields, withDoctors
+  sizeOf, studyCode, studyDoctors, studyEdits, studyPatientFields, studyServiceFields, withDoctors
 } from './shared.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
@@ -209,16 +209,17 @@ export async function createFirebaseBackend() {
       return [...byId.values()].map(withDoctors).sort(byDateDesc);
     },
 
-    // Un examen (documento de "studies") = modalidad + archivos. Los exámenes del mismo
-    // paciente, médico y fecha forman un grupo (ver services/groups.js).
-    async uploadStudy({ patient, doctorIds, modality, description, date, files, onProgress }) {
+    // Un examen (documento de "studies") = un servicio + sus archivos. Los exámenes del
+    // mismo paciente, médicos y fecha forman una visita (ver services/groups.js).
+    async uploadStudy({ patient, doctorIds, serviceId, service, description, date, files, onProgress }) {
+      const serviceFields = studyServiceFields(serviceId, service); // valida antes de subir archivos
       const r = doc(collection(db, 'studies'));
       const uploaded = await uploadFiles(r.id, files, [], onProgress);
       await setDoc(r, {
         code: studyCode(r.id),
         patientId: patient.id, ...studyPatientFields(patient),
         ...studyDoctors(doctorIds),
-        modality, description, date,
+        ...serviceFields, description: String(description || '').trim().slice(0, 120), date,
         files: uploaded, totalSize: sizeOf(uploaded),
         status: 'Nuevo', createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       });
@@ -235,7 +236,7 @@ export async function createFirebaseBackend() {
       await batch.commit();
     },
 
-    // Datos del examen: modalidad, descripción, fecha y médico.
+    // Datos del examen: servicio, detalle, fecha y médicos.
     updateStudy: (study, changes) => editStudy(study.id, studyEdits(changes)),
 
     // Archivos de un examen: agregar (p. ej. el informe PDF), renombrar y eliminar.

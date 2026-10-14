@@ -259,17 +259,17 @@ function lateralProjection(vol) {
   return { width: ny, height: nz, data: out };
 }
 
-// Datos de demostración según la modalidad del examen (mismo formato que loadStudy).
-export async function demoStudyData(modality, onProgress) {
+// Datos de demostración según el tipo de examen (profiles.examKind; mismo
+// formato que loadStudy).
+export async function demoStudyData(kind, onProgress) {
   const { vol, curve } = await buildPhantom(onProgress);
-  const m = (modality || '').toLowerCase();
   const result = { volumes: [], images: [], documents: [], warnings: [] };
-  if (m === 'cbct') { result.volumes.push(vol); return result; }
+  if (kind === 'cbct') { result.volumes.push(vol); return result; }
 
   const pano = asRadiograph(reconstructPanoramic(vol, curve, { thickness: 18, mode: 'avg' }).frame, 'Panorámica', [SP, SP]);
-  if (m.startsWith('panor')) result.images.push(pano);
-  else if (m.startsWith('cefal')) result.images.push(asRadiograph(lateralProjection(vol), 'Cefalometría lateral', [SP, SP]));
-  else if (m.startsWith('periap')) {
+  if (kind === 'pano') result.images.push(pano);
+  else if (kind === 'ceph') result.images.push(asRadiograph(lateralProjection(vol), 'Cefalometría lateral', [SP, SP]));
+  else if (kind === 'intraoral') {
     const w = 70, h = 90;
     const cols = [0.2, 0.4, 0.6, 0.8];
     cols.forEach((c, i) => result.images.push(crop(pano, Math.round(pano.width * c - w / 2), Math.round(pano.height / 2 - h / 2), w, h, 'Periapical ' + (i + 1))));

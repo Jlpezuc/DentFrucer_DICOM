@@ -126,7 +126,6 @@
             <button type="button" data-filter="nodoctor" aria-selected="false">Sin médico</button>
             <button type="button" data-filter="noreport" aria-selected="false">Sin informe</button>
             <button type="button" data-filter="unpaid" aria-selected="false">Por cobrar</button>
-            <button type="button" data-filter="cbct" aria-selected="false">CBCT</button>
           </div>
           <div class="panel-actions">
             <label class="search">
@@ -134,6 +133,7 @@
               <i data-icon="search"></i>
               <input class="input" id="admin-search" type="search" placeholder="Paciente, médico, ID o fecha (08/10/2026)">
             </label>
+            <label><span class="sr-only">Servicio</span><select class="input select input-sm" id="admin-service" style="width:auto"></select></label>
             <label class="date-filter"><span class="sr-only">Fecha</span><input class="input input-sm" id="admin-date" type="date" title="Ver solo los exámenes de esta fecha"></label>
           </div>
         </div>
@@ -224,7 +224,7 @@
         <div class="panel-head"><h2>Servicios</h2><button class="btn btn-primary btn-sm" type="button" data-new-service><i data-icon="plus"></i> Nuevo servicio</button></div>
         <div class="table-wrap">
           <table class="data">
-            <thead><tr><th>Servicio</th><th>Modalidad</th><th class="num">Precio</th><th>Agenda en línea</th><th></th></tr></thead>
+            <thead><tr><th>Servicio</th><th class="num">Precio</th><th>Agenda en línea</th><th></th></tr></thead>
             <tbody id="services-body"></tbody>
           </table>
         </div>
@@ -385,10 +385,7 @@
         <div class="form-error" role="alert"></div>
         <div class="field"><label for="sv-label">Nombre</label><input class="input" id="sv-label" name="label" required maxlength="60" placeholder="Radiografía panorámica"></div>
         <div class="field"><label for="sv-detail">Descripción <span class="opt">(la ven los pacientes al agendar)</span></label><input class="input" id="sv-detail" name="detail" maxlength="160"></div>
-        <div class="form-row">
-          <div class="field"><label for="sv-modality">Modalidad del examen</label><select class="input select" id="sv-modality" name="modality"></select></div>
-          <div class="field"><label for="sv-price">Precio <span class="opt">($)</span></label><input class="input" id="sv-price" name="price" inputmode="numeric" placeholder="0"></div>
-        </div>
+        <div class="field"><label for="sv-price">Precio <span class="opt">($)</span></label><input class="input" id="sv-price" name="price" inputmode="numeric" placeholder="0"></div>
         <label class="check"><input type="checkbox" name="active" id="sv-active" checked> Se puede agendar en línea</label>
         <div class="modal-foot">
           <button class="btn btn-ghost danger-text" type="button" id="sv-delete" hidden><i data-icon="trash"></i> Eliminar</button>

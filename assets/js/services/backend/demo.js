@@ -9,11 +9,12 @@ import { normalizePayment } from '../payments.js';
 import { normalizeAccountName, normalizePatient } from '../people.js';
 import { currentSettings, toStored, validateSettings } from '../settings.js';
 import {
-  agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, normalizeAdmin, sizeOf, studyDoctors, studyEdits, studyPatientFields, withDoctors
+  agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, normalizeAdmin, sizeOf, studyDoctors, studyEdits, studyPatientFields,
+  studyServiceFields, withDoctors
 } from './shared.js';
 
 const SESSION_KEY = 'dentfrucer.demo.session';
-const DB_KEY = 'dentfrucer.demo.db.v4'; // cambia la versión si cambian los datos de ejemplo
+const DB_KEY = 'dentfrucer.demo.db.v5'; // cambia la versión si cambian los datos de ejemplo
 const MB = 1024 * 1024;
 const PASSWORD = 'demo1234';
 
@@ -42,11 +43,18 @@ function seed() {
     person('ag_demo2', 'Camila', 'Rojas', { phone: '300 555 0192', source: 'agenda' })
   ];
   const patient = (id) => patients.find((p) => p.id === id);
-  const study = (id, pid, doctorIds, modality, description, date, mb, images, status, names) => ({
-    id, code: id, patientId: pid, ...studyPatientFields(patient(pid)), ...studyDoctors([].concat(doctorIds)),
-    modality, description, date, status, totalSize: mb * MB,
-    files: Array.from({ length: Math.min(images, 3) }, (_, i) => ({ name: names ? names[i] : 'IMG' + String(i + 1).padStart(4, '0') + '.dcm', path: 'demo/' + id + '/' + i, size: (mb * MB) / images }))
-  });
+  const settings = currentSettings();
+  settings.exams.forEach((e) => { e.price = DEMO_PRICES[e.id] || 0; });
+  const labelOf = (id) => (settings.exams.find((e) => e.id === id) || { label: id }).label;
+  // Examen de ejemplo: hasta 3 imágenes y, si report, su informe PDF.
+  const study = (id, pid, doctorIds, serviceId, description, date, mb, images, status, report = false) => {
+    const files = Array.from({ length: Math.min(images, 3) }, (_, i) => ({ name: 'IMG' + String(i + 1).padStart(4, '0') + '.dcm', path: 'demo/' + id + '/' + i, size: (mb * MB) / images }));
+    if (report) files.push({ name: 'Informe ' + id + '.pdf', path: 'demo/' + id + '/informe', size: 0.2 * MB });
+    return {
+      id, code: id, patientId: pid, ...studyPatientFields(patient(pid)), ...studyDoctors([].concat(doctorIds)),
+      serviceId, service: labelOf(serviceId), description, date, status, totalSize: mb * MB + (report ? 0.2 * MB : 0), files
+    };
+  };
   const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return isoDate(d); };
   const appointment = (id, pid, exam, date, time, referrer, status) => {
     const p = patient(pid);
@@ -56,45 +64,38 @@ function seed() {
     };
   };
   const studies = [
-    study('EST-2026-0418', 'p1', 'D-01', 'CBCT', 'Tomografía Cone Beam · maxilar completo', day(-6), 412, 512, 'Nuevo'),
-    study('EST-2026-0415', 'p1', 'D-01', 'Panorámica', 'Ortopantomografía digital', day(-6), 18, 1, 'Visto'),
-    study('EST-2026-0416', 'p1', 'D-01', 'Informe', 'Informe radiológico', day(-6), 0.2, 1, 'Nuevo', ['Informe EST-2026-0418.pdf']),
-    study('EST-2026-0310', 'p1', 'D-02', 'Periapical', 'Control periapical 21', day(-121), 4, 2, 'Visto'),
-    study('EST-2026-0409', 'p2', 'D-01', 'Cefalometría', 'Telerradiografía lateral de cráneo', day(-8), 22, 1, 'Visto'),
-    study('EST-2026-0402', 'p3', ['D-01', 'D-03'], 'CBCT', 'Cone Beam · ATM bilateral', day(-11), 388, 480, 'Nuevo'),
-    study('EST-2026-0397', 'p4', 'D-02', 'CBCT', 'Cone Beam · zona implante 36', day(-12), 296, 384, 'Visto'),
-    study('EST-2026-0391', 'p5', 'D-03', 'Periapical', 'Serie periapical completa', day(-14), 36, 14, 'Nuevo'),
-    study('EST-2026-0385', 'p6', 'D-01', 'Panorámica', 'Ortopantomografía digital', day(-15), 17, 1, 'Visto'),
-    study('EST-2026-0380', 'p7', 'D-02', 'CBCT', 'Cone Beam · seno maxilar', day(-17), 402, 500, 'Visto'),
-    study('EST-2026-0371', 'p2', 'D-01', 'Panorámica', 'Ortopantomografía digital', day(-24), 17, 1, 'Visto'),
-    study('EST-2026-0364', 'p5', 'D-02', 'CBCT', 'Cone Beam · zona implante 46', day(-31), 301, 390, 'Visto'),
-    study('EST-2026-0358', 'p3', 'D-03', 'Periapical', 'Periapical 36', day(-38), 3, 1, 'Visto'),
-    study('EST-2026-0352', 'p7', 'D-01', 'Cefalometría', 'Telerradiografía lateral de cráneo', day(-45), 21, 1, 'Visto'),
-    study('EST-2026-0347', 'p4', 'D-02', 'Panorámica', 'Ortopantomografía digital', day(-52), 18, 1, 'Visto'),
+    study('EST-2026-0418', 'p1', 'D-01', 'CBCT', 'Maxilar completo', day(-6), 412, 512, 'Nuevo', true),
+    study('EST-2026-0415', 'p1', 'D-01', 'Panorámica', '', day(-6), 18, 1, 'Visto'),
+    study('EST-2026-0310', 'p1', 'D-02', 'Periapical', 'Control pieza 21', day(-121), 4, 2, 'Visto', true),
+    study('EST-2026-0409', 'p2', 'D-01', 'Cefalometría', 'Lateral de cráneo', day(-8), 22, 1, 'Visto', true),
+    study('EST-2026-0402', 'p3', ['D-01', 'D-03'], 'CBCT', 'ATM bilateral', day(-11), 388, 480, 'Nuevo'),
+    study('EST-2026-0397', 'p4', 'D-02', 'CBCT', 'Zona implante 36', day(-12), 296, 384, 'Visto'),
+    study('EST-2026-0391', 'p5', 'D-03', 'Periapical', 'Serie completa', day(-14), 36, 14, 'Nuevo'),
+    study('EST-2026-0385', 'p6', 'D-01', 'Panorámica', '', day(-15), 17, 1, 'Visto', true),
+    study('EST-2026-0380', 'p7', 'D-02', 'CBCT', 'Seno maxilar', day(-17), 402, 500, 'Visto'),
+    study('EST-2026-0371', 'p2', 'D-01', 'Panorámica', '', day(-24), 17, 1, 'Visto', true),
+    study('EST-2026-0364', 'p5', 'D-02', 'CBCT', 'Zona implante 46', day(-31), 301, 390, 'Visto', true),
+    study('EST-2026-0358', 'p3', 'D-03', 'Periapical', 'Pieza 36', day(-38), 3, 1, 'Visto', true),
+    study('EST-2026-0352', 'p7', 'D-01', 'Cefalometría', 'Lateral de cráneo', day(-45), 21, 1, 'Visto', true),
+    study('EST-2026-0347', 'p4', 'D-02', 'Panorámica', '', day(-52), 18, 1, 'Visto', true),
     study('EST-2026-0341', 'p6', 'D-01', 'Otro', 'Fotografías clínicas', day(-60), 9, 6, 'Visto')
   ];
-
-  const settings = currentSettings();
-  settings.exams.forEach((e) => { e.price = DEMO_PRICES[e.id] || 0; });
-  const labelOf = (id) => (settings.exams.find((e) => e.id === id) || { label: id }).label;
 
   // Cobros de ejemplo: uno por visita (paciente + día), con los precios de ejemplo.
   const methods = ['Débito', 'Crédito', 'Efectivo', 'Transferencia', 'Débito', 'Convenio', 'Crédito'];
   const docFor = (m) => (m === 'Débito' || m === 'Crédito' ? 'Voucher (boleta)' : m === 'Convenio' ? 'Factura' : 'Boleta');
   const visits = new Map();
-  studies.filter((x) => x.modality !== 'Informe').forEach((x) => {
+  studies.forEach((x) => {
     const k = x.patientId + '|' + x.date;
     if (!visits.has(k)) visits.set(k, []);
     visits.get(k).push(x);
   });
   const payments = [...visits.values()].map((list, i) => {
     const method = methods[i % methods.length];
-    const items = list.map((x) => ({ serviceId: x.modality, label: labelOf(x.modality), price: DEMO_PRICES[x.modality] || 0 }));
+    const items = list.map((x) => ({ serviceId: x.serviceId, label: labelOf(x.serviceId), price: DEMO_PRICES[x.serviceId] || 0 }));
     const total = items.reduce((n, it) => n + it.price, 0);
-    // Las visitas cobradas quedan pagadas (también su informe del mismo día).
-    const all = studies.filter((x) => x.patientId === list[0].patientId && x.date === list[0].date);
-    all.forEach((x) => { x.paid = true; });
-    return { id: 'pay' + (i + 1), date: list[0].date, patientId: list[0].patientId, patientName: list[0].patientName, appointmentId: null, studyIds: all.map((x) => x.id), items, discount: 0, total, method, docType: docFor(method), docNumber: String(48210 + i), note: '' };
+    list.forEach((x) => { x.paid = true; }); // la visita cobrada queda pagada
+    return { id: 'pay' + (i + 1), date: list[0].date, patientId: list[0].patientId, patientName: list[0].patientName, appointmentId: null, studyIds: list.map((x) => x.id), items, discount: 0, total, method, docType: docFor(method), docNumber: String(48210 + i), note: '' };
   }).filter((x, i) => i % 6 !== 5); // algunas visitas quedan por cobrar
   studies.forEach((x) => { if (!payments.some((p) => p.studyIds.includes(x.id))) x.paid = false; });
   payments.push({ id: 'pay-today', date: day(0), patientId: 'p3', patientName: 'Sofía Herrera', appointmentId: 'demoa4', studyIds: [], items: [{ serviceId: 'Periapical', label: 'Radiografías intraorales', price: 8000 }], discount: 0, total: 8000, method: 'Débito', docType: 'Voucher (boleta)', docNumber: '48290', note: '' });
@@ -242,12 +243,13 @@ export function createDemoBackend() {
     async listStudies({ doctorId } = {}) {
       return studies.filter((s) => !doctorId || doctorsOf(s).includes(doctorId)).map(withDoctors).sort(byDateDesc);
     },
-    async uploadStudy({ patient, doctorIds, modality, description, date, files, onProgress }) {
+    async uploadStudy({ patient, doctorIds, serviceId, service, description, date, files, onProgress }) {
+      const serviceFields = studyServiceFields(serviceId, service);
       for (let i = 1; i <= 10; i++) { await wait(80); if (onProgress) onProgress(i / 10); }
       const id = 'EST-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000) + 1000);
       studies.push({
         id, code: id, patientId: patient.id, ...studyPatientFields(patient), ...studyDoctors(doctorIds),
-        modality, description, date, status: 'Nuevo', createdAt: Date.now(), updatedAt: Date.now(),
+        ...serviceFields, description: String(description || '').trim().slice(0, 120), date, status: 'Nuevo', createdAt: Date.now(), updatedAt: Date.now(),
         files: files.map((f) => ({ name: f.name, path: 'demo/' + newId('f'), size: f.size })), totalSize: sizeOf(files)
       });
       save();

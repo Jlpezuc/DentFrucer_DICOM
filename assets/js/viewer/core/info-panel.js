@@ -35,8 +35,8 @@ export function renderInfo(container, { study, dataset, extra = [], allTags = tr
     ['Paciente', study.patientName],
     ['Expediente', study.patientCode],
     ['Edad', study.patientAge ? study.patientAge + ' años' : ''],
-    ['Examen', study.description],
-    ['Tipo', study.modality],
+    ['Servicio', study.service],
+    ['Detalle', study.description],
     ['Fecha', study.date ? new Date(study.date + 'T12:00:00').toLocaleDateString('es') : ''],
     ['Código', study.code]
   ]);

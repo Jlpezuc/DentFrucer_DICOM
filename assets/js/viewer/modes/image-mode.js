@@ -43,7 +43,7 @@ export function startImageMode(shell, { study, data, profileId, onDownload, view
     const ds = f.meta.dataset;
     const name = ds ? formatPersonName(ds.string('00100010')) : '';
     vp.info.tl = [escapeHtml(name || study.patientName || ''), escapeHtml(f.label || '')];
-    vp.info.tr = [escapeHtml(ws.profile.title), ds ? formatDicomDate(ds.string('00080020')) : ''];
+    vp.info.tr = [escapeHtml(study.service || ws.profile.title), ds ? formatDicomDate(ds.string('00080020')) : ''];
     vp.info.br = [
       images.length > 1 ? `Imagen ${idx + 1} de ${images.length}` : '',
       `${f.width} × ${f.height}`,

@@ -1,7 +1,5 @@
 // Formato de datos para mostrar en pantalla.
 
-import { escapeHtml } from './dom.js';
-
 export function initials(name) {
   return String(name || '?').replace(/^(Dr\.|Dra\.)\s*/, '').split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('').toUpperCase();
 }
@@ -24,9 +22,4 @@ export function fmtSize(bytes) {
 export function today() {
   const d = new Date();
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-}
-
-export function statusBadge(s) {
-  const map = { 'Nuevo': 'blue', 'Visto': 'green' };
-  return '<span class="badge ' + (map[s] || 'gray') + '">' + escapeHtml(s || '—') + '</span>';
 }

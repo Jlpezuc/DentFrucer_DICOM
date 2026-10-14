@@ -30,11 +30,18 @@ export function studyDoctors(ids) {
 // Examen leído de la base: siempre con doctorIds.
 export const withDoctors = (s) => ({ ...s, doctorIds: doctorsOf(s) });
 
+// Servicio de un examen: su id y su nombre al momento de guardarlo.
+export function studyServiceFields(serviceId, serviceName) {
+  const id = String(serviceId || '').trim();
+  if (!id) throw new Error('Elija el servicio del examen.');
+  return { serviceId: id, service: String(serviceName || id).trim().slice(0, 60) };
+}
+
 // Cambios permitidos en un examen desde el panel.
-export function studyEdits({ modality, description, date, doctorIds }) {
+export function studyEdits({ serviceId, service, description, date, doctorIds }) {
   const out = {};
-  if (modality !== undefined) out.modality = String(modality).trim();
-  if (description !== undefined) out.description = String(description).trim() || out.modality || '';
+  if (serviceId !== undefined) Object.assign(out, studyServiceFields(serviceId, service));
+  if (description !== undefined) out.description = String(description).trim().slice(0, 120);
   if (date !== undefined) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('La fecha no es válida.');
     out.date = date;

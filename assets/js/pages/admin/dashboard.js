@@ -4,7 +4,8 @@
 //   Indicadores   ingresos (y cambio frente al período anterior de igual largo),
 //                 exámenes, citas y citas atendidas sin cobro
 //   Gráficos      ingresos en el tiempo (columnas por día, semana o mes) y
-//                 barras horizontales por medio de pago, servicio, modalidad y médico
+//                 barras horizontales: ingresos por medio de pago y por servicio,
+//                 exámenes por servicio y por médico
 //   Por cobrar    visitas del período que no están pagadas y citas atendidas sin
 //                 visita ni cobro
 //
@@ -12,8 +13,9 @@
 // Cada gráfico tiene su tabla equivalente para lectores de pantalla.
 
 import { addDays, examLabel, isoDate, parseIso } from '../../services/agenda.js';
-import { groupStudies, PAY_STATE } from '../../services/groups.js';
+import { groupStudies, isReportOnly, PAY_STATE } from '../../services/groups.js';
 import { fmtCLP, PAYMENT_METHODS } from '../../services/payments.js';
+import { studyServiceName } from '../../services/settings.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -166,7 +168,7 @@ export function createDashboard(ctx) {
     const prevPays = state.payments.filter((x) => x.date >= prevFrom && x.date <= prevTo);
     const income = pays.reduce((n, x) => n + x.total, 0);
     const prevIncome = prevPays.reduce((n, x) => n + x.total, 0);
-    const exams = state.studies.filter((s) => inRange(s.date) && s.modality !== 'Informe');
+    const exams = state.studies.filter((s) => inRange(s.date) && !isReportOnly(s));
     const appts = state.appointments.filter((a) => inRange(a.date));
     const byStatus = (st) => appts.filter((a) => a.status === st).length;
     // Por cobrar: visitas no pagadas y citas atendidas que no tienen visita ni cobro.
@@ -179,7 +181,7 @@ export function createDashboard(ctx) {
     const canPay = ctx.can('cobros');
     const seeMoney = ctx.can('cobros') || ctx.can('resumen');
 
-    // Ingresos por medio de pago, por servicio; exámenes por modalidad y por médico.
+    // Ingresos por medio de pago y por servicio; exámenes por servicio y por médico.
     const methodRows = PAYMENT_METHODS.map((m) => {
       const list = pays.filter((x) => x.method === m);
       return { label: m, value: list.reduce((n, x) => n + x.total, 0), note: list.length ? list.length + (list.length === 1 ? ' cobro' : ' cobros') : '' };
@@ -190,9 +192,9 @@ export function createDashboard(ctx) {
       x.items.forEach((it) => services.set(it.label, (services.get(it.label) || 0) + Math.max(0, it.price - share)));
     });
     const serviceRows = [...services.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
-    const modalities = new Map();
-    exams.forEach((s) => modalities.set(s.modality, (modalities.get(s.modality) || 0) + 1));
-    const modalityRows = [...modalities.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    const byService = new Map();
+    exams.forEach((s) => { const n = studyServiceName(s); byService.set(n, (byService.get(n) || 0) + 1); });
+    const examServiceRows = [...byService.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
     const doctors = new Map();
     exams.forEach((s) => (s.doctorIds.length ? s.doctorIds : ['']).forEach((id) => doctors.set(id, (doctors.get(id) || 0) + 1)));
     const doctorRows = [...doctors.entries()].map(([id, value]) => ({ label: id ? doctorNames(state.doctors, [id]) : 'Sin médico', value })).sort((a, b) => b.value - a.value);
@@ -215,13 +217,13 @@ export function createDashboard(ctx) {
         ${seeMoney ? timeChart(currentBuckets) : ''}
         ${seeMoney ? barList('Ingresos por medio de pago', methodRows, { format: fmtCLP, empty: 'Sin cobros en el período.' }) : ''}
         ${seeMoney ? barList('Ingresos por servicio', serviceRows, { format: fmtCLP, empty: 'Sin cobros en el período.' }) : ''}
-        ${barList('Exámenes por modalidad', modalityRows, { empty: 'Sin exámenes en el período.' })}
+        ${barList('Exámenes por servicio', examServiceRows, { empty: 'Sin exámenes en el período.' })}
         ${barList('Exámenes por médico', doctorRows, { share: false, empty: 'Sin exámenes en el período.' })}
       </div>
       <section class="dash-card dash-wide">
         <h3>Por cobrar</h3>
         ${pending ? `<table class="data compact"><thead><tr><th>Fecha</th><th>Paciente</th><th>Exámenes o servicio</th><th>Estado</th><th></th></tr></thead><tbody>${unpaidVisits.map((g) => `
-          <tr><td>${fmtDate(g.date)}</td><td>${escapeHtml(g.patientName)}</td><td>${escapeHtml(g.modalities.join(', '))}</td><td><span class="badge ${g.payState === 'partial' ? 'amber' : 'gray'}">${PAY_STATE[g.payState]}</span></td>
+          <tr><td>${fmtDate(g.date)}</td><td>${escapeHtml(g.patientName)}</td><td>${escapeHtml(g.services.join(', '))}</td><td><span class="badge ${g.payState === 'partial' ? 'amber' : 'gray'}">${PAY_STATE[g.payState]}</span></td>
           <td><div class="row-actions">${canPay ? `<button class="btn btn-outline btn-sm" type="button" data-pay-visit="${escapeHtml(g.key)}">${icon('cash')} Cobrar</button>` : ''}</div></td></tr>`).join('')}${unpaidAppts.map((a) => `
           <tr><td>${fmtDate(a.date)} <span class="muted">${escapeHtml(a.time)}</span></td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(examLabel(a.exam))}</td><td><span class="badge gray">Cita sin cobro</span></td>
           <td><div class="row-actions">${canPay ? `<button class="btn btn-outline btn-sm" type="button" data-pay-appt="${escapeHtml(a.id)}">${icon('cash')} Cobrar</button>` : ''}</div></td></tr>`).join('')}</tbody></table>`

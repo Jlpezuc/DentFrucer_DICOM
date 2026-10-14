@@ -13,9 +13,9 @@
 
 import { examLabel } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
-import { groupStudies, PAY_STATE } from '../../services/groups.js';
+import { groupStudies, isReportOnly, PAY_STATE } from '../../services/groups.js';
 import { DOC_TYPES, fmtCLP, itemsTotal, PAYMENT_METHODS } from '../../services/payments.js';
-import { activeServices, serviceById, serviceForModality } from '../../services/settings.js';
+import { activeServices, serviceById, studyServiceId, studyServiceName } from '../../services/settings.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -146,15 +146,15 @@ export function createPayments(ctx) {
   function renderVisits(selectedKey = '') {
     visits = groupStudies(state.studies).filter((g) => g.patientId === patientSel.value);
     visitSel.innerHTML = '<option value="">Sin visita: servicio suelto</option>' + visits.map((g) =>
-      `<option value="${escapeHtml(g.key)}">${fmtDate(g.date)} · ${escapeHtml(g.modalities.join(', '))} · ${PAY_STATE[g.payState]}</option>`).join('');
+      `<option value="${escapeHtml(g.key)}">${fmtDate(g.date)} · ${escapeHtml(g.services.join(', '))} · ${PAY_STATE[g.payState]}</option>`).join('');
     visitSel.value = visits.some((g) => g.key === selectedKey) ? selectedKey : '';
     visitSel.disabled = !visits.length;
   }
   const currentVisit = () => visits.find((g) => g.key === visitSel.value) || null;
   // Servicios propuestos para los exámenes de una visita (con el precio de cada servicio).
-  const visitItems = (g) => g.studies.filter((s) => s.modality !== 'Informe').map((s) => {
-    const sv = serviceForModality(s.modality);
-    return sv ? { serviceId: sv.id, price: sv.price } : { label: s.description || s.modality, price: 0 };
+  const visitItems = (g) => g.studies.filter((s) => !isReportOnly(s)).map((s) => {
+    const sv = serviceById(studyServiceId(s));
+    return sv ? { serviceId: sv.id, price: sv.price } : { label: studyServiceName(s), price: 0 };
   });
   function fillFromVisit(g) {
     $('py-date').value = g.date;

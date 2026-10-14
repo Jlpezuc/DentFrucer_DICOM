@@ -76,13 +76,23 @@ export const PROFILES = {
   }
 };
 
-// Elige el perfil a partir de lo que se cargó y de la modalidad indicada al subir el examen.
-export function pickProfile(studyModality, data) {
+// Tipo de examen según el nombre del servicio ("Radiografía panorámica"…):
+// 'cbct' | 'pano' | 'ceph' | 'intraoral' | '' (sin pista).
+export function examKind(text) {
+  const t = String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (/cbct|cone ?beam|tomograf/.test(t)) return 'cbct';
+  if (/panoram|ortopantomo/.test(t)) return 'pano';
+  if (/cefalo|telerradio/.test(t)) return 'ceph';
+  if (/periapic|intraoral|aleta|bite/.test(t)) return 'intraoral';
+  return '';
+}
+
+// Elige el perfil a partir de lo que se cargó (volumen, etiqueta DICOM) y del
+// nombre del servicio del examen.
+export function pickProfile(serviceText, data) {
   if (data.volumes.length) return 'cbct';
-  const m = (studyModality || '').toLowerCase();
-  if (m.startsWith('panor')) return 'pano';
-  if (m.startsWith('cefal')) return 'ceph';
-  if (m.startsWith('periap') || m.startsWith('intra')) return 'intraoral';
+  const kind = examKind(serviceText);
+  if (kind === 'pano' || kind === 'ceph' || kind === 'intraoral') return kind;
   const dicomMod = data.images[0] && data.images[0].meta.dataset ? data.images[0].meta.dataset.string('00080060') : '';
   if (dicomMod === 'PX') return 'pano';
   if (dicomMod === 'IO') return 'intraoral';

@@ -34,10 +34,3 @@ export function can(u, permission) {
 export function normalizePermissions(input = {}) {
   return Object.fromEntries(PERMISSIONS.map((p) => [p.id, input[p.id] === true || input[p.id] === 'on']));
 }
-
-// Etiqueta para mostrar: "Administrador general" o la lista de permisos.
-export function permissionSummary(u) {
-  if (isSuperAdmin(u)) return 'Administrador general';
-  const on = PERMISSIONS.filter((p) => u.permissions && u.permissions[p.id]).map((p) => p.label);
-  return on.length ? on.join(', ') : 'Sin permisos';
-}

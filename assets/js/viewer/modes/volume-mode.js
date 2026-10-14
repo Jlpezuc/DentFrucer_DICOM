@@ -93,7 +93,6 @@ export function startVolumeMode(shell, { study, data, onDownload, viewOnly }) {
     </div>
     <div class="dv-quad-controls"></div>`;
   grid.appendChild(quad);
-  const quadBody = quad.querySelector('.dv-quad-body');
   const quadControls = quad.querySelector('.dv-quad-controls');
   const emptyCurve = quad.querySelector('.dv-q-empty');
   let quadView = '3d';
