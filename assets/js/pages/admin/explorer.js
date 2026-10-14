@@ -34,6 +34,7 @@ export function createExplorer(ctx) {
   let query = '';            // búsqueda en las vistas de médico y paciente
   let ui = {};               // { editing: studyId, adding: true } dentro de una visita
   let uploadTarget = null;   // examen al que se suben archivos
+  let expanded = new Set();  // visitas desplegadas en las vistas de paciente y médico
 
   const canEdit = () => ctx.can('examenes');
   const groups = () => groupStudies(state.studies);
@@ -43,7 +44,7 @@ export function createExplorer(ctx) {
   const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 
   // --- Navegación ---------------------------------------------------------------------
-  function open(type, id) { stack = [{ type, id }]; query = ''; ui = {}; render(); m.open(); }
+  function open(type, id) { stack = [{ type, id }]; query = ''; ui = {}; expanded = new Set(); render(); m.open(); }
   function push(type, id) { stack.push({ type, id }); query = ''; ui = {}; render(); body.scrollTop = 0; }
   function goTo(i) { stack = stack.slice(0, i + 1); query = ''; ui = {}; render(); }
 
@@ -70,29 +71,33 @@ export function createExplorer(ctx) {
   const searchBox = (placeholder) => `<label class="search explorer-search"><span class="sr-only">Buscar</span>${icon('search')}<input class="input" type="search" data-search placeholder="${placeholder}" value="${escapeHtml(query)}"></label>`;
   const matches = (g) => !query || groupSearchText(g, names(g.doctorIds)).includes(searchTerm(query));
 
-  // Estado de un examen en una frase corta.
+  // Estado de un examen: si ya tiene su informe.
   const reportsOf = (s) => (s.files || []).filter((f) => fileKind(f) === 'pdf');
   function examStatus(s) {
     const out = [];
     if (s.modality !== 'Informe') out.push(reportsOf(s).length ? '<span class="st ok">Informe listo</span>' : '<span class="st warn">Falta el informe</span>');
-    if (s.doctorIds.length) out.push(s.status === 'Nuevo' ? '<span class="st new">El médico aún no lo abre</span>' : '<span class="st muted">Visto por el médico</span>');
     return out.join('');
   }
 
-  // Tarjeta de una visita (vistas de paciente y médico): fecha, médicos y sus exámenes.
+  // Tarjeta de una visita (vistas de paciente y médico): fecha, médicos y, al
+  // desplegarla, sus exámenes (que se abren en el visor desde ahí).
   function visitCard(g, { showDoctor = true } = {}) {
     const key = escapeHtml(g.key);
+    const open = expanded.has(g.key);
     return `
-      <article class="visit-item">
-        <button type="button" class="visit-item-head" data-group="${key}">
-          <span class="visit-date"><strong>${fmtDate(g.date)}</strong><small>${escapeHtml(longDate(g.date).split(',')[0])}</small></span>
-          <span class="visit-meta">
-            ${showDoctor ? `<span class="${g.doctorIds.length ? '' : 'warn-text'}">${icon('stethoscope')} ${escapeHtml(names(g.doctorIds))}</span>` : ''}
-            <span class="muted">${plural(g.studies.length, 'examen', 'exámenes')} · ${plural(g.fileCount, 'archivo', 'archivos')}${g.missingReports ? ' · <span class="warn-text">' + plural(g.missingReports, 'sin informe', 'sin informe') + '</span>' : ''}</span>
-          </span>
-          <span class="visit-open">${payBadge(g)} Abrir visita ${icon('chevronRight')}</span>
-        </button>
-        <ul class="visit-item-exams">${g.studies.map((s) => `
+      <article class="visit-item${open ? ' is-open' : ''}">
+        <div class="visit-item-head">
+          <button type="button" class="visit-toggle" data-toggle-visit="${key}" aria-expanded="${open}" title="${open ? 'Ocultar' : 'Ver'} los exámenes de esta visita">
+            <span class="visit-chevron">${icon('chevronRight')}</span>
+            <span class="visit-date"><strong>${fmtDate(g.date)}</strong><small>${escapeHtml(longDate(g.date).split(',')[0])}</small></span>
+            <span class="visit-meta">
+              ${showDoctor ? `<span class="${g.doctorIds.length ? '' : 'warn-text'}">${icon('stethoscope')} ${escapeHtml(names(g.doctorIds))}</span>` : ''}
+              <span class="visit-counts"><span class="badge green">${plural(g.studies.length, 'examen', 'exámenes')}</span>${g.missingReports ? `<span class="badge red">${g.missingReports} sin informe</span>` : ''}</span>
+            </span>
+          </button>
+          <span class="visit-open">${payBadge(g)}<button type="button" class="btn btn-outline btn-sm" data-group="${key}">Abrir visita ${icon('chevronRight')}</button></span>
+        </div>
+        <ul class="visit-item-exams"${open ? '' : ' hidden'}>${g.studies.map((s) => `
           <li data-study="${escapeHtml(s.id)}">
             <span class="badge ${s.modality === 'Informe' ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span>
             <span class="vi-name">${escapeHtml(s.description || s.modality)}</span>
@@ -136,7 +141,7 @@ export function createExplorer(ctx) {
     body.innerHTML = personHead(name, sub,
       `<span><strong>${visits.length}</strong> ${visits.length === 1 ? 'visita' : 'visitas'}</span><span><strong>${visits.reduce((n, g) => n + g.studies.length, 0)}</strong> exámenes</span>${visits[0] ? `<span>Última: <strong>${fmtDate(visits[0].date)}</strong></span>` : ''}`) +
       (visits.length > 1 ? searchBox('Buscar por fecha (08/10/2026, oct 2026), médico o examen') : '') +
-      (shown.length ? `<p class="explorer-hint">Todas las visitas del paciente, de la más reciente a la más antigua. «Ver» abre un examen en el visor; «Abrir visita» muestra sus archivos para editarlos.</p>` + shown.map((g) => visitCard(g)).join('')
+      (shown.length ? `<p class="explorer-hint">Todas las visitas del paciente, de la más reciente a la más antigua. Haga clic en una visita para ver sus exámenes («Ver» los abre en el visor); «Abrir visita» muestra sus archivos para editarlos.</p>` + shown.map((g) => visitCard(g)).join('')
         : '<div class="empty">' + (query ? 'Nada coincide con la búsqueda.' : 'Este paciente aún no tiene exámenes.') + '</div>');
   }
 
@@ -296,6 +301,10 @@ export function createExplorer(ctx) {
   body.addEventListener('click', async (e) => {
     const t = e.target.closest('button');
     if (!t) return;
+    if (t.dataset.toggleVisit) {
+      if (expanded.has(t.dataset.toggleVisit)) expanded.delete(t.dataset.toggleVisit); else expanded.add(t.dataset.toggleVisit);
+      return render();
+    }
     if (t.dataset.group) return push('group', t.dataset.group);
     if (t.dataset.patient) return push('patient', t.dataset.patient);
     if (t.dataset.doctor) return push('doctor', t.dataset.doctor);
