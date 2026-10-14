@@ -1,5 +1,9 @@
 // Utilidades comunes a las dos implementaciones del backend.
 
+import { cleanDoctorIds, doctorsOf } from '../groups.js';
+import { normalizePermissions } from '../permissions.js';
+import { normalizeAccountName } from '../people.js';
+
 export const byDateDesc = (a, b) => (b.date || '').localeCompare(a.date || '');
 export const byDateTime = (a, b) => (a.date + a.time).localeCompare(b.date + b.time);
 export const byName = (a, b) => (a.name || '').localeCompare(b.name || '', 'es');
@@ -17,8 +21,17 @@ export const studyPatientFields = (p) => ({ patientName: p.name, patientCode: p.
 export const sizeOf = (files) => files.reduce((n, f) => n + (f.size || 0), 0);
 export const cleanFileName = (name) => String(name || '').replace(/[\\/]/g, '-').trim().slice(0, 120) || 'archivo';
 
+// Médicos de un examen: doctorIds (todos) y doctorId (el primero, para los
+// exámenes y reglas anteriores a que un examen pudiera tener varios médicos).
+export function studyDoctors(ids) {
+  const doctorIds = cleanDoctorIds(ids);
+  return { doctorIds, doctorId: doctorIds[0] || null };
+}
+// Examen leído de la base: siempre con doctorIds.
+export const withDoctors = (s) => ({ ...s, doctorIds: doctorsOf(s) });
+
 // Cambios permitidos en un examen desde el panel.
-export function studyEdits({ modality, description, date, doctorId }) {
+export function studyEdits({ modality, description, date, doctorIds }) {
   const out = {};
   if (modality !== undefined) out.modality = String(modality).trim();
   if (description !== undefined) out.description = String(description).trim() || out.modality || '';
@@ -26,8 +39,18 @@ export function studyEdits({ modality, description, date, doctorId }) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('La fecha no es válida.');
     out.date = date;
   }
-  if (doctorId !== undefined) out.doctorId = doctorId || null;
+  if (doctorIds !== undefined) Object.assign(out, studyDoctors(doctorIds));
   return out;
+}
+
+// Cuenta de administración: nombre, descripción (cargo libre: "Secretaria"…),
+// si es administrador general y sus permisos. Devuelve { data } o { error }.
+export function normalizeAdmin(input) {
+  const { data: name, error } = normalizeAccountName(input.name);
+  if (error) return { error };
+  const description = String(input.description || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  const superadmin = input.superadmin === true;
+  return { data: { name, description, superadmin, permissions: normalizePermissions(input.permissions) } };
 }
 
 // Campos de una cita que se guardan (además de code, slotId, patientId, createdAt).

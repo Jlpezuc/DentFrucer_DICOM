@@ -1,7 +1,7 @@
-// Carga de exámenes: un paciente + el médico que los recibe + la fecha, y uno o
-// varios exámenes (cada uno con su modalidad y sus archivos, incluidos los
-// informes PDF). Los exámenes del mismo paciente, médico y fecha quedan en el
-// mismo grupo, aunque se suban en momentos distintos.
+// Carga de exámenes: un paciente + los médicos que los reciben (uno o varios) +
+// la fecha, y uno o varios exámenes (cada uno con su modalidad y sus archivos,
+// incluidos los informes PDF). Los exámenes del mismo paciente, médicos y fecha
+// quedan en la misma visita, aunque se suban en momentos distintos.
 //
 // Si el paciente tiene una cita pendiente (o se llega desde "Cargar examen"
 // en la agenda), se rellenan examen y fecha, se sugiere el médico que indicó
@@ -10,10 +10,11 @@
 import { examLabel } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
 import { groupKey, STUDY_MODALITIES } from '../../services/groups.js';
+import { serviceById } from '../../services/settings.js';
 import { busy, escapeHtml, showError, toast } from '../../ui/dom.js';
 import { fmtDate, fmtSize, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
-import { doctorOptions, matchDoctor } from './common.js';
+import { bindDoctorPickers, doctorNames, doctorPickerHtml, matchDoctor, pickerValue } from './common.js';
 
 export function createUpload(ctx) {
   const { state } = ctx;
@@ -21,7 +22,7 @@ export function createUpload(ctx) {
   const form = $('upload-form');
   const err = form.querySelector('.form-error');
   const patientSel = $('u-patient');
-  const doctorSel = $('u-doctor');
+  const doctorBox = $('u-doctors');
   const dateInput = $('u-date');
   const doctorHint = $('u-doctor-hint');
   const groupHint = $('u-group-hint');
@@ -32,8 +33,12 @@ export function createUpload(ctx) {
   let appt = null;
   dateInput.value = today();
 
+  // Médicos elegidos (selector de varios médicos, common.js).
+  const doctorIds = () => pickerValue(doctorBox.querySelector('[data-doctor-picker]'));
+  const setDoctors = (ids) => { doctorBox.innerHTML = doctorPickerHtml(state.doctors, ids, { emptyLabel: 'Sin médico (solo la clínica)' }); updateGroupHint(); };
+  bindDoctorPickers(doctorBox, () => state.doctors, () => { doctorHint.textContent = DOCTOR_HINT; updateGroupHint(); });
+
   // --- Bloques de examen -------------------------------------------------------------
-  // Cada bloque tiene su modalidad, descripción y archivos (block.files).
   // Cada bloque tiene su modalidad, descripción, archivos (block.files: DICOM,
   // ZIP, fotos…) y su informe PDF (block.report), que se guarda en el mismo examen.
   function addExamBlock(modality = 'CBCT') {
@@ -112,7 +117,7 @@ export function createUpload(ctx) {
   // --- Selectores ----------------------------------------------------------------------
   function render() {
     const curPatient = patientSel.value;
-    const curDoctor = doctorSel.value;
+    const curDoctors = doctorBox.querySelector('[data-doctor-picker]') ? doctorIds() : [];
     const option = (p, extra = '') => '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + (p.code ? ' · ' + escapeHtml(p.code) : '') + extra + '</option>';
     // Arriba, los pacientes con cita hoy: son los que se van a cargar.
     const seen = new Set();
@@ -123,20 +128,19 @@ export function createUpload(ctx) {
       (todays ? '<optgroup label="Citas de hoy">' + todays + '</optgroup><optgroup label="Todos los pacientes">' : '') +
       state.patients.map((p) => option(p)).join('') + (todays ? '</optgroup>' : '');
     patientSel.value = curPatient;
-    doctorSel.innerHTML = doctorOptions(state.doctors, curDoctor, 'Sin médico (solo la clínica)');
-    updateGroupHint();
+    setDoctors(curDoctors);
   }
 
-  // ¿Ya hay exámenes de este paciente, médico y fecha? Entonces se suman a ese grupo.
+  // ¿Ya hay exámenes de este paciente, médicos y fecha? Entonces se suman a esa visita.
   function updateGroupHint() {
-    if (!patientSel.value || !dateInput.value) { groupHint.textContent = 'Los exámenes del mismo paciente, médico y día se agrupan.'; return; }
-    const key = groupKey({ patientId: patientSel.value, doctorId: doctorSel.value, date: dateInput.value });
+    if (!patientSel.value || !dateInput.value || !doctorBox.querySelector('[data-doctor-picker]')) { groupHint.textContent = 'Los exámenes del mismo paciente, médicos y día forman una visita.'; return; }
+    const key = groupKey({ patientId: patientSel.value, doctorIds: doctorIds(), date: dateInput.value });
     const existing = state.studies.filter((s) => groupKey(s) === key);
     groupHint.innerHTML = existing.length
-      ? icon('folder') + ' Se agregará al grupo del ' + fmtDate(dateInput.value) + ', que ya tiene ' + existing.length + ' examen(es): ' + escapeHtml(existing.map((s) => s.modality).join(', ')) + '.'
-      : 'Se creará un grupo nuevo para el ' + fmtDate(dateInput.value) + '.';
+      ? icon('folder') + ' Se agregará a la visita del ' + fmtDate(dateInput.value) + ', que ya tiene ' + existing.length + ' examen(es): ' + escapeHtml(existing.map((s) => s.modality).join(', ')) + '.'
+      : 'Se creará una visita nueva para el ' + fmtDate(dateInput.value) + '.';
   }
-  [patientSel, doctorSel, dateInput].forEach((el) => el.addEventListener('change', updateGroupHint));
+  [patientSel, dateInput].forEach((el) => el.addEventListener('change', updateGroupHint));
 
   // --- Cita y médico sugerido -----------------------------------------------------------
   function setAppointment(a) {
@@ -146,7 +150,8 @@ export function createUpload(ctx) {
     apptBox.innerHTML = icon('calendar') + '<span>Cita del ' + fmtDate(appt.date) + ' a las ' + escapeHtml(appt.time) + ' · ' + escapeHtml(examLabel(appt.exam)) +
       '. Al subir los exámenes se marcará como <strong>atendida</strong>.</span>';
     const first = examList.querySelector('[data-modality]');
-    if (first) first.value = appt.exam;
+    const service = serviceById(appt.exam);
+    if (first) first.value = (service && service.modality) || appt.exam;
     dateInput.value = appt.date <= today() ? appt.date : today();
   }
 
@@ -154,18 +159,17 @@ export function createUpload(ctx) {
   // o, si no, el de su último examen.
   function suggestDoctor(patientId) {
     const byReferrer = appt && appt.referrer ? matchDoctor(state.doctors, appt.referrer) : undefined;
-    const last = state.studies.filter((s) => s.patientId === patientId && s.doctorId).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    const last = state.studies.filter((s) => s.patientId === patientId && s.doctorIds.length).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
     if (byReferrer) {
-      doctorSel.value = byReferrer.id;
+      setDoctors([byReferrer.id]);
       doctorHint.textContent = 'Sugerido: el paciente indicó «' + appt.referrer + '» al agendar.';
     } else if (last) {
-      doctorSel.value = last.doctorId;
-      doctorHint.textContent = 'Sugerido: el médico de su último examen.';
+      setDoctors(last.doctorIds);
+      doctorHint.textContent = 'Sugerido: ' + (last.doctorIds.length > 1 ? 'los médicos' : 'el médico') + ' de su último examen.';
     } else {
-      doctorSel.value = '';
+      setDoctors([]);
       doctorHint.textContent = appt && appt.referrer ? 'Indicó «' + appt.referrer + '», que no está registrado como médico.' : DOCTOR_HINT;
     }
-    updateGroupHint();
   }
 
   // Cita pendiente más reciente del paciente (hoy o antes).
@@ -177,7 +181,6 @@ export function createUpload(ctx) {
     setAppointment(pendingOf(patientSel.value));
     suggestDoctor(patientSel.value);
   });
-  doctorSel.addEventListener('change', () => { doctorHint.textContent = DOCTOR_HINT; });
 
   function startFor(a) {
     if (!a) return;
@@ -193,7 +196,7 @@ export function createUpload(ctx) {
     e.preventDefault();
     const btn = form.querySelector('button[type=submit]');
     const patient = ctx.patientById(patientSel.value);
-    const doctorId = doctorSel.value;
+    const ids = doctorIds();
     const date = dateInput.value || today();
     const exams = [...examList.children].filter((b) => b.files.length || b.report.length).map((b) => ({
       modality: b.querySelector('[data-modality]').value,
@@ -203,7 +206,7 @@ export function createUpload(ctx) {
     showError(err, '');
     if (!patient) { showError(err, 'Seleccione un paciente (o regístrelo primero).'); return; }
     if (!exams.length) { showError(err, 'Agregue los archivos de al menos un examen.'); return; }
-    if (!doctorId && !confirm('Los exámenes no tienen médico: no aparecerán en ningún portal hasta que se lo asigne. ¿Subirlos igual?')) return;
+    if (!ids.length && !confirm('Los exámenes no tienen médico: no aparecerán en ningún portal hasta que se lo asigne. ¿Subirlos igual?')) return;
     busy(btn, true, 'Subiendo…');
     progress.hidden = false;
     const bar = progress.querySelector('span');
@@ -214,7 +217,7 @@ export function createUpload(ctx) {
       for (const x of exams) {
         const size = x.files.reduce((m, f) => m + f.size, 0);
         await backend.uploadStudy({
-          patient, doctorId, date, modality: x.modality,
+          patient, doctorIds: ids, date, modality: x.modality,
           description: x.description || x.modality,
           files: x.files,
           onProgress: (p) => { bar.style.width = Math.round(((sent + p * size) / total) * 100) + '%'; }
@@ -224,10 +227,11 @@ export function createUpload(ctx) {
       if (appt && appt.patientId === patient.id) {
         try { await backend.updateAppointment(appt, { status: 'Atendida' }); } catch (ex) { toast('Los exámenes se cargaron, pero no se pudo marcar la cita como atendida.'); }
       }
-      toast(exams.length + ' examen(es) cargado(s) en el grupo del ' + fmtDate(date) + (doctorId ? ', visible(s) para ' + ctx.doctorName(doctorId) : '') + '.');
+      toast(exams.length + ' examen(es) cargado(s) en la visita del ' + fmtDate(date) + (ids.length ? ', visible(s) para ' + doctorNames(state.doctors, ids) : '') + '.');
       form.reset();
       dateInput.value = today();
       doctorHint.textContent = DOCTOR_HINT;
+      setDoctors([]);
       setAppointment(null);
       resetBlocks();
       await ctx.reload();

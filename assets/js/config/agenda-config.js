@@ -1,6 +1,7 @@
-// Agenda pública de DentFrucer: horarios, exámenes y textos de la cita.
-// Edite estos valores para cambiar lo que ven los pacientes en agendar.html.
-// Las horas son la hora local de la clínica.
+// Agenda de DentFrucer: horarios, servicios y textos de la cita.
+// Horario y servicios son valores iniciales: se editan desde el panel
+// (Servicios y horarios, ver services/settings.js). Las horas son la hora local
+// de la clínica.
 
 export const agendaConfig = {
   // Duración de cada turno (minutos). Un paciente por turno.
@@ -23,14 +24,19 @@ export const agendaConfig = {
   // Días sin atención (feriados, vacaciones): 'AAAA-MM-DD'.
   closedDates: ['2026-12-25', '2027-01-01'],
 
-  // Tipos de examen. "id" coincide con la modalidad al cargar el examen.
-  // Si agrega o renombra un id, actualice también la lista "exam in [...]" de firestore.rules.
+  // Servicios (tipos de examen) que se pueden agendar y cobrar. Son los valores
+  // iniciales: desde el panel (Servicios y horarios) se editan, y lo guardado
+  // allí reemplaza esta lista y el horario de arriba.
+  //   id        no cambia nunca (lo guardan las citas)
+  //   modality  modalidad con la que se carga el examen (services/groups.js)
+  //   price     valor en pesos, para los cobros
+  //   active    false = no aparece en la agenda en línea
   exams: [
-    { id: 'CBCT', label: 'Tomografía Cone Beam (CBCT)', detail: 'Volumen 3D de maxilar, mandíbula, ATM o senos maxilares.' },
-    { id: 'Panorámica', label: 'Radiografía panorámica', detail: 'Ortopantomografía digital de toda la boca.' },
-    { id: 'Cefalometría', label: 'Cefalometría', detail: 'Telerradiografía de cráneo para ortodoncia.' },
-    { id: 'Periapical', label: 'Radiografías intraorales', detail: 'Periapicales, aleta de mordida o serie completa.' },
-    { id: 'Otro', label: 'Otro examen', detail: 'Si no sabe cuál, elija este y lo orientamos en la clínica.' }
+    { id: 'CBCT', label: 'Tomografía Cone Beam (CBCT)', detail: 'Volumen 3D de maxilar, mandíbula, ATM o senos maxilares.', modality: 'CBCT', price: 0, active: true },
+    { id: 'Panorámica', label: 'Radiografía panorámica', detail: 'Ortopantomografía digital de toda la boca.', modality: 'Panorámica', price: 0, active: true },
+    { id: 'Cefalometría', label: 'Cefalometría', detail: 'Telerradiografía de cráneo para ortodoncia.', modality: 'Cefalometría', price: 0, active: true },
+    { id: 'Periapical', label: 'Radiografías intraorales', detail: 'Periapicales, aleta de mordida o serie completa.', modality: 'Periapical', price: 0, active: true },
+    { id: 'Otro', label: 'Otro examen', detail: 'Si no sabe cuál, elija este y lo orientamos en la clínica.', modality: 'Otro', price: 0, active: true }
   ],
 
   // Datos que se muestran en la confirmación y en el archivo de calendario.

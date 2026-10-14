@@ -1,36 +1,51 @@
 // Panel de administración. Cada sección vive en su propio módulo:
-//   agenda.js    citas: lista, alta, edición, cambio de estado y borrado
-//   studies.js   exámenes agrupados (paciente + médico + fecha) con búsqueda
-//   explorer.js  explorador: médico → paciente → grupo → exámenes y archivos
-//   upload.js    carga de exámenes (paciente + médico + fecha + archivos)
+//   dashboard.js resumen: ingresos, medios de pago, exámenes y citas por período
+//   agenda.js    citas: lista, calendario, alta, edición, estado y borrado
+//   calendar.js  calendario de la agenda (semana y mes)
+//   studies.js   exámenes agrupados por visita (paciente + médicos + fecha)
+//   explorer.js  explorador: médico → paciente → visita → exámenes y archivos
+//   upload.js    carga de exámenes (paciente + médicos + fecha + archivos)
 //   people.js    pacientes (alta, edición, sus visitas) y médicos
-//   account.js   mi cuenta: correo y nombre del administrador en sesión
+//   payments.js  cobros: registro, edición y lista con filtros
+//   schedule.js  servicios (precios) y horario de la agenda en línea
+//   users.js     cuentas de administración y sus permisos (administrador general)
+//   account.js   mi cuenta: correo y nombre de la cuenta en sesión
 //
 // Todas comparten el mismo estado y se vuelven a dibujar con ctx.reload().
-// El menú lateral muestra una sección a la vez (views.js): #agenda, #examenes,
-// #carga, #pacientes, #medicos.
+// El menú lateral muestra una sección a la vez (views.js) y solo las que
+// permite la cuenta (services/permissions.js); las reglas de Firestore aplican
+// los mismos permisos.
 
 import { backend } from '../../services/backend.js';
+import { can, SECTION_PERMISSION } from '../../services/permissions.js';
+import { applySettings } from '../../services/settings.js';
 import { setText, toast } from '../../ui/dom.js';
 import { today } from '../../ui/format.js';
 import { requireRole } from '../session.js';
 import { initViews } from '../views.js';
 import { createAccount } from './account.js';
 import { createAgenda } from './agenda.js';
+import { createDashboard } from './dashboard.js';
 import { createExplorer } from './explorer.js';
+import { createPayments } from './payments.js';
 import { createPeople } from './people.js';
+import { createSchedule } from './schedule.js';
 import { createStudies } from './studies.js';
 import { createUpload } from './upload.js';
+import { createUsers } from './users.js';
 
 export async function init() {
   const user = await requireRole('admin');
   if (!user) return;
   createAccount(user);
+  applySettings(await backend.getAgendaSettings());
 
-  const views = initViews({ fallback: 'agenda', title: document.getElementById('view-title'), subtitle: document.getElementById('view-desc') });
-  const state = { studies: [], patients: [], doctors: [], appointments: [] };
+  const allowed = (p) => can(user, p);
+  const state = { studies: [], patients: [], doctors: [], appointments: [], payments: [], admins: [] };
   const ctx = {
     state,
+    user,
+    can: allowed,
     reload: load,
     go: (view) => views.go(view),
     doctorName: (id) => (state.doctors.find((d) => d.id === id) || {}).name,
@@ -40,14 +55,36 @@ export async function init() {
   ctx.explorer = createExplorer(ctx);
   const upload = createUpload(ctx);
   ctx.startUploadFor = (appt) => upload.startFor(appt);
-  const sections = [createAgenda(ctx), createStudies(ctx), upload, createPeople(ctx)];
+  const payments = createPayments(ctx);
+  ctx.openPayment = (preset) => payments.open(preset);
+  const sections = [createDashboard(ctx), createAgenda(ctx), createStudies(ctx), upload, createPeople(ctx), payments, createSchedule(ctx), createUsers(ctx)];
+
+  // Solo lo permitido: se quitan del menú y de la página las secciones y los
+  // botones sin permiso (los módulos ya tomaron sus elementos y no fallan).
+  const sectionAllowed = (name) => allowed(SECTION_PERMISSION[name] || '*');
+  document.querySelectorAll('[data-section]').forEach((el) => { if (!sectionAllowed(el.dataset.section)) el.remove(); });
+  document.querySelectorAll('.side-nav a[href^="#"]').forEach((a) => { if (!sectionAllowed(a.getAttribute('href').slice(1))) a.remove(); });
+  document.querySelectorAll('.side-nav .label').forEach((label) => {
+    const next = label.nextElementSibling;
+    if (!next || next.classList.contains('label')) label.remove();
+  });
+  document.querySelectorAll('[data-perm]').forEach((el) => { if (!allowed(el.dataset.perm)) el.remove(); });
+
+  const first = Object.keys(SECTION_PERMISSION).find(sectionAllowed);
+  if (!first) {
+    document.querySelector('.main').innerHTML = '<div class="empty" style="margin-top:80px"><h2>Su cuenta no tiene permisos</h2><p>Pida al administrador general que le asigne las secciones que necesita.</p></div>';
+    return;
+  }
+  const views = initViews({ fallback: allowed('agenda') ? 'agenda' : first, title: document.getElementById('view-title'), subtitle: document.getElementById('view-desc') });
 
   async function load() {
     try {
-      const [studies, patients, doctors, appointments] = await Promise.all([
-        backend.listStudies(), backend.listPatients(), backend.listDoctors(), backend.listAppointments()
+      const [studies, patients, doctors, appointments, pays, admins] = await Promise.all([
+        backend.listStudies(), backend.listPatients(), backend.listDoctors(), backend.listAppointments(),
+        allowed('cobros') || allowed('resumen') ? backend.listPayments() : [],
+        allowed('*') ? backend.listAdmins() : []
       ]);
-      Object.assign(state, { studies, patients, doctors, appointments });
+      Object.assign(state, { studies, patients, doctors, appointments, payments: pays, admins });
     } catch (e) {
       toast('No se pudieron cargar los datos: ' + e.message);
     }
@@ -59,8 +96,9 @@ export async function init() {
     setText('stat-studies', state.studies.length);
     setText('stat-patients', state.patients.length);
     setText('stat-doctors', state.doctors.length);
-    setText('stat-unassigned', state.studies.filter((s) => !s.doctorId).length);
+    setText('stat-unassigned', state.studies.filter((s) => !s.doctorIds.length).length);
     sections.forEach((s) => s.render());
+    ctx.explorer.refresh();
   }
 
   await load();

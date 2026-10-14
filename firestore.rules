@@ -1,24 +1,51 @@
 rules_version = '2';
 
 // DentFrucer — reglas de Firestore.
-// - Administradores (users/{uid}.role == 'admin'): acceso total.
-// - Médicos: solo leen sus exámenes (studies.doctorId == su uid) y solo pueden
-//   marcarlos como 'Visto'. Los datos del paciente que necesitan van copiados
-//   en el examen; la colección de pacientes es solo de la clínica.
+// - Administradores (users/{uid}.role == 'admin', no desactivados): leen los
+//   datos de la clínica; para modificar cada parte necesitan su permiso
+//   (users/{uid}.permissions: agenda, examenes, pacientes, medicos, cobros,
+//   resumen, config). El administrador general (superadmin, o una cuenta sin
+//   mapa de permisos, como el primer administrador) puede todo y es el único
+//   que crea y edita cuentas de administración.
+// - Médicos: solo leen sus exámenes (su uid en studies.doctorIds, o en
+//   studies.doctorId en exámenes anteriores) y solo pueden marcarlos como
+//   'Visto'. Los datos del paciente que necesitan van copiados en el examen; la
+//   colección de pacientes es solo de la clínica.
 // - Público (agendar.html, sin cuenta): puede CREAR una cita, su turno y el
-//   paciente, con campos validados. No puede leer, cambiar ni borrar nada; solo
-//   ve qué turnos están ocupados (colección "slots", sin datos personales).
+//   paciente, con campos validados, y leer los servicios y el horario
+//   (settings). No puede leer, cambiar ni borrar nada más; solo ve qué turnos
+//   están ocupados (colección "slots", sin datos personales).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
       return request.auth != null;
     }
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
     function isAdmin() {
-      return signedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return signedIn() && me().role == 'admin' && me().get('disabled', false) != true;
+    }
+    // Administrador general: superadmin, o cuenta sin mapa de permisos (la primera).
+    function isSuper() {
+      return isAdmin() && (me().get('superadmin', false) == true || !('permissions' in me()));
+    }
+    function can(p) {
+      return isAdmin() && (isSuper() || me().permissions.get(p, false) == true);
     }
     function ownsRecord(data) {
-      return signedIn() && data.doctorId == request.auth.uid;
+      return signedIn()
+        && (data.get('doctorId', null) == request.auth.uid || request.auth.uid in data.get('doctorIds', []));
+    }
+    function changes() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+    // Servicios que el público puede agendar: los activos guardados desde el panel
+    // o, si todavía no se guardó nada, los de config/agenda-config.js.
+    function bookableExam(exam) {
+      return exists(/databases/$(database)/documents/settings/agenda)
+        ? exam in get(/databases/$(database)/documents/settings/agenda).data.examIds
+        : exam in ['CBCT', 'Panorámica', 'Cefalometría', 'Periapical', 'Otro'];
     }
 
     // --- Validación de lo que llega desde la agenda pública ---------------------
@@ -43,17 +70,38 @@ service cloud.firestore {
       return /databases/$(database)/documents/appointments/$(id);
     }
 
+    // Cuentas. Médicos: los crea quien tiene el permiso "medicos". Administradores:
+    // solo el administrador general, que no puede cambiarse a sí mismo el rol, los
+    // permisos ni desactivarse. Cada cuenta puede cambiar su propio nombre.
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if isAdmin();
+      allow create: if isSuper() || (can('medicos') && request.resource.data.role == 'doctor');
+      allow update: if (isSuper()
+            && !(uid == request.auth.uid && changes().hasAny(['role', 'superadmin', 'permissions', 'disabled'])))
+        || (can('medicos') && resource.data.role == 'doctor' && request.resource.data.role == 'doctor')
+        || (uid == request.auth.uid && changes().hasOnly(['name']));
+      allow delete: if isSuper() && uid != request.auth.uid;
+    }
+
+    // Servicios y horario de la agenda: públicos (los usa agendar.html).
+    match /settings/{id} {
+      allow read: if true;
+      allow write: if can('config') && request.resource.data.examIds is list;
+    }
+
+    // Cobros: los ve quien tiene "cobros" o "resumen"; los modifica "cobros".
+    match /payments/{paymentId} {
+      allow read: if can('cobros') || can('resumen');
+      allow create, update, delete: if can('cobros');
     }
 
     // Pacientes: solo identidad y contacto. No tienen médico: el médico se
     // asigna a cada examen.
     match /patients/{patientId} {
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin();
+      allow update, delete: if can('pacientes');
       // Paciente creado al agendar: sin expediente ni edad (los completa la clínica).
-      allow create: if isAdmin() || (
+      allow create: if can('pacientes') || can('agenda') || (
         request.resource.data.keys().hasOnly(['name', 'firstName', 'lastName', 'email', 'phone', 'code', 'age', 'source', 'createdAt'])
         && validPerson(request.resource.data)
         && request.resource.data.code == ''
@@ -65,23 +113,26 @@ service cloud.firestore {
 
     match /studies/{studyId} {
       allow read: if isAdmin() || ownsRecord(resource.data);
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-        || (ownsRecord(resource.data)
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-            && request.resource.data.status == 'Visto');
+      allow create, delete: if can('examenes');
+      allow update: if can('examenes')
+        // Al editar un paciente se actualizan sus datos copiados en los exámenes.
+        || (can('pacientes') && changes().hasOnly(['patientName', 'patientCode', 'patientAge']))
+        || (ownsRecord(resource.data) && changes().hasOnly(['status']) && request.resource.data.status == 'Visto');
     }
 
     // Citas: datos personales, solo los ve la clínica.
     match /appointments/{appointmentId} {
-      allow read, update, delete: if isAdmin();
-      allow create: if isAdmin() || (
+      allow read: if isAdmin();
+      allow delete: if can('agenda');
+      // Quien carga exámenes marca la cita como atendida.
+      allow update: if can('agenda') || (can('examenes') && changes().hasOnly(['status']));
+      allow create: if can('agenda') || (
         request.resource.data.keys().hasOnly(['code', 'firstName', 'lastName', 'name', 'email', 'phone', 'referrer', 'exam', 'date', 'time', 'slotId', 'patientId', 'status', 'createdAt'])
         && validPerson(request.resource.data)
         && text(request.resource.data.referrer, 0, 80)
         && validSlotKey(request.resource.data)
         && text(request.resource.data.code, 1, 12)
-        && request.resource.data.exam in ['CBCT', 'Panorámica', 'Cefalometría', 'Periapical', 'Otro']
+        && bookableExam(request.resource.data.exam)
         && request.resource.data.status == 'Pendiente'
         && request.resource.data.createdAt == request.time
         && request.resource.data.slotId == request.resource.data.date + '_' + request.resource.data.time.replace(':', '')
@@ -96,8 +147,8 @@ service cloud.firestore {
     // reservar dos veces (crear sobre uno existente no está permitido).
     match /slots/{slotKey} {
       allow read: if true;
-      allow delete: if isAdmin();
-      allow create: if isAdmin() || (
+      allow delete: if can('agenda');
+      allow create: if can('agenda') || (
         request.resource.data.keys().hasOnly(['date', 'time', 'appointmentId'])
         && validSlotKey(request.resource.data)
         && slotKey == request.resource.data.date + '_' + request.resource.data.time.replace(':', '')

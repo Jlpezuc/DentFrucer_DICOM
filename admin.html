@@ -18,11 +18,16 @@
       <a class="brand" href="admin.html"><img src="assets/img/logo-dentfrucer.png" alt="DentFrucer" width="435" height="115"></a>
       <nav class="side-nav" aria-label="Administración">
         <span class="label">General</span>
+        <a href="#resumen"><i data-icon="chart"></i> Resumen</a>
         <a href="#agenda"><i data-icon="calendar"></i> Agenda</a>
         <a href="#examenes"><i data-icon="folder"></i> Exámenes</a>
         <a href="#carga"><i data-icon="upload"></i> Cargar examen</a>
         <a href="#pacientes"><i data-icon="users"></i> Pacientes</a>
         <a href="#medicos"><i data-icon="stethoscope"></i> Médicos</a>
+        <span class="label">Clínica</span>
+        <a href="#cobros"><i data-icon="cash"></i> Cobros</a>
+        <a href="#servicios"><i data-icon="settings"></i> Servicios y horarios</a>
+        <a href="#usuarios"><i data-icon="shield"></i> Usuarios</a>
       </nav>
       <div class="side-user">
         <span class="avatar" data-user-initials>AD</span>
@@ -39,10 +44,10 @@
           <p id="view-desc">Gestione la agenda, los exámenes DICOM, los pacientes y los médicos.</p>
         </div>
         <div class="actions">
-          <button class="btn btn-outline btn-sm" type="button" data-open="appointment"><i data-icon="calendar"></i> Nueva cita</button>
-          <button class="btn btn-outline btn-sm" type="button" data-open="patient"><i data-icon="plus"></i> Nuevo paciente</button>
-          <button class="btn btn-outline btn-sm" type="button" data-open="doctor"><i data-icon="plus"></i> Nuevo médico</button>
-          <a class="btn btn-primary btn-sm" href="#carga"><i data-icon="upload"></i> Cargar examen</a>
+          <button class="btn btn-outline btn-sm" type="button" data-open="appointment" data-perm="agenda"><i data-icon="calendar"></i> Nueva cita</button>
+          <button class="btn btn-outline btn-sm" type="button" data-open="payment" data-perm="cobros"><i data-icon="cash"></i> Registrar cobro</button>
+          <button class="btn btn-outline btn-sm" type="button" data-open="patient" data-perm="pacientes"><i data-icon="plus"></i> Nuevo paciente</button>
+          <a class="btn btn-primary btn-sm" href="#carga" data-perm="examenes"><i data-icon="upload"></i> Cargar examen</a>
         </div>
       </div>
 
@@ -53,6 +58,24 @@
         <div class="stat"><div class="k">Médicos</div><div class="v" id="stat-doctors">–</div></div>
         <div class="stat"><div class="k">Exámenes sin médico</div><div class="v" id="stat-unassigned" style="color:var(--warning)">–</div></div>
       </div>
+
+      <!-- Resumen -->
+      <section class="panel" id="resumen" data-section="resumen" data-section-desc="Ingresos, medios de pago, exámenes y citas del período elegido.">
+        <div class="panel-head dash-filters">
+          <div class="tabs" id="dash-presets" role="group" aria-label="Período">
+            <button type="button" data-range="today" aria-selected="false">Hoy</button>
+            <button type="button" data-range="week" aria-selected="false">Esta semana</button>
+            <button type="button" data-range="month" aria-selected="true">Este mes</button>
+            <button type="button" data-range="last-month" aria-selected="false">Mes anterior</button>
+            <button type="button" data-range="year" aria-selected="false">Este año</button>
+          </div>
+          <div class="range-inputs">
+            <label>Desde <input class="input input-sm" type="date" id="dash-from"></label>
+            <label>Hasta <input class="input input-sm" type="date" id="dash-to"></label>
+          </div>
+        </div>
+        <div class="panel-body dash" id="dash-body"></div>
+      </section>
 
       <!-- Agenda -->
       <section class="panel" id="agenda" data-section="agenda">
@@ -85,8 +108,8 @@
           </div>
           <div class="table-wrap">
             <table class="data">
-              <thead><tr><th>Fecha</th><th>Paciente</th><th>Examen</th><th>Lo envía</th><th>Estado</th><th></th></tr></thead>
-              <tbody id="agenda-body"><tr><td colspan="6"><div class="empty">Cargando…</div></td></tr></tbody>
+              <thead><tr><th>Fecha</th><th>Paciente</th><th>Examen</th><th>Lo envía</th><th>Estado</th><th>Cobro</th><th></th></tr></thead>
+              <tbody id="agenda-body"><tr><td colspan="7"><div class="empty">Cargando…</div></td></tr></tbody>
             </table>
           </div>
         </div>
@@ -96,12 +119,13 @@
       </section>
 
       <!-- Exámenes -->
-      <section class="panel" id="examenes" data-section="examenes" data-section-desc="Exámenes agrupados por paciente, médico y fecha. Abra un grupo para ver, editar o agregar archivos.">
+      <section class="panel" id="examenes" data-section="examenes" data-section-desc="Exámenes agrupados por visita (paciente, médicos y fecha). Abra una visita para ver, editar o agregar archivos.">
         <div class="panel-head">
           <div class="tabs" id="study-tabs" role="tablist">
             <button type="button" data-filter="all" aria-selected="true">Todos</button>
             <button type="button" data-filter="new" aria-selected="false">No vistos</button>
             <button type="button" data-filter="nodoctor" aria-selected="false">Sin médico</button>
+            <button type="button" data-filter="noreport" aria-selected="false">Sin informe</button>
             <button type="button" data-filter="cbct" aria-selected="false">CBCT</button>
           </div>
           <div class="panel-actions">
@@ -113,10 +137,10 @@
             <label class="date-filter"><span class="sr-only">Fecha</span><input class="input input-sm" id="admin-date" type="date" title="Ver solo los exámenes de esta fecha"></label>
           </div>
         </div>
-        <p class="panel-note">Cada fila es un <strong>grupo</strong>: los exámenes de un paciente, para un médico, en una misma fecha. Ábralo para ver, editar o agregar archivos.</p>
+        <p class="panel-note">Cada fila es una <strong>visita</strong>: los exámenes que un paciente se hizo un mismo día, para los mismos médicos. Ábrala para ver, editar o agregar archivos.</p>
         <div class="table-wrap">
           <table class="data">
-            <thead><tr><th>Paciente</th><th>Fecha</th><th>Médico</th><th>Exámenes</th><th>Archivos</th><th></th></tr></thead>
+            <thead><tr><th>Paciente</th><th>Fecha</th><th>Médicos</th><th>Exámenes</th><th>Archivos</th><th></th></tr></thead>
             <tbody id="studies-body"><tr><td colspan="6"><div class="empty">Cargando…</div></td></tr></tbody>
           </table>
         </div>
@@ -135,9 +159,9 @@
               <span class="hint">Los pacientes que agendaron ya están en la lista. ¿No aparece? <a href="#" data-open="patient">Registrar paciente</a>.</span>
             </div>
             <div class="field">
-              <label for="u-doctor">Médico que recibe el examen</label>
-              <select class="input select" id="u-doctor"></select>
-              <span class="hint" id="u-doctor-hint">El examen aparecerá en el portal de este médico.</span>
+              <span class="field-label" id="u-doctor-label">Médicos que reciben los exámenes</span>
+              <div id="u-doctors" aria-labelledby="u-doctor-label"></div>
+              <span class="hint" id="u-doctor-hint">Los exámenes aparecerán en el portal de cada médico elegido. Puede elegir más de uno.</span>
             </div>
           </div>
           <div class="form-row">
@@ -168,6 +192,56 @@
           <table class="data">
             <thead><tr><th>Paciente</th><th>Contacto</th><th>Visitas</th><th></th></tr></thead>
             <tbody id="patients-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Cobros -->
+      <section class="panel" id="cobros" data-section="cobros" data-section-desc="Lo cobrado en cada atención: servicios, medio de pago y documento entregado.">
+        <div class="panel-head">
+          <div class="range-inputs">
+            <label>Desde <input class="input input-sm" type="date" id="pay-from"></label>
+            <label>Hasta <input class="input input-sm" type="date" id="pay-to"></label>
+            <label><span class="sr-only">Medio de pago</span><select class="input select input-sm" id="pay-method"><option value="">Todos los medios</option></select></label>
+          </div>
+          <div class="panel-actions">
+            <label class="search search-sm"><span class="sr-only">Buscar cobros</span><i data-icon="search"></i><input class="input" id="pay-search" type="search" placeholder="Paciente o N° de documento"></label>
+            <button class="btn btn-primary btn-sm" type="button" data-open="payment"><i data-icon="plus"></i> Registrar cobro</button>
+          </div>
+        </div>
+        <div class="pay-summary" id="pay-summary"></div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Fecha</th><th>Paciente</th><th>Detalle</th><th>Medio de pago</th><th>Documento</th><th class="num">Total</th><th></th></tr></thead>
+            <tbody id="payments-body"><tr><td colspan="7"><div class="empty">Cargando…</div></td></tr></tbody>
+          </table>
+        </div>
+        <p class="panel-note">La página no emite boletas ni facturas: registre aquí el número del documento entregado (voucher del terminal, boleta o factura del SII).</p>
+      </section>
+
+      <!-- Servicios y horarios -->
+      <section class="panel" id="servicios" data-section="servicios" data-section-desc="Servicios que se agendan y se cobran, sus precios, y el horario de la agenda en línea.">
+        <div class="panel-head"><h2>Servicios</h2><button class="btn btn-primary btn-sm" type="button" data-new-service><i data-icon="plus"></i> Nuevo servicio</button></div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Servicio</th><th>Modalidad</th><th class="num">Precio</th><th>Agenda en línea</th><th></th></tr></thead>
+            <tbody id="services-body"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel" data-section="servicios">
+        <div class="panel-head"><h2>Horario de la agenda en línea</h2><span class="muted">Días y horas en que los pacientes pueden reservar</span></div>
+        <form class="panel-body" id="hours-form" novalidate></form>
+      </section>
+
+      <!-- Usuarios -->
+      <section class="panel" id="usuarios" data-section="usuarios" data-section-desc="Cuentas de administración: quién entra al panel y qué puede hacer.">
+        <div class="panel-head"><h2>Cuentas de administración</h2><button class="btn btn-primary btn-sm" type="button" data-new-admin><i data-icon="plus"></i> Nuevo administrador</button></div>
+        <p class="panel-note">El <strong>administrador general</strong> puede hacer todo y es el único que ve esta sección. A las demás cuentas se les eligen sus permisos; las secciones sin permiso no aparecen en su menú.</p>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Usuario</th><th>Descripción</th><th>Permisos</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="admins-body"></tbody>
           </table>
         </div>
       </section>
@@ -262,6 +336,89 @@
     </div>
   </div>
 
+  <!-- Cobro: nuevo o editar -->
+  <div class="modal-backdrop" id="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title">
+    <div class="modal md">
+      <div class="modal-head"><h3 id="payment-modal-title">Registrar cobro</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <form class="modal-body" id="payment-form" novalidate>
+        <div class="form-error" role="alert"></div>
+        <div class="pay-context" id="py-context" hidden></div>
+        <div class="form-row">
+          <div class="field"><label for="py-patient">Paciente</label><select class="input select" id="py-patient" name="patientId" required></select></div>
+          <div class="field"><label for="py-date">Fecha</label><input class="input" type="date" id="py-date" name="date" required></div>
+        </div>
+        <div class="field">
+          <span class="field-label">Servicios cobrados</span>
+          <div class="pay-items" id="py-items"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="py-add-item"><i data-icon="plus"></i> Agregar servicio</button>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="py-discount">Descuento <span class="opt">($)</span></label><input class="input" id="py-discount" name="discount" inputmode="numeric" placeholder="0"></div>
+          <div class="field pay-total"><span class="field-label">Total a cobrar</span><strong id="py-total">$0</strong></div>
+        </div>
+        <div class="form-row three">
+          <div class="field"><label for="py-method">Medio de pago</label><select class="input select" id="py-method" name="method" required></select></div>
+          <div class="field"><label for="py-doctype">Documento entregado</label><select class="input select" id="py-doctype" name="docType"></select></div>
+          <div class="field"><label for="py-docnumber">N° de documento <span class="opt">(opcional)</span></label><input class="input" id="py-docnumber" name="docNumber" maxlength="30"></div>
+        </div>
+        <div class="field"><label for="py-note">Nota <span class="opt">(opcional)</span></label><input class="input" id="py-note" name="note" maxlength="300" placeholder="Ej.: convenio, abono, pago en dos partes…"></div>
+        <div class="modal-foot">
+          <button class="btn btn-ghost danger-text" type="button" id="py-delete" hidden><i data-icon="trash"></i> Eliminar</button>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost" type="button" data-close>Cancelar</button>
+          <button class="btn btn-primary" type="submit">Guardar cobro</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Servicio: nuevo o editar -->
+  <div class="modal-backdrop" id="service-modal" role="dialog" aria-modal="true" aria-labelledby="service-modal-title">
+    <div class="modal sm">
+      <div class="modal-head"><h3 id="service-modal-title">Nuevo servicio</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <form class="modal-body" id="service-form" novalidate>
+        <div class="form-error" role="alert"></div>
+        <div class="field"><label for="sv-label">Nombre</label><input class="input" id="sv-label" name="label" required maxlength="60" placeholder="Radiografía panorámica"></div>
+        <div class="field"><label for="sv-detail">Descripción <span class="opt">(la ven los pacientes al agendar)</span></label><input class="input" id="sv-detail" name="detail" maxlength="160"></div>
+        <div class="form-row">
+          <div class="field"><label for="sv-modality">Modalidad del examen</label><select class="input select" id="sv-modality" name="modality"></select></div>
+          <div class="field"><label for="sv-price">Precio <span class="opt">($)</span></label><input class="input" id="sv-price" name="price" inputmode="numeric" placeholder="0"></div>
+        </div>
+        <label class="check"><input type="checkbox" name="active" id="sv-active" checked> Se puede agendar en línea</label>
+        <div class="modal-foot">
+          <button class="btn btn-ghost danger-text" type="button" id="sv-delete" hidden><i data-icon="trash"></i> Eliminar</button>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost" type="button" data-close>Cancelar</button>
+          <button class="btn btn-primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cuenta de administración: nueva o editar -->
+  <div class="modal-backdrop" id="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
+    <div class="modal sm">
+      <div class="modal-head"><h3 id="admin-modal-title">Nuevo administrador</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <form class="modal-body" id="admin-form" novalidate>
+        <div class="form-error" role="alert"></div>
+        <div class="field"><label for="ad-name">Nombre</label><input class="input" id="ad-name" name="name" required maxlength="60" placeholder="Paula Soto"></div>
+        <div class="field"><label for="ad-description">Descripción <span class="opt">(cargo o rol: secretaria, tecnólogo…)</span></label><input class="input" id="ad-description" name="description" maxlength="80"></div>
+        <div data-new-only>
+          <div class="field"><label for="ad-email">Correo (usuario)</label><input class="input" id="ad-email" name="email" type="email" autocomplete="off"></div>
+          <div class="field"><label for="ad-pass">Contraseña inicial</label><input class="input" id="ad-pass" name="password" type="text" minlength="6" autocomplete="new-password"><span class="hint">Mínimo 6 caracteres. Puede cambiarla con «¿Olvidó su contraseña?».</span></div>
+        </div>
+        <label class="check check-strong"><input type="checkbox" name="superadmin" id="ad-super"> <span><strong>Administrador general</strong><small>Puede hacer todo, incluso administrar estas cuentas.</small></span></label>
+        <fieldset class="perm-list" id="ad-perms"><legend>Permisos</legend></fieldset>
+        <div class="modal-foot">
+          <button class="btn btn-ghost danger-text" type="button" id="ad-toggle" hidden></button>
+          <span class="spacer"></span>
+          <button class="btn btn-ghost" type="button" data-close>Cancelar</button>
+          <button class="btn btn-primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Nuevo médico -->
   <div class="modal-backdrop" id="doctor-modal" role="dialog" aria-modal="true" aria-labelledby="doctor-modal-title">
     <div class="modal sm">
@@ -277,7 +434,7 @@
     </div>
   </div>
 
-  <!-- Explorador de exámenes: grupo, paciente o médico -->
+  <!-- Explorador de exámenes: visita, paciente o médico -->
   <div class="modal-backdrop" id="explorer-modal" role="dialog" aria-modal="true" aria-labelledby="explorer-title">
     <div class="modal explorer">
       <div class="modal-head">

@@ -57,7 +57,7 @@ export async function init() {
   }
 
   function render() {
-    visits = groupStudies(mine);
+    visits = groupStudies(mine, { byDoctor: false });
     const patients = patientsOf(visits);
     setText('stat-my-patients', patients.length);
     setText('stat-my-studies', mine.length);

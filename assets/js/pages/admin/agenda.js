@@ -6,6 +6,7 @@
 import { agendaConfig } from '../../config/agenda-config.js';
 import { addDays, adminDayTimes, APPOINTMENT_STATUSES, examLabel, isActive, parseIso, slotId } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
+import { fmtCLP } from '../../services/payments.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -56,20 +57,28 @@ export function createAgenda(ctx) {
       ? longDay(dayInput.value).replace(/^./, (c) => c.toUpperCase()) + ' · ' + (active ? active + ' cita' + (active > 1 ? 's' : '') : 'sin citas') + (rows.length > active ? ' (' + (rows.length - active) + ' cancelada' + (rows.length - active > 1 ? 's' : '') + ')' : '')
       : rows.length + ' cita' + (rows.length === 1 ? '' : 's');
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="6"><div class="empty">' + EMPTY[filter] + ' Cree una con <strong>Nueva cita</strong> o comparta la <a href="agendar.html" target="_blank" rel="noopener">agenda en línea</a>.</div></td></tr>';
+      body.innerHTML = '<tr><td colspan="7"><div class="empty">' + EMPTY[filter] + ' Cree una con <strong>Nueva cita</strong> o comparta la <a href="agendar.html" target="_blank" rel="noopener">agenda en línea</a>.</div></td></tr>';
       return;
     }
+    // Cobros de cada cita (los que la mencionan) para mostrar si ya se pagó.
+    const paidBy = new Map();
+    state.payments.forEach((x) => { if (x.appointmentId) paidBy.set(x.appointmentId, (paidBy.get(x.appointmentId) || 0) + (x.total || 0)); });
     body.innerHTML = rows.map((a) => {
       const when = escapeHtml(a.time) + (oneDay ? '' : '<small>' + fmtDate(a.date) + '</small>');
       const id = escapeHtml(a.id);
+      const paid = paidBy.get(a.id);
+      const payCell = paid !== undefined
+        ? '<span class="badge green" title="Cobro registrado">' + fmtCLP(paid) + '</span>'
+        : (ctx.can('cobros') && isActive(a) && a.status !== 'No asistió' ? '<button class="btn btn-ghost btn-sm" type="button" data-pay="' + id + '" title="Registrar el cobro de esta cita">' + icon('cash') + ' Cobrar</button>' : '');
       return '<tr class="appt-row' + (isActive(a) ? '' : ' done') + '">' +
         '<td><span class="appt-time">' + when + '</span></td>' +
         '<td>' + personCell(a.name, (contactOf(a) || 'Sin contacto') + ' · ' + escapeHtml(a.code || '')) + '</td>' +
         '<td><span class="badge blue" title="' + escapeHtml(examLabel(a.exam)) + '">' + escapeHtml(a.exam) + '</span></td>' +
         '<td>' + (a.referrer ? escapeHtml(a.referrer) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + statusSelect(a) + '</td>' +
+        '<td>' + payCell + '</td>' +
         '<td><div class="row-actions">' +
-          (isActive(a) ? '<button class="btn btn-outline btn-sm" type="button" data-upload="' + id + '" title="Cargar el examen de esta cita">' + icon('upload') + ' Cargar examen</button>' : '') +
+          (isActive(a) && ctx.can('examenes') ? '<button class="btn btn-outline btn-sm" type="button" data-upload="' + id + '" title="Cargar el examen de esta cita">' + icon('upload') + ' Cargar</button>' : '') +
           '<button class="icon-btn" type="button" data-edit="' + id + '" title="Editar cita" aria-label="Editar cita">' + icon('edit') + '</button>' +
           '<button class="icon-btn" type="button" data-delete="' + id + '" title="Borrar cita" aria-label="Borrar cita">' + icon('trash') + '</button>' +
         '</div></td>' +
@@ -110,8 +119,9 @@ export function createAgenda(ctx) {
 
   const find = (id) => state.appointments.find((a) => a.id === id);
   body.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-upload], [data-edit], [data-delete]');
+    const b = e.target.closest('[data-upload], [data-edit], [data-delete], [data-pay]');
     if (!b) return;
+    if (b.dataset.pay) { const a = find(b.dataset.pay); ctx.openPayment({ patientId: a.patientId, date: a.date, appointment: a }); }
     if (b.dataset.upload) ctx.startUploadFor(find(b.dataset.upload));
     if (b.dataset.edit) form.open(find(b.dataset.edit));
     if (b.dataset.delete) remove(find(b.dataset.delete));
@@ -174,7 +184,6 @@ function createAppointmentForm(ctx, { onDelete }) {
   const deleteBtn = $('ap-delete');
   let editing = null;
 
-  fields.exam.innerHTML = agendaConfig.exams.map((x) => '<option value="' + escapeHtml(x.id) + '">' + escapeHtml(x.label) + '</option>').join('');
   fields.status.innerHTML = APPOINTMENT_STATUSES.map((st) => '<option>' + st + '</option>').join('');
 
   // Horas del día elegido; las ocupadas por otras citas no se pueden elegir.
@@ -215,7 +224,11 @@ function createAppointmentForm(ctx, { onDelete }) {
     // En una cita existente el paciente no cambia (se editan los datos de la cita).
     fields.patient.disabled = !!appt;
     document.getElementById('doctor-names').innerHTML = state.doctors.map((d) => '<option value="' + escapeHtml(d.name) + '">').join('');
-    const a = appt || { exam: agendaConfig.exams[0].id, date: preset.date || today(), time: preset.time, status: 'Pendiente' };
+    // Servicios al abrir: pueden cambiar en «Servicios y horarios». Los inactivos
+    // solo aparecen si la cita ya los tiene.
+    fields.exam.innerHTML = agendaConfig.exams.filter((x) => x.active !== false || (appt && appt.exam === x.id))
+      .map((x) => '<option value="' + escapeHtml(x.id) + '">' + escapeHtml(x.label) + '</option>').join('');
+    const a = appt || { exam: (agendaConfig.exams.find((x) => x.active !== false) || agendaConfig.exams[0]).id, date: preset.date || today(), time: preset.time, status: 'Pendiente' };
     fields.patient.value = a.patientId || '';
     fields.first.value = a.firstName || '';
     fields.last.value = a.lastName || '';

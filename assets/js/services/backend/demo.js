@@ -4,17 +4,23 @@
 // agendado; al cerrar la pestaña se vuelve a los datos de ejemplo.
 
 import { isoDate, agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
+import { doctorsOf } from '../groups.js';
+import { normalizePayment } from '../payments.js';
 import { normalizeAccountName, normalizePatient } from '../people.js';
-import { agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, sizeOf, studyEdits, studyPatientFields } from './shared.js';
+import { currentSettings, toStored, validateSettings } from '../settings.js';
+import {
+  agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, normalizeAdmin, sizeOf, studyDoctors, studyEdits, studyPatientFields, withDoctors
+} from './shared.js';
 
 const SESSION_KEY = 'dentfrucer.demo.session';
-const DB_KEY = 'dentfrucer.demo.db.v2'; // cambia la versión si cambian los datos de ejemplo
+const DB_KEY = 'dentfrucer.demo.db.v3'; // cambia la versión si cambian los datos de ejemplo
 const MB = 1024 * 1024;
+const PASSWORD = 'demo1234';
 
-const USERS = {
-  'admin@dentfrucer.com': { uid: 'admin', name: 'Administración', role: 'admin', specialty: '' },
-  'doctor@dentfrucer.com': { uid: 'D-01', name: 'Dra. Laura Méndez', role: 'doctor', specialty: 'Ortodoncia' }
-};
+// Médico de ejemplo (las cuentas de administración están en los datos: store.admins).
+const DOCTOR_LOGIN = { 'doctor@dentfrucer.com': { uid: 'D-01', name: 'Dra. Laura Méndez', role: 'doctor', specialty: 'Ortodoncia' } };
+// Precios de ejemplo de los servicios.
+const DEMO_PRICES = { CBCT: 65000, 'Panorámica': 18000, 'Cefalometría': 15000, Periapical: 8000, Otro: 10000 };
 
 // --- Datos de ejemplo ---------------------------------------------------------------
 function seed() {
@@ -36,8 +42,8 @@ function seed() {
     person('ag_demo2', 'Camila', 'Rojas', { phone: '300 555 0192', source: 'agenda' })
   ];
   const patient = (id) => patients.find((p) => p.id === id);
-  const study = (id, pid, doctorId, modality, description, date, mb, images, status, names) => ({
-    id, code: id, patientId: pid, ...studyPatientFields(patient(pid)), doctorId,
+  const study = (id, pid, doctorIds, modality, description, date, mb, images, status, names) => ({
+    id, code: id, patientId: pid, ...studyPatientFields(patient(pid)), ...studyDoctors([].concat(doctorIds)),
     modality, description, date, status, totalSize: mb * MB,
     files: Array.from({ length: Math.min(images, 3) }, (_, i) => ({ name: names ? names[i] : 'IMG' + String(i + 1).padStart(4, '0') + '.dcm', path: 'demo/' + id + '/' + i, size: (mb * MB) / images }))
   });
@@ -49,21 +55,63 @@ function seed() {
       slotId: slotId(date, time), patientId: pid
     };
   };
+  const studies = [
+    study('EST-2026-0418', 'p1', 'D-01', 'CBCT', 'Tomografía Cone Beam · maxilar completo', day(-6), 412, 512, 'Nuevo'),
+    study('EST-2026-0415', 'p1', 'D-01', 'Panorámica', 'Ortopantomografía digital', day(-6), 18, 1, 'Visto'),
+    study('EST-2026-0416', 'p1', 'D-01', 'Informe', 'Informe radiológico', day(-6), 0.2, 1, 'Nuevo', ['Informe EST-2026-0418.pdf']),
+    study('EST-2026-0310', 'p1', 'D-02', 'Periapical', 'Control periapical 21', day(-121), 4, 2, 'Visto'),
+    study('EST-2026-0409', 'p2', 'D-01', 'Cefalometría', 'Telerradiografía lateral de cráneo', day(-8), 22, 1, 'Visto'),
+    study('EST-2026-0402', 'p3', ['D-01', 'D-03'], 'CBCT', 'Cone Beam · ATM bilateral', day(-11), 388, 480, 'Nuevo'),
+    study('EST-2026-0397', 'p4', 'D-02', 'CBCT', 'Cone Beam · zona implante 36', day(-12), 296, 384, 'Visto'),
+    study('EST-2026-0391', 'p5', 'D-03', 'Periapical', 'Serie periapical completa', day(-14), 36, 14, 'Nuevo'),
+    study('EST-2026-0385', 'p6', 'D-01', 'Panorámica', 'Ortopantomografía digital', day(-15), 17, 1, 'Visto'),
+    study('EST-2026-0380', 'p7', 'D-02', 'CBCT', 'Cone Beam · seno maxilar', day(-17), 402, 500, 'Visto'),
+    study('EST-2026-0371', 'p2', 'D-01', 'Panorámica', 'Ortopantomografía digital', day(-24), 17, 1, 'Visto'),
+    study('EST-2026-0364', 'p5', 'D-02', 'CBCT', 'Cone Beam · zona implante 46', day(-31), 301, 390, 'Visto'),
+    study('EST-2026-0358', 'p3', 'D-03', 'Periapical', 'Periapical 36', day(-38), 3, 1, 'Visto'),
+    study('EST-2026-0352', 'p7', 'D-01', 'Cefalometría', 'Telerradiografía lateral de cráneo', day(-45), 21, 1, 'Visto'),
+    study('EST-2026-0347', 'p4', 'D-02', 'Panorámica', 'Ortopantomografía digital', day(-52), 18, 1, 'Visto'),
+    study('EST-2026-0341', 'p6', 'D-01', 'Otro', 'Fotografías clínicas', day(-60), 9, 6, 'Visto')
+  ];
+
+  const settings = currentSettings();
+  settings.exams.forEach((e) => { e.price = DEMO_PRICES[e.id] || 0; });
+  const labelOf = (id) => (settings.exams.find((e) => e.id === id) || { label: id }).label;
+
+  // Cobros de ejemplo: uno por visita (paciente + día), con los precios de ejemplo.
+  const methods = ['Débito', 'Crédito', 'Efectivo', 'Transferencia', 'Débito', 'Convenio', 'Crédito'];
+  const docFor = (m) => (m === 'Débito' || m === 'Crédito' ? 'Voucher (boleta)' : m === 'Convenio' ? 'Factura' : 'Boleta');
+  const visits = new Map();
+  studies.filter((x) => x.modality !== 'Informe').forEach((x) => {
+    const k = x.patientId + '|' + x.date;
+    if (!visits.has(k)) visits.set(k, []);
+    visits.get(k).push(x);
+  });
+  const payments = [...visits.values()].map((list, i) => {
+    const method = methods[i % methods.length];
+    const items = list.map((x) => ({ serviceId: x.modality, label: labelOf(x.modality), price: DEMO_PRICES[x.modality] || 0 }));
+    const total = items.reduce((n, it) => n + it.price, 0);
+    return { id: 'pay' + (i + 1), date: list[0].date, patientId: list[0].patientId, patientName: list[0].patientName, appointmentId: null, items, discount: 0, total, method, docType: docFor(method), docNumber: String(48210 + i), note: '' };
+  });
+  payments.push({ id: 'pay-today', date: day(0), patientId: 'p3', patientName: 'Sofía Herrera', appointmentId: 'demoa4', items: [{ serviceId: 'Periapical', label: 'Radiografías intraorales', price: 8000 }], discount: 0, total: 8000, method: 'Débito', docType: 'Voucher (boleta)', docNumber: '48290', note: '' });
+
+  // Cuentas de administración: la general, una secretaria y un tecnólogo con permisos limitados.
+  const all = { resumen: true, agenda: true, examenes: true, pacientes: true, medicos: true, cobros: true, config: true };
+  const admins = [
+    { uid: 'admin', email: 'admin@dentfrucer.com', name: 'Administración', description: 'Dirección', superadmin: true, permissions: all },
+    { uid: 'adm-sec', email: 'secretaria@dentfrucer.com', name: 'Paula Soto', description: 'Secretaria', superadmin: false,
+      permissions: { ...all, resumen: false, examenes: false, medicos: false, config: false } },
+    { uid: 'adm-tec', email: 'tecnologo@dentfrucer.com', name: 'Matías Rojas', description: 'Tecnólogo médico', superadmin: false,
+      permissions: { ...all, resumen: false, medicos: false, cobros: false, config: false } }
+  ];
+
   return {
     doctors,
     patients,
-    studies: [
-      study('EST-2026-0418', 'p1', 'D-01', 'CBCT', 'Tomografía Cone Beam · maxilar completo', '2026-10-08', 412, 512, 'Nuevo'),
-      study('EST-2026-0415', 'p1', 'D-01', 'Panorámica', 'Ortopantomografía digital', '2026-10-08', 18, 1, 'Visto'),
-      study('EST-2026-0416', 'p1', 'D-01', 'Informe', 'Informe radiológico', '2026-10-08', 0.2, 1, 'Nuevo', ['Informe EST-2026-0418.pdf']),
-      study('EST-2026-0310', 'p1', 'D-02', 'Periapical', 'Control periapical 21', '2026-06-15', 4, 2, 'Visto'),
-      study('EST-2026-0409', 'p2', 'D-01', 'Cefalometría', 'Telerradiografía lateral de cráneo', '2026-10-06', 22, 1, 'Visto'),
-      study('EST-2026-0402', 'p3', 'D-01', 'CBCT', 'Cone Beam · ATM bilateral', '2026-10-03', 388, 480, 'Nuevo'),
-      study('EST-2026-0397', 'p4', 'D-02', 'CBCT', 'Cone Beam · zona implante 36', '2026-10-02', 296, 384, 'Visto'),
-      study('EST-2026-0391', 'p5', 'D-03', 'Periapical', 'Serie periapical completa', '2026-09-30', 36, 14, 'Nuevo'),
-      study('EST-2026-0385', 'p6', 'D-01', 'Panorámica', 'Ortopantomografía digital', '2026-09-29', 17, 1, 'Visto'),
-      study('EST-2026-0380', 'p7', 'D-02', 'CBCT', 'Cone Beam · seno maxilar', '2026-09-27', 402, 500, 'Visto')
-    ],
+    studies,
+    payments,
+    admins,
+    settings: toStored(settings),
     appointments: [
       appointment('demoa1', 'ag_demo1', 'Panorámica', day(0), '10:20', 'Dra. Laura Méndez'),
       appointment('demoa2', 'ag_demo2', 'CBCT', day(0), '11:00', 'Dr. Carlos Rivas'),
@@ -81,7 +129,7 @@ function seed() {
 
 export function createDemoBackend() {
   const store = (() => { try { return JSON.parse(sessionStorage.getItem(DB_KEY)); } catch (e) { return null; } })() || seed();
-  const { doctors, patients, studies, appointments } = store;
+  const { doctors, patients, studies, appointments, payments, admins } = store;
   const save = () => { try { sessionStorage.setItem(DB_KEY, JSON.stringify(store)); } catch (e) { /* modo privado */ } };
   // Examen modificado por la clínica: queda la fecha del cambio (orden dentro del grupo).
   const edited = (id) => { const s = studies.find((x) => x.id === id); s.updatedAt = Date.now(); return s; };
@@ -93,20 +141,36 @@ export function createDemoBackend() {
     read: () => { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; } },
     write: (v) => { try { v ? sessionStorage.setItem(SESSION_KEY, JSON.stringify(v)) : sessionStorage.removeItem(SESSION_KEY); } catch (e) { /* modo privado */ } }
   };
+  // Perfil como el de Firebase (null si la cuenta está desactivada).
+  function profileOf(email) {
+    const a = admins.find((x) => x.email === email);
+    if (a) {
+      if (a.disabled) return null;
+      return { uid: a.uid, email, name: a.name, role: 'admin', specialty: '', description: a.description || '', superadmin: a.superadmin === true, permissions: a.permissions, title: a.description || 'Administrador' };
+    }
+    const d = DOCTOR_LOGIN[email];
+    if (!d) return null;
+    return { ...d, email, name: (store.accountNames || {})[email] || d.name, description: '', superadmin: false, permissions: null, title: d.specialty };
+  }
 
   return {
     mode: 'demo',
 
     // --- Sesión -----------------------------------------------------------------
-    async currentUser() { return session.read(); },
+    // La sesión guarda el correo; el perfil se lee de los datos, así los cambios
+    // de permisos se ven al recargar, como en Firebase.
+    async currentUser() {
+      const s = session.read();
+      return s ? profileOf(s.email) : null;
+    },
     async signIn(email, password) {
       await wait(250);
       const key = email.trim().toLowerCase();
-      const u = USERS[key];
-      if (!u || password !== 'demo1234') throw new Error('Correo o contraseña incorrectos.');
-      const name = (store.accountNames || {})[key] || u.name;
-      const profile = { ...u, name, email: key, title: u.role === 'admin' ? 'Administrador' : u.specialty };
-      session.write(profile);
+      const known = admins.some((a) => a.email === key) || DOCTOR_LOGIN[key];
+      if (!known || password !== PASSWORD) throw new Error('Correo o contraseña incorrectos.');
+      const profile = profileOf(key);
+      if (!profile) throw new Error('Su cuenta no tiene acceso (sin perfil o desactivada). Contacte al administrador de DentFrucer.');
+      session.write({ email: key });
       return profile;
     },
     async signOut() { session.write(null); },
@@ -115,11 +179,34 @@ export function createDemoBackend() {
       if (error) throw new Error(error);
       const me = session.read();
       if (!me) throw new Error('La sesión expiró. Vuelva a ingresar.');
-      store.accountNames = { ...store.accountNames, [me.email]: name };
+      const admin = admins.find((a) => a.email === me.email);
+      if (admin) admin.name = name;
+      else store.accountNames = { ...store.accountNames, [me.email]: name };
       save();
-      const profile = { ...me, name };
-      session.write(profile);
-      return profile;
+      return profileOf(me.email);
+    },
+
+    // --- Cuentas de administración -------------------------------------------------
+    async listAdmins() { return admins.map((a) => ({ ...a, id: a.uid, role: 'admin' })).sort(byName); },
+    async createAdmin(input) {
+      const data = fail(normalizeAdmin(input));
+      const email = String(input.email || '').trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('El correo no es válido.');
+      if (admins.some((a) => a.email === email) || DOCTOR_LOGIN[email]) throw new Error('Ya existe una cuenta con ese correo.');
+      if (String(input.password || '').length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+      const uid = newId('adm-');
+      admins.push({ uid, email, ...data });
+      save();
+      return uid;
+    },
+    async updateAdmin(uid, input) {
+      const data = fail(normalizeAdmin(input));
+      Object.assign(admins.find((a) => a.uid === uid), input.permissions === undefined ? { name: data.name, description: data.description } : data);
+      save();
+    },
+    async setAdminDisabled(uid, disabled) {
+      admins.find((a) => a.uid === uid).disabled = !!disabled;
+      save();
     },
     async resetPassword() { await wait(200); },
 
@@ -149,20 +236,20 @@ export function createDemoBackend() {
 
     // --- Exámenes ----------------------------------------------------------------
     async listStudies({ doctorId } = {}) {
-      return studies.filter((s) => !doctorId || s.doctorId === doctorId).sort(byDateDesc);
+      return studies.filter((s) => !doctorId || doctorsOf(s).includes(doctorId)).map(withDoctors).sort(byDateDesc);
     },
-    async uploadStudy({ patient, doctorId, modality, description, date, files, onProgress }) {
+    async uploadStudy({ patient, doctorIds, modality, description, date, files, onProgress }) {
       for (let i = 1; i <= 10; i++) { await wait(80); if (onProgress) onProgress(i / 10); }
       const id = 'EST-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 9000) + 1000);
       studies.push({
-        id, code: id, patientId: patient.id, ...studyPatientFields(patient), doctorId: doctorId || null,
+        id, code: id, patientId: patient.id, ...studyPatientFields(patient), ...studyDoctors(doctorIds),
         modality, description, date, status: 'Nuevo', createdAt: Date.now(), updatedAt: Date.now(),
         files: files.map((f) => ({ name: f.name, path: 'demo/' + newId('f'), size: f.size })), totalSize: sizeOf(files)
       });
       save();
       return id;
     },
-    async setStudyDoctor(studyId, doctorId) { edited(studyId).doctorId = doctorId || null; save(); },
+    async setStudyDoctors(studyId, doctorIds) { Object.assign(edited(studyId), studyDoctors(doctorIds)); save(); },
     async updateStudy(study, changes) { Object.assign(edited(study.id), studyEdits(changes)); save(); },
     // Archivos de demostración: solo nombre y tamaño (no hay nada que descargar).
     async addStudyFiles(study, files, onProgress) {
@@ -190,6 +277,26 @@ export function createDemoBackend() {
     async deleteStudy(study) { studies.splice(studies.findIndex((s) => s.id === study.id), 1); save(); },
     async markSeen(studyId) { const s = studies.find((x) => x.id === studyId); if (s) s.status = 'Visto'; save(); },
     async fileUrls() { return []; },
+
+    // --- Servicios y horario ------------------------------------------------------------
+    async getAgendaSettings() { return store.settings || null; },
+    async saveAgendaSettings(cfg) {
+      const data = fail(validateSettings(cfg));
+      store.settings = toStored(data);
+      save();
+      return data;
+    },
+
+    // --- Cobros ------------------------------------------------------------------------
+    async listPayments() { return payments.map((x) => ({ ...x })).sort(byDateDesc); },
+    async savePayment(id, input) {
+      const data = fail(normalizePayment(input));
+      if (id) Object.assign(payments.find((x) => x.id === id), data);
+      else { id = newId('pay'); payments.push({ id, ...data, createdBy: (session.read() || {}).email || null }); }
+      save();
+      return id;
+    },
+    async deletePayment(id) { payments.splice(payments.findIndex((x) => x.id === id), 1); save(); },
 
     // --- Agenda: público -----------------------------------------------------------
     async listBusySlots(from, to) {

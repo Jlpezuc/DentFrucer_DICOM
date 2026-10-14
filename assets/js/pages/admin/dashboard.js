@@ -1,0 +1,255 @@
+// Resumen: ingresos, medios de pago, exámenes y citas de un período (desde /
+// hasta, con atajos: hoy, esta semana, este mes, mes anterior, este año).
+//
+//   Indicadores   ingresos (y cambio frente al período anterior de igual largo),
+//                 exámenes, citas y citas atendidas sin cobro
+//   Gráficos      ingresos en el tiempo (columnas por día, semana o mes) y
+//                 barras horizontales por medio de pago, servicio, modalidad y médico
+//   Pendientes    citas atendidas del período que aún no tienen cobro
+//
+// Las barras usan un solo color: comparan magnitudes, no identifican series.
+// Cada gráfico tiene su tabla equivalente para lectores de pantalla.
+
+import { addDays, examLabel, isoDate, parseIso } from '../../services/agenda.js';
+import { fmtCLP, PAYMENT_METHODS } from '../../services/payments.js';
+import { escapeHtml } from '../../ui/dom.js';
+import { fmtDate, today } from '../../ui/format.js';
+import { icon } from '../../ui/icons.js';
+import { doctorNames } from './common.js';
+
+const DAY_MS = 86400000;
+const daysBetween = (a, b) => Math.round((parseIso(b) - parseIso(a)) / DAY_MS) + 1;
+const mondayOf = (iso) => addDays(iso, -((parseIso(iso).getDay() + 6) % 7));
+
+// $1.250.000 -> "$1,3 M"; $85.000 -> "$85 mil".
+function compactCLP(n) {
+  if (n >= 1e6) return '$' + (n / 1e6).toLocaleString('es-CL', { maximumFractionDigits: n >= 1e7 ? 0 : 1 }) + ' M';
+  if (n >= 1e3) return '$' + Math.round(n / 1e3).toLocaleString('es-CL') + ' mil';
+  return fmtCLP(n);
+}
+
+function presetRange(id) {
+  const t = today();
+  const d = parseIso(t);
+  if (id === 'today') return [t, t];
+  if (id === 'week') return [mondayOf(t), t];
+  if (id === 'month') return [t.slice(0, 8) + '01', t];
+  if (id === 'last-month') {
+    const first = isoDate(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    return [first, isoDate(new Date(d.getFullYear(), d.getMonth(), 0))];
+  }
+  if (id === 'year') return [t.slice(0, 5) + '01-01', t];
+  return [t, t];
+}
+
+// Agrupa fechas en columnas: por día (hasta un mes), semana (hasta 4 meses) o mes.
+function buckets(from, to) {
+  const n = daysBetween(from, to);
+  const unit = n <= 31 ? 'day' : n <= 124 ? 'week' : 'month';
+  const keyOf = (iso) => (unit === 'day' ? iso : unit === 'week' ? mondayOf(iso) : iso.slice(0, 7));
+  const list = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const k = keyOf(d);
+    if (!list.length || list[list.length - 1].key !== k) list.push({ key: k, from: d, to: d, total: 0, count: 0 });
+    list[list.length - 1].to = d;
+  }
+  const label = (b) => (unit === 'day' ? parseIso(b.from).getDate() + ''
+    : unit === 'week' ? parseIso(b.from).toLocaleDateString('es', { day: 'numeric', month: 'short' })
+      : parseIso(b.from).toLocaleDateString('es', { month: 'short' }));
+  const title = (b) => (unit === 'day' ? fmtDate(b.from) : unit === 'week' ? 'Semana del ' + fmtDate(b.from) : parseIso(b.from).toLocaleDateString('es', { month: 'long', year: 'numeric' }));
+  return { unit, list, keyOf, label, title };
+}
+
+export function createDashboard(ctx) {
+  const { state } = ctx;
+  const $ = (id) => document.getElementById(id);
+  const out = $('dash-body');
+  const fromInput = $('dash-from');
+  const toInput = $('dash-to');
+  const presets = document.querySelectorAll('#dash-presets [data-range]');
+  [fromInput.value, toInput.value] = presetRange('month');
+
+  function pick(id) {
+    [fromInput.value, toInput.value] = presetRange(id);
+    presets.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.range === id)));
+    render();
+  }
+  presets.forEach((b) => b.addEventListener('click', () => pick(b.dataset.range)));
+  [fromInput, toInput].forEach((el) => el.addEventListener('change', () => {
+    if (fromInput.value && toInput.value && fromInput.value > toInput.value) [fromInput.value, toInput.value] = [toInput.value, fromInput.value];
+    presets.forEach((b) => b.setAttribute('aria-selected', 'false'));
+    render();
+  }));
+
+  // --- Piezas -----------------------------------------------------------------------------
+  const tile = (label, value, sub = '', cls = '') => `
+    <div class="kpi ${cls}"><span class="kpi-label">${label}</span><strong class="kpi-value">${value}</strong>${sub ? `<span class="kpi-sub">${sub}</span>` : ''}</div>`;
+
+  function delta(now, before) {
+    if (!before) return now ? '<span class="delta">Sin ingresos en el período anterior</span>' : '';
+    const pct = Math.round(((now - before) / before) * 100);
+    const cls = pct > 0 ? 'up' : pct < 0 ? 'down' : '';
+    return `<span class="delta ${cls}">${pct > 0 ? '▲ +' : pct < 0 ? '▼ ' : ''}${pct}% vs. período anterior</span>`;
+  }
+
+  // Barras horizontales ordenadas de mayor a menor, con el valor y la parte del total.
+  function barList(title, rows, { format = (v) => v, share = true, empty = 'Sin datos en el período.' } = {}) {
+    const max = Math.max(...rows.map((r) => r.value), 0);
+    const total = rows.reduce((n, r) => n + r.value, 0);
+    return `<section class="dash-card">
+      <h3>${title}</h3>
+      ${rows.length ? `<ul class="bar-list">${rows.map((r) => `
+        <li title="${escapeHtml(r.label)}: ${escapeHtml(String(format(r.value)))}${r.note ? ' · ' + escapeHtml(r.note) : ''}">
+          <span class="bl-label">${escapeHtml(r.label)}${r.note ? `<small>${escapeHtml(r.note)}</small>` : ''}</span>
+          <span class="bl-track"><span class="bl-bar" style="width:${max ? Math.max(2, (r.value / max) * 100) : 0}%"></span></span>
+          <span class="bl-value">${format(r.value)}${share && total ? `<small>${Math.round((r.value / total) * 100)}%</small>` : ''}</span>
+        </li>`).join('')}</ul>` : `<p class="muted dash-empty">${empty}</p>`}
+    </section>`;
+  }
+
+  // Columnas de ingresos en el tiempo (SVG), con su tabla para lectores de pantalla.
+  function timeChart(b) {
+    const W = 720;
+    const H = 220;
+    const pad = { l: 64, r: 8, t: 12, b: 26 };
+    const max = Math.max(...b.list.map((x) => x.total), 0);
+    const top = max ? niceMax(max) : 1;
+    const iw = W - pad.l - pad.r;
+    const ih = H - pad.t - pad.b;
+    const slot = iw / b.list.length;
+    const bw = Math.min(24, Math.max(3, slot * 0.6));
+    const y = (v) => pad.t + ih - (v / top) * ih;
+    const ticks = [0, top / 2, top];
+    const every = Math.ceil(b.list.length / 12);
+    const bars = b.list.map((x, i) => {
+      const cx = pad.l + slot * i + slot / 2;
+      const h = (x.total / top) * ih;
+      const r = Math.min(4, h, bw / 2);
+      const x0 = cx - bw / 2;
+      const y0 = pad.t + ih;
+      // Extremo de datos redondeado; la base queda recta.
+      const path = h > 0 ? `M${x0},${y0}V${y0 - h + r}Q${x0},${y0 - h} ${x0 + r},${y0 - h}H${x0 + bw - r}Q${x0 + bw},${y0 - h} ${x0 + bw},${y0 - h + r}V${y0}Z` : '';
+      return `<g class="tc-col" data-i="${i}">
+        <rect class="tc-hit" x="${pad.l + slot * i}" y="${pad.t}" width="${slot}" height="${ih}"></rect>
+        ${path ? `<path class="tc-bar" d="${path}"></path>` : ''}
+        ${i % every === 0 ? `<text class="tc-x" x="${cx}" y="${H - 8}" text-anchor="middle">${escapeHtml(b.label(x))}</text>` : ''}
+      </g>`;
+    }).join('');
+    return `<section class="dash-card dash-wide">
+      <h3>Ingresos ${b.unit === 'day' ? 'por día' : b.unit === 'week' ? 'por semana' : 'por mes'}</h3>
+      <div class="time-chart">
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Ingresos ${b.unit === 'day' ? 'por día' : b.unit === 'week' ? 'por semana' : 'por mes'} del período">
+          ${ticks.map((t) => `<line class="tc-grid" x1="${pad.l}" x2="${W - pad.r}" y1="${y(t)}" y2="${y(t)}"></line><text class="tc-y" x="${pad.l - 8}" y="${y(t) + 4}" text-anchor="end">${compactCLP(t)}</text>`).join('')}
+          ${bars}
+        </svg>
+        <div class="tc-tip" hidden></div>
+      </div>
+      <table class="sr-only"><caption>Ingresos del período</caption><thead><tr><th>Período</th><th>Ingresos</th><th>Cobros</th></tr></thead>
+        <tbody>${b.list.map((x) => `<tr><td>${escapeHtml(b.title(x))}</td><td>${fmtCLP(x.total)}</td><td>${x.count}</td></tr>`).join('')}</tbody></table>
+    </section>`;
+  }
+
+  // --- Dibujo ---------------------------------------------------------------------------------
+  let currentBuckets = null;
+
+  function render() {
+    const from = fromInput.value || today();
+    const to = toInput.value || today();
+    const inRange = (d) => d >= from && d <= to;
+    const len = daysBetween(from, to);
+    const prevFrom = addDays(from, -len);
+    const prevTo = addDays(from, -1);
+
+    const pays = state.payments.filter((x) => inRange(x.date));
+    const prevPays = state.payments.filter((x) => x.date >= prevFrom && x.date <= prevTo);
+    const income = pays.reduce((n, x) => n + x.total, 0);
+    const prevIncome = prevPays.reduce((n, x) => n + x.total, 0);
+    const exams = state.studies.filter((s) => inRange(s.date) && s.modality !== 'Informe');
+    const appts = state.appointments.filter((a) => inRange(a.date));
+    const byStatus = (st) => appts.filter((a) => a.status === st).length;
+    const paidAppts = new Set(state.payments.map((x) => x.appointmentId).filter(Boolean));
+    const paidVisits = new Set(state.payments.map((x) => x.patientId + '|' + x.date));
+    const unpaid = appts.filter((a) => a.status === 'Atendida' && !paidAppts.has(a.id) && !paidVisits.has(a.patientId + '|' + a.date));
+    const canPay = ctx.can('cobros');
+    const seeMoney = ctx.can('cobros') || ctx.can('resumen');
+
+    // Ingresos por medio de pago, por servicio; exámenes por modalidad y por médico.
+    const methodRows = PAYMENT_METHODS.map((m) => {
+      const list = pays.filter((x) => x.method === m);
+      return { label: m, value: list.reduce((n, x) => n + x.total, 0), note: list.length ? list.length + (list.length === 1 ? ' cobro' : ' cobros') : '' };
+    }).filter((r) => r.value > 0).sort((a, b) => b.value - a.value);
+    const services = new Map();
+    pays.forEach((x) => {
+      const share = x.items.length ? x.discount / x.items.length : 0;
+      x.items.forEach((it) => services.set(it.label, (services.get(it.label) || 0) + Math.max(0, it.price - share)));
+    });
+    const serviceRows = [...services.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    const modalities = new Map();
+    exams.forEach((s) => modalities.set(s.modality, (modalities.get(s.modality) || 0) + 1));
+    const modalityRows = [...modalities.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    const doctors = new Map();
+    exams.forEach((s) => (s.doctorIds.length ? s.doctorIds : ['']).forEach((id) => doctors.set(id, (doctors.get(id) || 0) + 1)));
+    const doctorRows = [...doctors.entries()].map(([id, value]) => ({ label: id ? doctorNames(state.doctors, [id]) : 'Sin médico', value })).sort((a, b) => b.value - a.value);
+
+    currentBuckets = buckets(from, to);
+    const index = new Map(currentBuckets.list.map((b, i) => [b.key, i]));
+    pays.forEach((x) => { const b = currentBuckets.list[index.get(currentBuckets.keyOf(x.date))]; if (b) { b.total += x.total; b.count++; } });
+
+    const period = from === to ? fmtDate(from) : fmtDate(from) + ' – ' + fmtDate(to);
+    out.innerHTML = `
+      <p class="dash-period">${icon('calendar')} ${escapeHtml(period)} <span class="muted">· ${len} ${len === 1 ? 'día' : 'días'}</span></p>
+      <div class="kpis">
+        ${seeMoney ? tile('Ingresos', fmtCLP(income), delta(income, prevIncome), 'kpi-hero') : ''}
+        ${seeMoney ? tile('Cobros', String(pays.length), pays.length ? 'Promedio ' + fmtCLP(income / pays.length) : '') : ''}
+        ${tile('Exámenes realizados', String(exams.length), new Set(exams.map((s) => s.patientId)).size + ' pacientes')}
+        ${tile('Citas', String(appts.filter((a) => a.status !== 'Cancelada').length), byStatus('Atendida') + ' atendidas · ' + byStatus('No asistió') + ' no asistieron · ' + byStatus('Cancelada') + ' canceladas')}
+        ${tile('Atendidas sin cobro', String(unpaid.length), unpaid.length ? 'Revise la lista de abajo' : 'Todo cobrado', unpaid.length ? 'kpi-warn' : '')}
+      </div>
+      <div class="dash-grid">
+        ${seeMoney ? timeChart(currentBuckets) : ''}
+        ${seeMoney ? barList('Ingresos por medio de pago', methodRows, { format: fmtCLP, empty: 'Sin cobros en el período.' }) : ''}
+        ${seeMoney ? barList('Ingresos por servicio', serviceRows, { format: fmtCLP, empty: 'Sin cobros en el período.' }) : ''}
+        ${barList('Exámenes por modalidad', modalityRows, { empty: 'Sin exámenes en el período.' })}
+        ${barList('Exámenes por médico', doctorRows, { share: false, empty: 'Sin exámenes en el período.' })}
+      </div>
+      <section class="dash-card dash-wide">
+        <h3>Citas atendidas sin cobro</h3>
+        ${unpaid.length ? `<table class="data compact"><thead><tr><th>Fecha</th><th>Paciente</th><th>Servicio</th><th></th></tr></thead><tbody>${unpaid.map((a) => `
+          <tr><td>${fmtDate(a.date)} <span class="muted">${escapeHtml(a.time)}</span></td><td>${escapeHtml(a.name)}</td><td>${escapeHtml(examLabel(a.exam))}</td>
+          <td><div class="row-actions">${canPay ? `<button class="btn btn-outline btn-sm" type="button" data-pay-appt="${escapeHtml(a.id)}">${icon('cash')} Cobrar</button>` : ''}</div></td></tr>`).join('')}</tbody></table>`
+        : '<p class="muted dash-empty">No hay citas atendidas pendientes de cobro en el período.</p>'}
+      </section>`;
+  }
+
+  // Tooltip de las columnas.
+  out.addEventListener('pointermove', (e) => {
+    const col = e.target.closest('.tc-col');
+    const tip = out.querySelector('.tc-tip');
+    if (!tip) return;
+    out.querySelectorAll('.tc-col.on').forEach((c) => { if (c !== col) c.classList.remove('on'); });
+    if (!col || !currentBuckets) { tip.hidden = true; return; }
+    col.classList.add('on');
+    const b = currentBuckets.list[Number(col.dataset.i)];
+    tip.innerHTML = `<strong>${escapeHtml(currentBuckets.title(b))}</strong><span>${fmtCLP(b.total)}</span><small>${b.count} ${b.count === 1 ? 'cobro' : 'cobros'}</small>`;
+    const box = tip.parentElement.getBoundingClientRect();
+    tip.hidden = false;
+    tip.style.left = Math.min(box.width - tip.offsetWidth, Math.max(0, e.clientX - box.left - tip.offsetWidth / 2)) + 'px';
+    tip.style.top = Math.max(0, e.clientY - box.top - tip.offsetHeight - 12) + 'px';
+  });
+  out.addEventListener('pointerleave', () => { const tip = out.querySelector('.tc-tip'); if (tip) tip.hidden = true; out.querySelectorAll('.tc-col.on').forEach((c) => c.classList.remove('on')); });
+  out.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pay-appt]');
+    if (!b) return;
+    const a = state.appointments.find((x) => x.id === b.dataset.payAppt);
+    if (a) ctx.openPayment({ patientId: a.patientId, date: a.date, appointment: a });
+  });
+
+  return { render };
+}
+
+// Máximo "redondo" para el eje (1, 2, 2,5 o 5 por una potencia de 10).
+function niceMax(v) {
+  const p = 10 ** Math.floor(Math.log10(v));
+  const n = v / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+}

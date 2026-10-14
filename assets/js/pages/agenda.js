@@ -5,6 +5,7 @@
 import { agendaConfig } from '../config/agenda-config.js';
 import { backend } from '../services/backend.js';
 import { addDays, bookingRange, daySlots, examLabel, isoDate, parseIso, SlotTakenError } from '../services/agenda.js';
+import { activeServices, applySettings } from '../services/settings.js';
 import { escapeHtml, showError } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 
@@ -16,6 +17,8 @@ export async function init() {
   const form = $('booking-form');
   const errEl = $('bk-error');
   const submit = $('bk-submit');
+  // Servicios y horario guardados desde el panel (si no hay, los de agenda-config.js).
+  applySettings(await backend.getAgendaSettings());
   const state = { exam: null, date: null, time: null, month: null, busy: new Set(), loadedAt: 0, range: bookingRange() };
 
   // --- Disponibilidad -------------------------------------------------------------
@@ -36,7 +39,7 @@ export async function init() {
 
   // --- 1. Examen --------------------------------------------------------------------
   const examsEl = $('bk-exams');
-  examsEl.innerHTML = agendaConfig.exams.map((e) => `
+  examsEl.innerHTML = activeServices().map((e) => `
     <label class="bk-exam">
       <input type="radio" name="exam" value="${escapeHtml(e.id)}">
       <span><strong>${escapeHtml(e.label)}</strong><small>${escapeHtml(e.detail)}</small></span>

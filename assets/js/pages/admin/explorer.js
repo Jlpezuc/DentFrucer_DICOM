@@ -1,20 +1,26 @@
-// Explorador de exámenes: una ventana con tres niveles y migas de pan.
+// Explorador de exámenes: una ventana con tres niveles y una ruta arriba
+// ("Médico › Paciente › Visita") para volver atrás.
 //
-//   Médico    sus pacientes y, de cada uno, los grupos (fechas) de ese médico
-//   Paciente  todas sus visitas (grupos), con búsqueda por fecha, médico o examen
-//   Grupo     los exámenes de un paciente, para un médico, en una fecha:
-//             ver, editar datos, agregar exámenes, subir más imágenes o el
-//             informe PDF de cada examen, renombrar, descargar y eliminar archivos.
+//   Médico    sus pacientes y, de cada uno, sus visitas con ese médico
+//   Paciente  todas sus visitas, cada una con sus exámenes (se pueden abrir en
+//             el visor desde aquí), con búsqueda por fecha, médico o examen
+//   Visita    los exámenes de un paciente en una fecha, para los mismos médicos:
+//             resumen (paciente, médicos, cobro), y cada examen con sus imágenes
+//             y su informe PDF: ver, editar datos y médicos, subir, renombrar,
+//             descargar y eliminar archivos, agregar otro examen.
 //
-// Se abre desde la tabla de exámenes (grupo), de pacientes o de médicos.
+// Sin el permiso "Exámenes" el explorador es de solo lectura.
 
 import { backend, isDemo } from '../../services/backend.js';
-import { fileKind, groupKey, groupSearchText, groupStudies, modifiedAt, searchTerm, STUDY_MODALITIES } from '../../services/groups.js';
+import { doctorsOf, fileKind, groupKey, groupSearchText, groupStudies, modifiedAt, searchTerm, STUDY_MODALITIES } from '../../services/groups.js';
+import { fmtCLP } from '../../services/payments.js';
 import { escapeHtml, modal, toast } from '../../ui/dom.js';
-import { fmtDate, fmtSize } from '../../ui/format.js';
+import { fmtDate, fmtSize, initials } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
 import { openStudy } from '../study-actions.js';
-import { contactOf, doctorOptions } from './common.js';
+import { bindDoctorPickers, contactOf, doctorNames, doctorPickerHtml, pickerValue } from './common.js';
+
+const LEVEL = { doctor: 'Médico', patient: 'Paciente', group: 'Visita' };
 
 export function createExplorer(ctx) {
   const { state } = ctx;
@@ -24,12 +30,15 @@ export function createExplorer(ctx) {
   const fileInput = document.getElementById('explorer-file-input');
   let stack = [];            // [{ type: 'doctor' | 'patient' | 'group', id }]
   let query = '';            // búsqueda en las vistas de médico y paciente
-  let ui = {};               // { editing: studyId, adding: true } dentro de un grupo
+  let ui = {};               // { editing: studyId, adding: true } dentro de una visita
   let uploadTarget = null;   // examen al que se suben archivos
 
+  const canEdit = () => ctx.can('examenes');
   const groups = () => groupStudies(state.studies);
   const groupByKey = (key) => groups().find((g) => g.key === key);
-  const doctorLabel = (id) => ctx.doctorName(id) || 'Sin médico';
+  const names = (ids) => doctorNames(state.doctors, ids);
+  const longDate = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 
   // --- Navegación ---------------------------------------------------------------------
   function open(type, id) { stack = [{ type, id }]; query = ''; ui = {}; render(); m.open(); }
@@ -37,16 +46,18 @@ export function createExplorer(ctx) {
   function goTo(i) { stack = stack.slice(0, i + 1); query = ''; ui = {}; render(); }
 
   function crumbLabel({ type, id }) {
-    if (type === 'doctor') return doctorLabel(id);
+    if (type === 'doctor') return ctx.doctorName(id) || 'Sin médico';
     if (type === 'patient') return (ctx.patientById(id) || {}).name || 'Paciente';
     const g = groupByKey(id);
-    return g ? fmtDate(g.date) : 'Grupo';
+    return g ? fmtDate(g.date) : 'Visita';
   }
 
   function render() {
-    crumbs.innerHTML = stack.map((c, i) => (i < stack.length - 1
-      ? `<button type="button" data-crumb="${i}">${escapeHtml(crumbLabel(c))}</button><span aria-hidden="true">›</span>`
-      : `<h3 id="explorer-title">${escapeHtml(crumbLabel(c))}</h3>`)).join('');
+    const back = stack.length > 1 ? `<button type="button" class="crumb-back" data-crumb="${stack.length - 2}" aria-label="Volver">${icon('arrowLeft')}</button>` : '';
+    crumbs.innerHTML = back + stack.map((c, i) => (i < stack.length - 1
+      ? `<button type="button" data-crumb="${i}"><small>${LEVEL[c.type]}</small>${escapeHtml(crumbLabel(c))}</button><span class="crumb-sep" aria-hidden="true">›</span>`
+      : `<h3 id="explorer-title"><small>${LEVEL[c.type]}</small>${escapeHtml(crumbLabel(c))}</h3>`)).join('');
+    body.classList.toggle('readonly', !canEdit());
     const cur = stack[stack.length - 1];
     if (!cur) return;
     if (cur.type === 'doctor') renderDoctor(cur.id);
@@ -54,95 +65,130 @@ export function createExplorer(ctx) {
     else renderGroup(cur.id);
   }
 
-  // Lista de grupos (filas que se pueden abrir).
-  function groupRows(list, { showPatient = false, showDoctor = true } = {}) {
-    if (!list.length) return '<div class="empty">' + (query ? 'Nada coincide con la búsqueda.' : 'No hay exámenes.') + '</div>';
-    return '<ul class="group-list">' + list.map((g) => `
-      <li><button type="button" data-group="${escapeHtml(g.key)}">
-        <span class="group-date">${fmtDate(g.date)}</span>
-        <span class="group-main">
-          ${showPatient ? `<strong>${escapeHtml(g.patientName)}</strong>` : ''}
-          ${showDoctor ? `<span class="${g.doctorId ? '' : 'warn-text'}">${escapeHtml(doctorLabel(g.doctorId))}</span>` : ''}
-        </span>
-        <span class="group-badges">${g.modalities.map((x) => `<span class="badge ${x === 'Informe' ? 'green' : 'blue'}">${escapeHtml(x)}</span>`).join('')}${g.hasNew ? '<span class="badge amber">Nuevo</span>' : ''}</span>
-        <span class="group-files">${g.fileCount} archivo(s) · ${fmtSize(g.totalSize)}</span>
-        ${icon('chevronRight')}
-      </button></li>`).join('') + '</ul>';
+  const searchBox = (placeholder) => `<label class="search explorer-search"><span class="sr-only">Buscar</span>${icon('search')}<input class="input" type="search" data-search placeholder="${placeholder}" value="${escapeHtml(query)}"></label>`;
+  const matches = (g) => !query || groupSearchText(g, names(g.doctorIds)).includes(searchTerm(query));
+
+  // Estado de un examen en una frase corta.
+  const reportsOf = (s) => (s.files || []).filter((f) => fileKind(f) === 'pdf');
+  function examStatus(s) {
+    const out = [];
+    if (s.modality !== 'Informe') out.push(reportsOf(s).length ? '<span class="st ok">Informe listo</span>' : '<span class="st warn">Falta el informe</span>');
+    if (s.doctorIds.length) out.push(s.status === 'Nuevo' ? '<span class="st new">El médico aún no lo abre</span>' : '<span class="st muted">Visto por el médico</span>');
+    return out.join('');
   }
 
-  const searchBox = (placeholder) => `<label class="search explorer-search"><span class="sr-only">Buscar</span>${icon('search')}<input class="input" type="search" data-search placeholder="${placeholder}" value="${escapeHtml(query)}"></label>`;
-  const matches = (g) => !query || groupSearchText(g, doctorLabel(g.doctorId)).includes(searchTerm(query));
+  // Tarjeta de una visita (vistas de paciente y médico): fecha, médicos y sus exámenes.
+  function visitCard(g, { showDoctor = true } = {}) {
+    const key = escapeHtml(g.key);
+    return `
+      <article class="visit-item">
+        <button type="button" class="visit-item-head" data-group="${key}">
+          <span class="visit-date"><strong>${fmtDate(g.date)}</strong><small>${escapeHtml(longDate(g.date).split(',')[0])}</small></span>
+          <span class="visit-meta">
+            ${showDoctor ? `<span class="${g.doctorIds.length ? '' : 'warn-text'}">${icon('stethoscope')} ${escapeHtml(names(g.doctorIds))}</span>` : ''}
+            <span class="muted">${plural(g.studies.length, 'examen', 'exámenes')} · ${plural(g.fileCount, 'archivo', 'archivos')}${g.missingReports ? ' · <span class="warn-text">' + plural(g.missingReports, 'sin informe', 'sin informe') + '</span>' : ''}</span>
+          </span>
+          <span class="visit-open">Abrir visita ${icon('chevronRight')}</span>
+        </button>
+        <ul class="visit-item-exams">${g.studies.map((s) => `
+          <li data-study="${escapeHtml(s.id)}">
+            <span class="badge ${s.modality === 'Informe' ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span>
+            <span class="vi-name">${escapeHtml(s.description || s.modality)}</span>
+            <span class="vi-status">${examStatus(s)}</span>
+            <button type="button" class="btn btn-ghost btn-sm" data-view>${icon('eye')} Ver</button>
+          </li>`).join('')}</ul>
+      </article>`;
+  }
+
+  const personHead = (name, sub, stats, color = '') => `
+    <div class="explorer-card person-head">
+      <span class="avatar"${color ? ` style="background:${color}"` : ''}>${initials(name)}</span>
+      <div><strong>${escapeHtml(name)}</strong><small>${sub}</small></div>
+      <div class="person-stats">${stats}</div>
+    </div>`;
 
   // --- Vista: médico -------------------------------------------------------------------
   function renderDoctor(doctorId) {
     const d = state.doctors.find((x) => x.id === doctorId) || {};
-    const mine = groups().filter((g) => (g.doctorId || '') === (doctorId || ''));
+    const mine = groups().filter((g) => (doctorId ? g.doctorIds.includes(doctorId) : !g.doctorIds.length));
     const byPatient = new Map();
     mine.filter(matches).forEach((g) => { if (!byPatient.has(g.patientId)) byPatient.set(g.patientId, []); byPatient.get(g.patientId).push(g); });
     const patients = [...byPatient.entries()].sort((a, b) => (a[1][0].patientName || '').localeCompare(b[1][0].patientName || '', 'es'));
-    body.innerHTML = `
-      <div class="explorer-head">
-        <div><strong>${escapeHtml(d.name || 'Sin médico')}</strong><small>${escapeHtml([d.specialty, d.email].filter(Boolean).join(' · '))}</small></div>
-        <span class="muted">${new Set(mine.map((g) => g.patientId)).size} paciente(s) · ${mine.reduce((n, g) => n + g.studies.length, 0)} examen(es)</span>
-      </div>
-      ${searchBox('Buscar paciente, fecha o examen')}
-      ${patients.length ? patients.map(([pid, list]) => `
-        <div class="explorer-section">
-          <h4><button type="button" class="link-btn" data-patient="${escapeHtml(pid)}">${escapeHtml(list[0].patientName)}</button> <small>${list.length} visita(s)</small></h4>
-          ${groupRows(list, { showDoctor: false })}
-        </div>`).join('') : '<div class="empty">' + (query ? 'Nada coincide con la búsqueda.' : 'Este médico aún no tiene exámenes.') + '</div>'}`;
+    body.innerHTML = personHead(d.name || 'Sin médico', escapeHtml([d.specialty, d.email].filter(Boolean).join(' · ')),
+      `<span><strong>${new Set(mine.map((g) => g.patientId)).size}</strong> pacientes</span><span><strong>${mine.reduce((n, g) => n + g.studies.length, 0)}</strong> exámenes</span>`, 'var(--green-600)') +
+      searchBox('Buscar paciente, fecha o examen') +
+      (patients.length ? patients.map(([pid, list]) => `
+        <section class="explorer-section">
+          <h4><button type="button" class="link-btn" data-patient="${escapeHtml(pid)}">${escapeHtml(list[0].patientName)}</button> <small>${plural(list.length, 'visita', 'visitas')}</small></h4>
+          ${list.map((g) => visitCard(g, { showDoctor: false })).join('')}
+        </section>`).join('') : '<div class="empty">' + (query ? 'Nada coincide con la búsqueda.' : 'Este médico aún no tiene exámenes.') + '</div>');
   }
 
   // --- Vista: paciente -----------------------------------------------------------------
   function renderPatient(patientId) {
     const p = ctx.patientById(patientId) || {};
     const visits = groups().filter((g) => g.patientId === patientId);
-    const sub = [p.code, p.age ? p.age + ' años' : '', contactOf(p)].filter(Boolean).join(' · ');
-    body.innerHTML = `
-      <div class="explorer-head">
-        <div><strong>${escapeHtml(p.name || visits[0]?.patientName || 'Paciente')}</strong><small>${sub}</small></div>
-        <span class="muted">${visits.length} visita(s) · ${visits.reduce((n, g) => n + g.studies.length, 0)} examen(es)</span>
-      </div>
-      ${searchBox('Buscar por fecha (08/10/2026, oct 2026), médico o examen')}
-      ${groupRows(visits.filter(matches))}`;
+    const name = p.name || visits[0]?.patientName || 'Paciente';
+    const sub = [p.code, p.age ? p.age + ' años' : '', contactOf(p)].filter(Boolean).join(' · ') || '<span class="muted">Sin expediente</span>';
+    const shown = visits.filter(matches);
+    body.innerHTML = personHead(name, sub,
+      `<span><strong>${visits.length}</strong> ${visits.length === 1 ? 'visita' : 'visitas'}</span><span><strong>${visits.reduce((n, g) => n + g.studies.length, 0)}</strong> exámenes</span>${visits[0] ? `<span>Última: <strong>${fmtDate(visits[0].date)}</strong></span>` : ''}`) +
+      (visits.length > 1 ? searchBox('Buscar por fecha (08/10/2026, oct 2026), médico o examen') : '') +
+      (shown.length ? `<p class="explorer-hint">Todas las visitas del paciente, de la más reciente a la más antigua. «Ver» abre un examen en el visor; «Abrir visita» muestra sus archivos para editarlos.</p>` + shown.map((g) => visitCard(g)).join('')
+        : '<div class="empty">' + (query ? 'Nada coincide con la búsqueda.' : 'Este paciente aún no tiene exámenes.') + '</div>');
   }
 
-  // --- Vista: grupo --------------------------------------------------------------------
+  // --- Vista: visita -------------------------------------------------------------------
   function renderGroup(key) {
     const g = groupByKey(key);
     if (!g) {
-      body.innerHTML = '<div class="empty">Este grupo ya no tiene exámenes (se eliminaron o cambiaron de médico o de fecha).</div>';
+      body.innerHTML = '<div class="empty">Esta visita ya no tiene exámenes (se eliminaron o cambiaron de médicos o de fecha).</div>';
       return;
     }
+    const p = ctx.patientById(g.patientId) || {};
+    const sub = [g.patientCode, g.patientAge ? g.patientAge + ' años' : ''].filter(Boolean).map(escapeHtml).join(' · ');
+    const pays = (state.payments || []).filter((x) => x.patientId === g.patientId && x.date === g.date);
+    const paid = pays.reduce((n, x) => n + (x.total || 0), 0);
+    const payInfo = pays.length
+      ? `<strong>${fmtCLP(paid)}</strong> <span class="muted">· ${escapeHtml(pays.map((x) => x.method + (x.docNumber ? ' · ' + x.docType + ' ' + x.docNumber : '')).join(' / '))}</span>`
+      : '<span class="muted">Sin cobro registrado</span>';
     body.innerHTML = `
-      <div class="explorer-head">
-        <div>
-          <strong><button type="button" class="link-btn" data-patient="${escapeHtml(g.patientId)}">${escapeHtml(g.patientName)}</button></strong>
-          <small>${fmtDate(g.date)} · ${g.doctorId ? `<button type="button" class="link-btn" data-doctor="${escapeHtml(g.doctorId)}">${escapeHtml(doctorLabel(g.doctorId))}</button>` : '<span class="warn-text">Sin médico</span>'}</small>
+      <div class="explorer-card visit-summary">
+        <div class="vs-title">
+          <h2>Visita del ${escapeHtml(longDate(g.date))}</h2>
+          <p>Una visita reúne los exámenes que el paciente se hizo este día. Cada examen tiene sus imágenes y su informe PDF.</p>
         </div>
-        <div class="panel-actions">
-          <label class="group-doctor"><span>Médico del grupo</span><select class="input select input-sm" data-group-doctor>${doctorOptions(state.doctors, g.doctorId)}</select></label>
-          <button type="button" class="btn btn-primary btn-sm" data-add-exam>${icon('plus')} Agregar examen</button>
-        </div>
+        <dl class="vs-grid">
+          <div><dt>Paciente</dt><dd><strong>${escapeHtml(g.patientName)}</strong>${sub ? ' <span class="muted">· ' + sub + '</span>' : ''}<br><button type="button" class="link-btn" data-patient="${escapeHtml(g.patientId)}">Ver todas sus visitas</button>${contactOf(p) ? ' <span class="muted">· ' + contactOf(p) + '</span>' : ''}</dd></div>
+          <div><dt>Médicos</dt><dd>${canEdit()
+            ? doctorPickerHtml(state.doctors, g.doctorIds, { emptyLabel: 'Sin médico: solo lo ve la clínica' }) + '<small class="muted">Los exámenes de esta visita aparecen en el portal de estos médicos.</small>'
+            : escapeHtml(names(g.doctorIds))}</dd></div>
+          <div><dt>Contenido</dt><dd>${plural(g.studies.length, 'examen', 'exámenes')} · ${plural(g.fileCount, 'archivo', 'archivos')} · ${fmtSize(g.totalSize)}${g.missingReports ? '<br><span class="warn-text">' + plural(g.missingReports, 'examen sin informe', 'exámenes sin informe') + '</span>' : '<br><span class="ok-text">Todos los informes subidos</span>'}</dd></div>
+          <div><dt>Cobro</dt><dd>${payInfo}${ctx.can('cobros') ? `<br><button type="button" class="link-btn" data-pay>${pays.length ? 'Registrar otro cobro' : 'Registrar cobro'}</button>` : ''}</dd></div>
+        </dl>
       </div>
-      ${ui.adding ? examForm(null, g) : ''}
-      ${g.studies.map((s) => examCard(s)).join('')}`;
+      <h3 class="explorer-subtitle">Exámenes de la visita</h3>
+      ${g.studies.map((s, i) => examCard(s, i + 1, g.studies.length)).join('')}
+      ${canEdit() ? (ui.adding ? examForm(null, g) : `<button type="button" class="add-exam-card" data-add-exam>${icon('plus')} Agregar otro examen a esta visita</button>`) : ''}`;
   }
 
   function examForm(s, g) {
-    const v = s || { modality: 'Panorámica', description: '', date: g.date, doctorId: g.doctorId };
+    const v = s || { modality: 'Panorámica', description: '', date: g.date, doctorIds: g.doctorIds };
     return `
       <form class="exam-form" data-exam-form="${s ? escapeHtml(s.id) : ''}">
-        <div class="form-row ${s ? 'four' : 'three'}">
+        <h4>${s ? 'Editar datos del examen' : 'Nuevo examen en esta visita'}</h4>
+        <div class="form-row ${s ? 'three' : 'two'}">
           <div class="field"><label>Modalidad <select class="input select" name="modality">${STUDY_MODALITIES.map((x) => `<option${x === v.modality ? ' selected' : ''}>${x}</option>`).join('')}</select></label></div>
-          <div class="field"><label>Descripción <input class="input" name="description" value="${escapeHtml(v.description || '')}"></label></div>
-          ${s ? `<div class="field"><label>Fecha <input class="input" type="date" name="date" value="${escapeHtml(v.date)}"></label></div>
-          <div class="field"><label>Médico <select class="input select" name="doctorId">${doctorOptions(state.doctors, v.doctorId)}</select></label></div>`
-          : `<div class="field"><label>Imágenes <span class="opt">(DICOM, fotos…)</span> <input class="input" type="file" name="files" multiple data-exam-files></label></div>`}
+          <div class="field"><label>Descripción <input class="input" name="description" value="${escapeHtml(v.description || '')}" placeholder="Ej.: Cone Beam · maxilar completo"></label></div>
+          ${s ? `<div class="field"><label>Fecha <input class="input" type="date" name="date" value="${escapeHtml(v.date)}"></label></div>` : ''}
         </div>
-        ${s ? '' : `<div class="field"><label>Informe <span class="opt">(PDF, opcional)</span> <input class="input" type="file" name="report" accept="application/pdf,.pdf" multiple data-exam-report></label></div>`}
-        ${s ? '<p class="hint">Si cambia la fecha o el médico, el examen pasa al grupo que corresponda.</p>' : ''}
-        <div class="exam-form-actions"><button type="button" class="btn btn-ghost btn-sm" data-cancel>Cancelar</button><button type="submit" class="btn btn-primary btn-sm">${s ? 'Guardar' : 'Subir examen'}</button></div>
+        ${s ? `<div class="field"><span class="field-label">Médicos de este examen</span>${doctorPickerHtml(state.doctors, doctorsOf(v))}</div>
+        <p class="hint">Si cambia la fecha o los médicos, el examen pasa a la visita que corresponda.</p>`
+        : `<div class="form-row">
+          <div class="field"><label>Imágenes <span class="opt">(DICOM, fotos…)</span> <input class="input" type="file" name="files" multiple data-exam-files></label></div>
+          <div class="field"><label>Informe <span class="opt">(PDF, opcional)</span> <input class="input" type="file" name="report" accept="application/pdf,.pdf" multiple data-exam-report></label></div>
+        </div>`}
+        <div class="exam-form-actions"><button type="button" class="btn btn-ghost btn-sm" data-cancel>Cancelar</button><button type="submit" class="btn btn-primary btn-sm">${s ? 'Guardar cambios' : 'Subir examen'}</button></div>
         <div class="progress" hidden><span></span></div>
       </form>`;
   }
@@ -152,54 +198,55 @@ export function createExplorer(ctx) {
     return `
           <li data-path="${escapeHtml(f.path)}">
             <span class="file-icon ${fileKind(f)}">${icon(pdf ? 'file' : 'image')}</span>
-            <span class="file-name">${escapeHtml(f.name)}</span>
+            <span class="file-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
             <span class="mono">${fmtSize(f.size)}</span>
             <span class="row-actions">
               ${pdf ? `<button type="button" class="icon-btn" data-open-file title="Abrir PDF" aria-label="Abrir PDF">${icon('eye')}</button>` : ''}
               <button type="button" class="icon-btn" data-download title="Descargar" aria-label="Descargar">${icon('download')}</button>
-              <button type="button" class="icon-btn" data-rename title="Renombrar" aria-label="Renombrar">${icon('edit')}</button>
-              <button type="button" class="icon-btn" data-delete-file title="Eliminar archivo" aria-label="Eliminar archivo">${icon('trash')}</button>
+              <button type="button" class="icon-btn edit-only" data-rename title="Renombrar" aria-label="Renombrar">${icon('edit')}</button>
+              <button type="button" class="icon-btn edit-only" data-delete-file title="Eliminar archivo" aria-label="Eliminar archivo">${icon('trash')}</button>
             </span>
           </li>`;
   }
 
   const fmtStamp = (ms) => new Date(ms).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-  // Cada examen (del modificado más recientemente al más antiguo): sus imágenes (DICOM, fotos…) y su informe PDF, por separado.
-  function examCard(s) {
+  // Cada examen (del modificado más recientemente al más antiguo), numerado,
+  // con sus imágenes y su informe en dos columnas.
+  function examCard(s, n, total) {
     const id = escapeHtml(s.id);
     const files = s.files || [];
     const images = files.filter((f) => fileKind(f) !== 'pdf');
-    const reports = files.filter((f) => fileKind(f) === 'pdf');
+    const reports = reportsOf(s);
     const isReportOnly = s.modality === 'Informe';
     const changed = modifiedAt(s);
     return `
       <article class="exam-card" data-study="${id}">
         <header>
-          <div>
-            <span class="badge ${isReportOnly ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span>
-            <strong>${escapeHtml(s.description || s.modality)}</strong>
-            <small class="mono">${escapeHtml(s.code || '')}</small>
-            ${changed ? `<small class="muted" title="Última modificación: subida, archivos o datos">Modificado ${fmtStamp(changed)}</small>` : ''}
-            ${s.status === 'Nuevo' ? '<span class="badge amber" title="El médico aún no lo abre">No visto</span>' : ''}
-            ${!isReportOnly && !reports.length ? '<span class="badge gray" title="Este examen aún no tiene su informe PDF">Sin informe</span>' : ''}
+          <span class="exam-num" title="Examen ${n} de ${total}">${n}</span>
+          <div class="exam-title">
+            <div><span class="badge ${isReportOnly ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span> <strong>${escapeHtml(s.description || s.modality)}</strong></div>
+            <small class="muted"><span class="mono">${escapeHtml(s.code || '')}</span>${changed ? ' · Modificado ' + fmtStamp(changed) : ''}</small>
+            <div class="exam-status">${examStatus(s)}</div>
           </div>
           <div class="row-actions">
-            <button type="button" class="btn btn-outline btn-sm" data-view title="Abrir en el visor">${icon('eye')} Ver</button>
-            <button type="button" class="btn btn-outline btn-sm" data-add-files title="Subir más imágenes a este examen">${icon('upload')} Agregar archivos</button>
-            <button type="button" class="icon-btn" data-edit title="Editar examen" aria-label="Editar examen">${icon('edit')}</button>
-            <button type="button" class="icon-btn" data-delete-study title="Eliminar examen" aria-label="Eliminar examen">${icon('trash')}</button>
+            <button type="button" class="btn btn-primary btn-sm" data-view title="Abrir en el visor">${icon('eye')} Ver</button>
+            <button type="button" class="btn btn-outline btn-sm edit-only" data-edit title="Editar modalidad, descripción, fecha o médicos">${icon('edit')} Editar</button>
+            <button type="button" class="icon-btn edit-only" data-delete-study title="Eliminar examen" aria-label="Eliminar examen">${icon('trash')}</button>
           </div>
         </header>
         ${ui.editing === s.id ? examForm(s) : ''}
         <div class="progress" data-progress hidden><span></span></div>
-        ${isReportOnly ? '' : `<h5 class="exam-sub">Imágenes</h5>
-        ${images.length ? `<ul class="exam-files">${images.map(fileRow).join('')}</ul>` : '<p class="muted exam-empty">Sin imágenes. Use «Agregar archivos».</p>'}`}
-        <div class="exam-sub exam-sub-report">
-          <h5>Informe</h5>
-          <button type="button" class="btn btn-ghost btn-sm" data-add-report>${icon('upload')} ${reports.length ? 'Agregar otro PDF' : 'Subir informe (PDF)'}</button>
+        <div class="exam-columns${isReportOnly ? ' single' : ''}">
+          ${isReportOnly ? '' : `<section>
+            <div class="exam-sub"><h5>${icon('image')} Imágenes <small>${images.length}</small></h5><button type="button" class="btn btn-ghost btn-sm edit-only" data-add-files>${icon('upload')} Subir imágenes</button></div>
+            ${images.length ? `<ul class="exam-files">${images.map(fileRow).join('')}</ul>` : '<p class="muted exam-empty">Sin imágenes.</p>'}
+          </section>`}
+          <section class="exam-report${reports.length ? '' : ' missing'}">
+            <div class="exam-sub"><h5>${icon('file')} Informe <small>${reports.length}</small></h5><button type="button" class="btn btn-ghost btn-sm edit-only" data-add-report>${icon('upload')} ${reports.length ? 'Agregar PDF' : 'Subir informe'}</button></div>
+            ${reports.length ? `<ul class="exam-files">${reports.map(fileRow).join('')}</ul>` : '<p class="exam-empty">Aún no se subió el informe de este examen.</p>'}
+          </section>
         </div>
-        ${reports.length ? `<ul class="exam-files">${reports.map(fileRow).join('')}</ul>` : '<p class="muted exam-empty">Aún no se subió el informe de este examen.</p>'}
       </article>`;
   }
 
@@ -213,7 +260,7 @@ export function createExplorer(ctx) {
     render();
   }
 
-  // Si un examen cambió de médico o de fecha, el explorador sigue a su nuevo grupo.
+  // Si un examen cambió de médicos o de fecha, el explorador sigue a su nueva visita.
   function followStudy(id) {
     const s = studyById(id);
     const c = stack[stack.length - 1];
@@ -246,6 +293,11 @@ export function createExplorer(ctx) {
     if (t.dataset.doctor) return push('doctor', t.dataset.doctor);
     if (t.hasAttribute('data-add-exam')) { ui = { adding: true }; return render(); }
     if (t.hasAttribute('data-cancel')) { ui = {}; return render(); }
+    if (t.hasAttribute('data-pay')) {
+      const g = currentGroup();
+      if (g && ctx.openPayment) ctx.openPayment({ patientId: g.patientId, date: g.date, studies: g.studies });
+      return;
+    }
 
     const card = t.closest('[data-study]');
     const study = card && studyById(card.dataset.study);
@@ -254,7 +306,8 @@ export function createExplorer(ctx) {
       if (isDemo && (study.files || []).every((f) => fileKind(f) === 'pdf')) { toast('En modo demostración los PDF no se pueden abrir.'); return; }
       return openStudy(study);
     }
-    if (t.hasAttribute('data-edit')) { ui = { editing: study.id }; return render(); }
+    if (!canEdit()) return;
+    if (t.hasAttribute('data-edit')) { ui = { editing: ui.editing === study.id ? null : study.id }; return render(); }
     if (t.hasAttribute('data-add-files') || t.hasAttribute('data-add-report')) {
       uploadTarget = study;
       fileInput.value = '';
@@ -293,20 +346,21 @@ export function createExplorer(ctx) {
     }
   });
 
-  // Médico de todo el grupo: se cambia en cada uno de sus exámenes.
-  body.addEventListener('change', async (e) => {
-    if (!e.target.matches('[data-group-doctor]')) return;
+  // Médicos: el selector del resumen cambia los de todos los exámenes de la
+  // visita; el del formulario de un examen solo se guarda con ese formulario.
+  bindDoctorPickers(body, () => state.doctors, async (picker, ids) => {
+    if (picker.closest('[data-exam-form]')) return;
     const g = currentGroup();
     if (!g) return;
-    e.target.disabled = true;
+    picker.classList.add('busy');
     try {
-      await Promise.all(g.studies.map((s) => backend.setStudyDoctor(s.id, e.target.value)));
-      stack[stack.length - 1].id = groupKey({ ...g, doctorId: e.target.value });
-      await refresh(e.target.value ? 'El grupo pasó al portal de ' + ctx.doctorName(e.target.value) + '.' : 'El grupo quedó sin médico.');
-    } catch (ex) { toast('No se pudo cambiar el médico: ' + ex.message); e.target.disabled = false; }
+      await Promise.all(g.studies.map((s) => backend.setStudyDoctors(s.id, ids)));
+      stack[stack.length - 1].id = groupKey({ ...g, doctorIds: ids });
+      await refresh(ids.length ? 'Los exámenes de la visita ahora están en el portal de ' + names(ids) + '.' : 'La visita quedó sin médico: solo la ve la clínica.');
+    } catch (ex) { toast('No se pudieron cambiar los médicos: ' + ex.message); render(); }
   });
 
-  // Formularios: editar examen o agregar un examen nuevo al grupo.
+  // Formularios: editar examen o agregar un examen nuevo a la visita.
   body.addEventListener('submit', async (e) => {
     const f = e.target.closest('[data-exam-form]');
     if (!f) return;
@@ -318,10 +372,11 @@ export function createExplorer(ctx) {
       const id = f.dataset.examForm;
       if (id) {
         const before = groupKey(studyById(id));
-        await backend.updateStudy(studyById(id), { modality: data.modality, description: data.description, date: data.date, doctorId: data.doctorId });
+        const doctorIds = pickerValue(f.querySelector('[data-doctor-picker]'));
+        await backend.updateStudy(studyById(id), { modality: data.modality, description: data.description, date: data.date, doctorIds });
         ui = {};
-        const moved = before !== groupKey({ ...studyById(id), date: data.date, doctorId: data.doctorId || null });
-        await refresh(moved ? 'Examen actualizado: pasó al grupo del ' + fmtDate(data.date) + ' · ' + doctorLabel(data.doctorId) + '.' : 'Examen actualizado.');
+        const moved = before !== groupKey({ ...studyById(id), date: data.date, doctorIds });
+        await refresh(moved ? 'Examen actualizado: pasó a la visita del ' + fmtDate(data.date) + ' · ' + names(doctorIds) + '.' : 'Examen actualizado.');
         followStudy(id);
       } else {
         const g = currentGroup();
@@ -331,11 +386,11 @@ export function createExplorer(ctx) {
         const bar = f.querySelector('.progress');
         bar.hidden = false;
         await backend.uploadStudy({
-          patient, doctorId: g.doctorId, date: g.date, modality: data.modality, description: data.description || data.modality, files,
+          patient, doctorIds: g.doctorIds, date: g.date, modality: data.modality, description: data.description || data.modality, files,
           onProgress: (p) => { bar.querySelector('span').style.width = Math.round(p * 100) + '%'; }
         });
         ui = {};
-        await refresh('Examen agregado al grupo.');
+        await refresh('Examen agregado a la visita.');
       }
     } catch (ex) { toast('No se pudo guardar: ' + ex.message); btn.disabled = false; }
   });
@@ -356,6 +411,7 @@ export function createExplorer(ctx) {
   return {
     openGroup: (key) => open('group', key),
     openPatient: (id) => open('patient', id),
-    openDoctor: (id) => open('doctor', id || '')
+    openDoctor: (id) => open('doctor', id || ''),
+    refresh: () => { if (m.el.classList.contains('open')) render(); }
   };
 }

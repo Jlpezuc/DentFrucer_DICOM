@@ -36,13 +36,13 @@ Las cuentas de médicos se crean desde el panel, pero el primer administrador se
 
 Para entrar como administrador use **`/admin-login.html`**. Esa página no está enlazada desde la landing.
 
-Para agregar **otro administrador** repita los dos pasos con su correo. Cada uno ve su correo en el panel y puede cambiar su nombre visible desde *Mi cuenta* (el lápiz junto al correo); las reglas actuales ya lo permiten, no hay que volver a publicarlas.
+Este primer administrador (sin campo `permissions`) es **administrador general**: puede todo. Los demás administradores se crean desde el panel, en **Usuarios**, con su descripción y sus permisos (o como administradores generales). No hace falta volver a tocar Firestore a mano.
 
 ## 4. Publicar reglas de seguridad y la página
 
-Las reglas (`firestore.rules`, `storage.rules`) garantizan que cada médico solo lea **sus** exámenes y sus archivos (los que tiene asignados), y que solo un administrador pueda subir, asignar o borrar. También permiten que cualquier persona, sin cuenta, **cree** una cita desde `agendar.html`, pero no que lea, cambie o borre citas o pacientes.
+Las reglas (`firestore.rules`, `storage.rules`) garantizan que cada médico solo lea **sus** exámenes y sus archivos (los que tiene asignados, aunque compartan el examen con otros médicos), y que cada administrador solo modifique lo que sus **permisos** le permiten (el administrador general, todo). También permiten que cualquier persona, sin cuenta, **cree** una cita desde `agendar.html` (solo de los servicios activos) y lea los servicios y el horario, pero no que lea, cambie o borre citas, pacientes ni cobros.
 
-> **Importante:** cada vez que cambie `firestore.rules` en el repositorio, vuelva a publicarlas. La agenda y el modelo actual (médico por examen) necesitan las reglas actuales: con unas anteriores, agendar falla con *"No se pudo agendar la cita"*.
+> **Importante:** cada vez que cambie `firestore.rules` o `storage.rules` en el repositorio, vuelva a publicar **las dos**. Los permisos, los cobros, los servicios y los exámenes con varios médicos necesitan las reglas actuales: con unas anteriores aparecen errores de permiso (por ejemplo al guardar un cobro o el horario).
 
 Con la [CLI de Firebase](https://firebase.google.com/docs/cli) (necesita Node.js):
 
@@ -95,35 +95,42 @@ Formatos que abre: DICOM sin compresión (Explicit/Implicit VR, Big Endian, Defl
 - Los turnos ocupados se guardan aparte en `slots/{fecha_hora}`, sin datos personales: es lo único que la página pública puede leer. Como el ID del documento es el turno, dos personas no pueden reservar la misma hora.
 - Al agendar se crea el paciente en `patients` con `source: 'agenda'`. Si la misma persona vuelve a agendar con el mismo nombre y correo (o teléfono), se reutiliza su ficha.
 - En el panel se pueden **crear, editar y borrar** citas. Cambiar el día o la hora mueve el turno (dentro de una transacción, para no pisar otra cita); cancelar o borrar lo libera. Las citas fuera de horario (por ejemplo un sábado) se pueden crear desde el panel.
-- Horarios, duración de turnos, feriados y tipos de examen: `assets/js/config/agenda-config.js`. Si cambia los tipos de examen, actualice también la lista `exam in [...]` de `firestore.rules`.
+- Servicios (con precio), horarios, duración de turnos y feriados se editan en el panel (*Servicios y horarios*) y se guardan en `settings/agenda`, que la página pública lee. Las reglas solo dejan agendar en línea los servicios activos (`settings/agenda.examIds`). Mientras no se guarde nada se usan los valores de `assets/js/config/agenda-config.js`.
 - **Recomendado:** active [App Check](https://firebase.google.com/docs/app-check) con reCAPTCHA para que solo su página pueda crear citas; sin él, un robot podría llenar la agenda con citas falsas. La página ya incluye un campo trampa básico contra robots simples.
 - El correo de confirmación automático no está incluido (necesita un servidor, por ejemplo la extensión *Trigger Email* de Firebase). El paciente recibe la confirmación en pantalla y un archivo de calendario.
 
 ## Uso diario
 
-1. **Agenda**: revise las citas del día; cree, edite o borre citas (por ejemplo las que llegan por teléfono).
-2. **Cargar examen**: use *Cargar examen* en la cita (o elija el paciente), elija el **médico que recibe los exámenes** (se sugiere el que el paciente indicó al agendar, o el de su último examen) y agregue uno o varios exámenes con sus archivos (DICOM, ZIP, imágenes o informes PDF). Quedan agrupados por paciente, médico y fecha, aparecen de inmediato en el portal de ese médico y la cita queda como atendida.
-3. **Explorador**: abra un grupo desde la tabla *Exámenes*, o los exámenes de un paciente o de un médico con el icono de carpeta. Allí se ven, editan, renombran, descargan y eliminan archivos, y se suben archivos o exámenes nuevos al grupo (por ejemplo el informe, días después).
+1. **Agenda**: revise las citas del día; cree, edite o borre citas (por ejemplo las que llegan por teléfono) y regístrelas como cobradas con *Cobrar*.
+2. **Cargar examen**: use *Cargar* en la cita (o elija el paciente), elija **uno o varios médicos** que reciben los exámenes (se sugiere el que el paciente indicó al agendar, o los de su último examen) y agregue uno o varios exámenes con sus archivos (DICOM, ZIP, imágenes o informes PDF). Quedan en la visita del paciente, aparecen de inmediato en el portal de cada médico y la cita queda como atendida.
+3. **Explorador**: abra una visita desde la tabla *Exámenes*, o todas las de un paciente o de un médico (clic en su fila). Allí se ven, editan, renombran, descargan y eliminan archivos, se suben archivos o exámenes nuevos (por ejemplo el informe, días después) y se registra el cobro.
 4. **Pacientes**: se crean solos al agendar; *Nuevo paciente* es para quien no agendó en línea. Con el lápiz se completan el expediente y la edad, que se copian también en sus exámenes.
-5. **Nuevo médico**: crea su cuenta. Comparta el correo y la contraseña inicial por un canal seguro; el médico puede cambiarla con *¿Olvidó su contraseña?*.
+5. **Médicos**: *Nuevo* crea su cuenta. Comparta el correo y la contraseña inicial por un canal seguro; el médico puede cambiarla con *¿Olvidó su contraseña?*.
+6. **Cobros, Resumen, Servicios y horarios, Usuarios**: ver el README.
 
 ## Modelo de datos
 
 ```
-users/{uid}      name, email, role ('admin' | 'doctor'), specialty
+users/{uid}      name, email, role ('admin' | 'doctor'), specialty (médicos),
+                 description, superadmin, permissions { resumen, agenda, examenes, pacientes,
+                 medicos, cobros, config }, disabled (administradores)
 patients/{id}    name, firstName, lastName, email, phone, code, age, source ('agenda' | 'panel')
                  sin médico: solo la clínica lee esta colección
-studies/{id}     code, patientId, patientName, patientCode, patientAge, doctorId,
+studies/{id}     code, patientId, patientName, patientCode, patientAge, doctorIds[], doctorId (el primero),
                  modality, description, date (YYYY-MM-DD), files[{name, path, size}],
                  totalSize, status ('Nuevo' | 'Visto'), createdAt, updatedAt
 appointments/{id}  code, firstName, lastName, name, email, phone, referrer, exam,
                  date (YYYY-MM-DD), time (HH:MM), slotId, patientId,
                  status ('Pendiente' | 'Atendida' | 'No asistió' | 'Cancelada'), createdAt
 slots/{fecha_hora} date, time, appointmentId      (turnos ocupados, lectura pública)
+payments/{id}    date, patientId, patientName, appointmentId, items[{serviceId, label, price}],
+                 discount, total, method, docType, docNumber, note, createdAt, createdBy
+settings/agenda  slotMinutes, daysAhead, minNoticeMinutes, closedDates[], hours{día: ['09:00-13:00']},
+                 services[{id, label, detail, modality, price, active}], examIds[] (lectura pública)
 Storage          studies/{studyId}/{archivo}
 ```
 
-Si su base tiene pacientes anteriores con un campo `doctorId`, ya no se usa: el médico de cada examen está en `studies.doctorId`, que no cambia.
+Si su base tiene pacientes anteriores con un campo `doctorId`, ya no se usa. Los exámenes anteriores, que solo tienen `studies.doctorId`, siguen funcionando: la página y las reglas los tratan como de un solo médico, y al editarlos se guarda también `doctorIds`.
 
 ## Acceso de pacientes (pendiente)
 
