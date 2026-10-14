@@ -346,6 +346,7 @@ table.data tr:hover td { background: #fafcfd; }
 .badge.green { background: var(--lime-50); color: var(--green-600); }
 .badge.gray { background: #eef1f4; color: var(--ink-soft); }
 .badge.amber { background: #fdf4e3; color: var(--warning); }
+.badge.red { background: #fdecea; color: var(--danger); }
 .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: #fff; display: grid; place-items: center; color: var(--ink-soft); cursor: pointer; }
 .icon-btn:hover { border-color: var(--blue-500); color: var(--blue-700); }
@@ -617,14 +618,19 @@ body[data-guard] .app { visibility: hidden; }
 
 /* Visita como tarjeta (vistas de paciente y médico) */
 .visit-item { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-md); margin-bottom: 10px; overflow: hidden; }
-.visit-item-head { width: 100%; display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); background: #fbfcfd; font: inherit; font-size: 14px; color: var(--ink); text-align: left; cursor: pointer; }
+.visit-item-head { display: flex; align-items: center; gap: 12px; padding-right: 14px; background: #fbfcfd; }
+.visit-item.is-open .visit-item-head { border-bottom: 1px solid var(--line); }
+.visit-toggle { flex: 1; min-width: 0; display: grid; grid-template-columns: 18px 110px minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px 0 12px 14px; border: 0; background: none; font: inherit; font-size: 14px; color: var(--ink); text-align: left; cursor: pointer; }
 .visit-item-head:hover { background: var(--blue-50); }
-.visit-item-head:hover .visit-open { color: var(--blue-700); }
+.visit-chevron { display: grid; place-items: center; color: var(--muted); transition: transform .15s; }
+.visit-chevron svg { width: 16px; height: 16px; }
+.visit-item.is-open .visit-chevron { transform: rotate(90deg); color: var(--blue-700); }
+.visit-counts { display: flex; gap: 6px; flex-wrap: wrap; }
 .visit-date strong { display: block; font-family: var(--font-sans); font-size: 15px; }
 .visit-date small { color: var(--muted); font-size: 12px; text-transform: capitalize; }
 .visit-meta { display: grid; gap: 2px; min-width: 0; font-size: 13px; }
 .visit-meta svg { width: 14px; height: 14px; vertical-align: -2px; }
-.visit-open { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.visit-open { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
 .visit-open svg { width: 16px; height: 16px; }
 .visit-item-exams { list-style: none; margin: 0; padding: 4px 0; }
 .visit-item-exams li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 14px; font-size: 14px; }
@@ -684,8 +690,10 @@ body[data-guard] .app { visibility: hidden; }
 .explorer-body.readonly .edit-only { display: none; }
 @media (max-width: 860px) {
   .form-row.four { grid-template-columns: 1fr 1fr; }
-  .visit-item-head { grid-template-columns: 1fr auto; }
-  .visit-item-head .visit-meta { grid-column: 1 / -1; grid-row: 2; }
+  .visit-item-head { flex-wrap: wrap; padding-bottom: 10px; }
+  .visit-toggle { flex-basis: 100%; grid-template-columns: 18px 1fr; padding-bottom: 4px; }
+  .visit-toggle .visit-meta { grid-column: 2; }
+  .visit-open { margin-left: 44px; }
   .visit-item-exams li { grid-template-columns: auto minmax(0, 1fr) auto; }
   .visit-item-exams .vi-status { grid-column: 2 / -1; }
   .vs-grid, .exam-columns { grid-template-columns: 1fr; }
