@@ -88,7 +88,7 @@ La sección **Cobros** registra lo cobrado en cada atención: paciente, fecha, *
 
 ## Resumen
 
-El **Resumen** muestra, para el período elegido (*Hoy*, *Esta semana*, *Este mes*, *Mes anterior*, *Este año* o **desde / hasta**): ingresos (y su cambio frente al período anterior de igual largo), cantidad de cobros y promedio, exámenes realizados, citas por estado, ingresos por día, semana o mes, ingresos por **medio de pago** y por **servicio**, exámenes por servicio y por médico, y lo **por cobrar** (visitas no pagadas y citas atendidas sin visita ni cobro) con su botón para cobrar.
+El **Resumen** muestra, para el período elegido (*Hoy*, *Esta semana*, *Este mes*, *Mes anterior*, *Este año* o **desde / hasta**): ingresos (y su cambio frente al período anterior de igual largo), cantidad de cobros y promedio, exámenes realizados, citas por estado, ingresos por día, semana o mes (columnas), ingresos por **medio de pago** y por **servicio** (gráficos de anillo con leyenda de montos y porcentajes; sobre 6 elementos, los menores se juntan en *Otros*), exámenes por servicio y por médico (barras), y lo **por cobrar** (visitas no pagadas y citas atendidas sin visita ni cobro) con su botón para cobrar.
 
 ## Servicios y horarios
 
