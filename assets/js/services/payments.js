@@ -3,6 +3,7 @@
 // registra el número del documento emitido fuera (voucher, portal del SII…).
 //
 //  payments/{id}  { date: 'AAAA-MM-DD', patientId, patientName, appointmentId,
+//                   studyIds: [exámenes de la visita cobrada; vacío = servicio suelto],
 //                   items: [{ serviceId, label, price }], discount, total,
 //                   method, docType, docNumber, note, createdAt, createdBy }
 
@@ -39,6 +40,7 @@ export function normalizePayment(input) {
       patientId: String(input.patientId),
       patientName: String(input.patientName || '').slice(0, 121),
       appointmentId: input.appointmentId || null,
+      studyIds: [...new Set((input.studyIds || []).filter((x) => typeof x === 'string' && x))].slice(0, 50),
       items,
       discount,
       total: subtotal - discount,

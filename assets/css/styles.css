@@ -912,3 +912,5 @@ table.data.compact th, table.data.compact td { padding: 8px 10px; }
   .pay-item, .pay-item:has([data-item-label]:not([hidden])) { grid-template-columns: minmax(0, 1fr) 110px 34px; }
   .pay-item [data-item-label]:not([hidden]) { grid-column: 1 / -1; grid-row: 2; }
 }
+
+.pay-actions { display: inline-flex; gap: 14px; flex-wrap: wrap; }

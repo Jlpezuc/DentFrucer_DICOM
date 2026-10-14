@@ -118,12 +118,13 @@ patients/{id}    name, firstName, lastName, email, phone, code, age, source ('ag
                  sin médico: solo la clínica lee esta colección
 studies/{id}     code, patientId, patientName, patientCode, patientAge, doctorIds[], doctorId (el primero),
                  modality, description, date (YYYY-MM-DD), files[{name, path, size}],
-                 totalSize, status ('Nuevo' | 'Visto'), createdAt, updatedAt
+                 totalSize, status ('Nuevo' | 'Visto'), paid (visita pagada), createdAt, updatedAt
 appointments/{id}  code, firstName, lastName, name, email, phone, referrer, exam,
                  date (YYYY-MM-DD), time (HH:MM), slotId, patientId,
                  status ('Pendiente' | 'Atendida' | 'No asistió' | 'Cancelada'), createdAt
 slots/{fecha_hora} date, time, appointmentId      (turnos ocupados, lectura pública)
-payments/{id}    date, patientId, patientName, appointmentId, items[{serviceId, label, price}],
+payments/{id}    date, patientId, patientName, appointmentId, studyIds[] (visita cobrada; vacío = servicio suelto),
+                 items[{serviceId, label, price}],
                  discount, total, method, docType, docNumber, note, createdAt, createdBy
 settings/agenda  slotMinutes, daysAhead, minNoticeMinutes, closedDates[], hours{día: ['09:00-13:00']},
                  services[{id, label, detail, modality, price, active}], examIds[] (lectura pública)

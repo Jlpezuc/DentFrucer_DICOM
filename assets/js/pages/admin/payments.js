@@ -3,11 +3,17 @@
 // cita de la agenda («Cobrar») o desde una visita del explorador. La página no
 // emite boletas ni facturas: solo se anota el número del documento.
 //
+// Un cobro puede ir asociado a una visita (opcional): al elegirla se cargan sus
+// exámenes como servicios y, al guardar, la visita queda pagada (studies.paid).
+// Sin visita es un servicio suelto. Al eliminar un cobro o cambiarle la visita,
+// la visita que deja de estar cubierta por algún cobro vuelve a «Por cobrar».
+//
 //   open(preset)  preset: { payment } para editar, o { patientId, date,
-//                 appointment, studies } para un cobro nuevo con datos propuestos.
+//                 appointment, visitKey } para un cobro nuevo con datos propuestos.
 
 import { examLabel } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
+import { groupStudies, PAY_STATE } from '../../services/groups.js';
 import { DOC_TYPES, fmtCLP, itemsTotal, PAYMENT_METHODS } from '../../services/payments.js';
 import { activeServices, serviceById, serviceForModality } from '../../services/settings.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
@@ -38,6 +44,9 @@ export function createPayments(ctx) {
       (!q || [x.patientName, x.docNumber, x.note, ...x.items.map((it) => it.label)].join(' ').toLowerCase().includes(q)));
   }
 
+  // Fecha de la visita cobrada (la de sus exámenes; si ya no existen, la del cobro).
+  const visitDate = (x) => (state.studies.find((s) => x.studyIds.includes(s.id)) || x).date;
+
   function render() {
     const rows = filtered();
     const total = rows.reduce((n, x) => n + x.total, 0);
@@ -53,7 +62,7 @@ export function createPayments(ctx) {
     body.innerHTML = rows.map((x) => `
       <tr>
         <td>${fmtDate(x.date)}</td>
-        <td><strong>${escapeHtml(x.patientName || '—')}</strong>${x.note ? `<small class="muted cell-note">${escapeHtml(x.note)}</small>` : ''}</td>
+        <td><strong>${escapeHtml(x.patientName || '—')}</strong><small class="muted cell-note">${(x.studyIds || []).length ? 'Visita del ' + fmtDate(visitDate(x)) : 'Servicio suelto'}${x.note ? ' · ' + escapeHtml(x.note) : ''}</small></td>
         <td class="pay-detail">${x.items.map((it) => `<span>${escapeHtml(it.label)} <small class="muted">${fmtCLP(it.price)}</small></span>`).join('')}${x.discount ? `<span class="muted">Descuento −${fmtCLP(x.discount)}</span>` : ''}</td>
         <td><span class="badge gray">${escapeHtml(x.method)}</span></td>
         <td>${escapeHtml(x.docType)}${x.docNumber ? ' <span class="mono">' + escapeHtml(x.docNumber) + '</span>' : ''}</td>
@@ -77,8 +86,10 @@ export function createPayments(ctx) {
   const methodField = $('py-method');
   const docField = $('py-doctype');
   const context = $('py-context');
+  const visitSel = $('py-visit');
   let editing = null;
   let appointmentId = null;
+  let visits = [];   // visitas del paciente elegido
   methodField.innerHTML = '<option value="">Elija…</option>' + PAYMENT_METHODS.map((x) => `<option>${x}</option>`).join('');
   docField.innerHTML = DOC_TYPES.map((x) => `<option>${x}</option>`).join('');
 
@@ -131,6 +142,40 @@ export function createPayments(ctx) {
   // El documento se propone según el medio de pago (se puede cambiar).
   methodField.addEventListener('change', () => { if (!editing && DOC_FOR_METHOD[methodField.value]) docField.value = DOC_FOR_METHOD[methodField.value]; });
 
+  // --- Visita asociada (opcional) ------------------------------------------------------------
+  function renderVisits(selectedKey = '') {
+    visits = groupStudies(state.studies).filter((g) => g.patientId === patientSel.value);
+    visitSel.innerHTML = '<option value="">Sin visita: servicio suelto</option>' + visits.map((g) =>
+      `<option value="${escapeHtml(g.key)}">${fmtDate(g.date)} · ${escapeHtml(g.modalities.join(', '))} · ${PAY_STATE[g.payState]}</option>`).join('');
+    visitSel.value = visits.some((g) => g.key === selectedKey) ? selectedKey : '';
+    visitSel.disabled = !visits.length;
+  }
+  const currentVisit = () => visits.find((g) => g.key === visitSel.value) || null;
+  // Servicios propuestos para los exámenes de una visita (con el precio de cada servicio).
+  const visitItems = (g) => g.studies.filter((s) => s.modality !== 'Informe').map((s) => {
+    const sv = serviceForModality(s.modality);
+    return sv ? { serviceId: sv.id, price: sv.price } : { label: s.description || s.modality, price: 0 };
+  });
+  function fillFromVisit(g) {
+    $('py-date').value = g.date;
+    items.innerHTML = '';
+    const list = visitItems(g);
+    (list.length ? list : [{}]).forEach(itemRow);
+    updateTotal();
+  }
+  patientSel.addEventListener('change', () => renderVisits(''));
+  visitSel.addEventListener('change', () => { const g = currentVisit(); if (g) fillFromVisit(g); });
+
+  // Marca como pagadas las visitas cobradas y devuelve a «Por cobrar» las que
+  // ya no cubre ningún cobro.
+  async function syncPaid(newIds, oldIds, exceptPaymentId) {
+    const covered = new Set(state.payments.filter((x) => x.id !== exceptPaymentId).flatMap((x) => x.studyIds || []));
+    newIds.forEach((id) => covered.add(id));
+    const release = oldIds.filter((id) => !covered.has(id));
+    if (newIds.length) await backend.setStudiesPaid(newIds, true);
+    if (release.length) await backend.setStudiesPaid(release, false);
+  }
+
   function open(preset = {}) {
     const p = preset.payment || null;
     editing = p;
@@ -148,26 +193,29 @@ export function createPayments(ctx) {
     $('py-docnumber').value = p ? p.docNumber || '' : '';
     $('py-note').value = p ? p.note || '' : '';
 
-    // Servicios propuestos: los de la cita o los exámenes de la visita, con su precio.
+    // Visita: la del cobro, la pedida o, desde una cita, la del mismo paciente y día.
+    const groups = groupStudies(state.studies);
+    let key = preset.visitKey || '';
+    if (p && (p.studyIds || []).length) key = (groups.find((g) => g.studies.some((s) => p.studyIds.includes(s.id))) || {}).key || '';
+    else if (!p && preset.appointment) key = (groups.find((g) => g.patientId === preset.appointment.patientId && g.date === preset.appointment.date) || {}).key || '';
+    renderVisits(key);
+
+    // Servicios propuestos: los del cobro, los exámenes de la visita o el servicio de la cita.
     items.innerHTML = '';
     let proposed = p ? p.items : [];
-    if (!p && preset.appointment) {
+    if (!p && currentVisit()) proposed = visitItems(currentVisit());
+    else if (!p && preset.appointment) {
       const sv = serviceById(preset.appointment.exam);
       proposed = [sv ? { serviceId: sv.id, price: sv.price } : { label: examLabel(preset.appointment.exam), price: 0 }];
-    } else if (!p && preset.studies) {
-      proposed = preset.studies.filter((s) => s.modality !== 'Informe').map((s) => {
-        const sv = serviceForModality(s.modality);
-        return sv ? { serviceId: sv.id, price: sv.price } : { label: s.description || s.modality, price: 0 };
-      });
     }
     (proposed.length ? proposed : [{}]).forEach(itemRow);
     updateTotal();
 
     const ctxText = preset.appointment
       ? 'Cita del ' + fmtDate(preset.appointment.date) + ' a las ' + preset.appointment.time + ' · ' + examLabel(preset.appointment.exam)
-      : preset.studies ? 'Visita del ' + fmtDate(preset.date) + ' · ' + preset.studies.map((s) => s.modality).join(', ') : '';
+      : '';
     context.hidden = !ctxText;
-    context.innerHTML = ctxText ? icon(preset.appointment ? 'calendar' : 'folder') + '<span>' + escapeHtml(ctxText) + '</span>' : '';
+    context.innerHTML = ctxText ? icon('calendar') + '<span>' + escapeHtml(ctxText) + '</span>' : '';
     m.open();
   }
   document.querySelectorAll('[data-open="payment"]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); open(); }));
@@ -179,11 +227,14 @@ export function createPayments(ctx) {
     const patient = ctx.patientById(v.patientId);
     showError(err, '');
     busy(btn, true, 'Guardando…');
+    const visit = currentVisit();
+    const studyIds = visit ? visit.studies.map((s) => s.id) : [];
     try {
-      await backend.savePayment(editing ? editing.id : null, {
-        ...v, patientName: patient ? patient.name : '', appointmentId, items: readItems(), discount: money(v.discount)
+      const id = await backend.savePayment(editing ? editing.id : null, {
+        ...v, patientName: patient ? patient.name : '', appointmentId, studyIds, items: readItems(), discount: money(v.discount)
       });
-      toast(editing ? 'Cobro actualizado.' : 'Cobro registrado: ' + $('py-total').textContent + '.');
+      await syncPaid(studyIds, editing ? editing.studyIds || [] : [], id);
+      toast((editing ? 'Cobro actualizado.' : 'Cobro registrado: ' + $('py-total').textContent + '.') + (visit ? ' La visita del ' + fmtDate(visit.date) + ' quedó pagada.' : ''));
       m.close();
       await ctx.reload();
     } catch (ex) { showError(err, ex.message); }
@@ -194,6 +245,7 @@ export function createPayments(ctx) {
     if (!editing || !confirm('¿Eliminar este cobro de ' + fmtCLP(editing.total) + ' (' + editing.patientName + ')?')) return;
     try {
       await backend.deletePayment(editing.id);
+      await syncPaid([], editing.studyIds || [], editing.id);
       toast('Cobro eliminado.');
       m.close();
       await ctx.reload();

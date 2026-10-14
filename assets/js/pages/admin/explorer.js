@@ -12,7 +12,7 @@
 // Sin el permiso "Exámenes" el explorador es de solo lectura.
 
 import { backend, isDemo } from '../../services/backend.js';
-import { doctorsOf, fileKind, groupKey, groupSearchText, groupStudies, modifiedAt, searchTerm, STUDY_MODALITIES } from '../../services/groups.js';
+import { doctorsOf, fileKind, groupKey, groupSearchText, groupStudies, modifiedAt, PAY_STATE, searchTerm, STUDY_MODALITIES } from '../../services/groups.js';
 import { fmtCLP } from '../../services/payments.js';
 import { escapeHtml, modal, toast } from '../../ui/dom.js';
 import { fmtDate, fmtSize, initials } from '../../ui/format.js';
@@ -21,6 +21,8 @@ import { openStudy } from '../study-actions.js';
 import { bindDoctorPickers, contactOf, doctorNames, doctorPickerHtml, pickerValue } from './common.js';
 
 const LEVEL = { doctor: 'Médico', patient: 'Paciente', group: 'Visita' };
+const PAY_BADGE = { paid: 'green', partial: 'amber', unpaid: 'gray' };
+const payBadge = (g) => `<span class="badge ${PAY_BADGE[g.payState]}">${PAY_STATE[g.payState]}</span>`;
 
 export function createExplorer(ctx) {
   const { state } = ctx;
@@ -88,7 +90,7 @@ export function createExplorer(ctx) {
             ${showDoctor ? `<span class="${g.doctorIds.length ? '' : 'warn-text'}">${icon('stethoscope')} ${escapeHtml(names(g.doctorIds))}</span>` : ''}
             <span class="muted">${plural(g.studies.length, 'examen', 'exámenes')} · ${plural(g.fileCount, 'archivo', 'archivos')}${g.missingReports ? ' · <span class="warn-text">' + plural(g.missingReports, 'sin informe', 'sin informe') + '</span>' : ''}</span>
           </span>
-          <span class="visit-open">Abrir visita ${icon('chevronRight')}</span>
+          <span class="visit-open">${payBadge(g)} Abrir visita ${icon('chevronRight')}</span>
         </button>
         <ul class="visit-item-exams">${g.studies.map((s) => `
           <li data-study="${escapeHtml(s.id)}">
@@ -147,11 +149,17 @@ export function createExplorer(ctx) {
     }
     const p = ctx.patientById(g.patientId) || {};
     const sub = [g.patientCode, g.patientAge ? g.patientAge + ' años' : ''].filter(Boolean).map(escapeHtml).join(' · ');
-    const pays = (state.payments || []).filter((x) => x.patientId === g.patientId && x.date === g.date);
+    // Cobros de la visita: los asociados a sus exámenes o, si no, los del mismo paciente y día.
+    const ids = new Set(g.studies.map((x) => x.id));
+    const linked = (state.payments || []).filter((x) => (x.studyIds || []).some((id) => ids.has(id)));
+    const pays = linked.length ? linked : (state.payments || []).filter((x) => x.patientId === g.patientId && x.date === g.date && !(x.studyIds || []).length);
     const paid = pays.reduce((n, x) => n + (x.total || 0), 0);
-    const payInfo = pays.length
-      ? `<strong>${fmtCLP(paid)}</strong> <span class="muted">· ${escapeHtml(pays.map((x) => x.method + (x.docNumber ? ' · ' + x.docType + ' ' + x.docNumber : '')).join(' / '))}</span>`
-      : '<span class="muted">Sin cobro registrado</span>';
+    const payInfo = payBadge(g) + (pays.length
+      ? ` <strong>${fmtCLP(paid)}</strong> <span class="muted">· ${escapeHtml(pays.map((x) => x.method + (x.docNumber ? ' · ' + x.docType + ' ' + x.docNumber : '')).join(' / '))}</span>`
+      : ' <span class="muted">Sin cobro registrado</span>');
+    const payActions = ctx.can('cobros') ? `<br><span class="pay-actions">
+      <button type="button" class="link-btn" data-pay>${pays.length ? 'Registrar otro cobro' : 'Registrar cobro'}</button>
+      <button type="button" class="link-btn" data-mark-paid="${g.payState === 'paid' ? '0' : '1'}">${g.payState === 'paid' ? 'Marcar como no pagada' : 'Marcar como pagada'}</button></span>` : '';
     body.innerHTML = `
       <div class="explorer-card visit-summary">
         <div class="vs-title">
@@ -164,7 +172,7 @@ export function createExplorer(ctx) {
             ? doctorPickerHtml(state.doctors, g.doctorIds, { emptyLabel: 'Sin médico: solo lo ve la clínica' }) + '<small class="muted">Los exámenes de esta visita aparecen en el portal de estos médicos.</small>'
             : escapeHtml(names(g.doctorIds))}</dd></div>
           <div><dt>Contenido</dt><dd>${plural(g.studies.length, 'examen', 'exámenes')} · ${plural(g.fileCount, 'archivo', 'archivos')} · ${fmtSize(g.totalSize)}${g.missingReports ? '<br><span class="warn-text">' + plural(g.missingReports, 'examen sin informe', 'exámenes sin informe') + '</span>' : '<br><span class="ok-text">Todos los informes subidos</span>'}</dd></div>
-          <div><dt>Cobro</dt><dd>${payInfo}${ctx.can('cobros') ? `<br><button type="button" class="link-btn" data-pay>${pays.length ? 'Registrar otro cobro' : 'Registrar cobro'}</button>` : ''}</dd></div>
+          <div><dt>Pago</dt><dd>${payInfo}${payActions}</dd></div>
         </dl>
       </div>
       <h3 class="explorer-subtitle">Exámenes de la visita</h3>
@@ -295,7 +303,18 @@ export function createExplorer(ctx) {
     if (t.hasAttribute('data-cancel')) { ui = {}; return render(); }
     if (t.hasAttribute('data-pay')) {
       const g = currentGroup();
-      if (g && ctx.openPayment) ctx.openPayment({ patientId: g.patientId, date: g.date, studies: g.studies });
+      if (g && ctx.openPayment) ctx.openPayment({ patientId: g.patientId, date: g.date, visitKey: g.key });
+      return;
+    }
+    // Estado de pago a mano (por ejemplo, pagada por convenio sin cobro registrado aquí).
+    if (t.dataset.markPaid !== undefined) {
+      const g = currentGroup();
+      if (!g) return;
+      const paid = t.dataset.markPaid === '1';
+      try {
+        await backend.setStudiesPaid(g.studies.map((x) => x.id), paid);
+        await refresh(paid ? 'Visita marcada como pagada.' : 'Visita marcada como por cobrar.');
+      } catch (ex) { toast('No se pudo cambiar el estado de pago: ' + ex.message); }
       return;
     }
 

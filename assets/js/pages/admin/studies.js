@@ -3,7 +3,7 @@
 // filtra por un día. Al abrir una visita se ve el explorador (explorer.js), donde
 // también se cambian sus médicos.
 
-import { groupSearchText, groupStudies, searchTerm } from '../../services/groups.js';
+import { groupSearchText, groupStudies, PAY_STATE, searchTerm } from '../../services/groups.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { fmtDate, fmtSize } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -14,6 +14,7 @@ const FILTERS = {
   new: (g) => g.hasNew,
   nodoctor: (g) => !g.doctorIds.length,
   noreport: (g) => g.missingReports > 0,
+  unpaid: (g) => g.payState !== 'paid',
   cbct: (g) => g.modalities.includes('CBCT')
 };
 
@@ -32,7 +33,7 @@ export function createStudies(ctx) {
     const rows = groups.filter((g) => FILTERS[filter](g) && (!day || g.date === day) &&
       (!q || groupSearchText(g, doctorNames(state.doctors, g.doctorIds, '')).includes(q)));
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="6"><div class="empty">' + (state.studies.length ? 'No se encontraron exámenes.' : 'Todavía no hay exámenes. Cárguelos abajo.') + '</div></td></tr>';
+      body.innerHTML = '<tr><td colspan="7"><div class="empty">' + (state.studies.length ? 'No se encontraron exámenes.' : 'Todavía no hay exámenes. Cárguelos abajo.') + '</div></td></tr>';
       return;
     }
     body.innerHTML = rows.map((g) => {
@@ -49,6 +50,7 @@ export function createStudies(ctx) {
           : '<span class="warn-text">Sin médico</span>') + '</td>' +
         '<td><div class="badges">' + exams + '</div></td>' +
         '<td><span class="mono">' + g.fileCount + ' · ' + fmtSize(g.totalSize) + '</span></td>' +
+        '<td><span class="badge ' + ({ paid: 'green', partial: 'amber', unpaid: 'gray' })[g.payState] + '">' + PAY_STATE[g.payState] + '</span></td>' +
         '<td><div class="row-actions"><button class="btn btn-outline btn-sm" type="button" data-open="' + key + '">' + icon('folder') + ' Abrir visita</button></div></td>' +
       '</tr>';
     }).join('');

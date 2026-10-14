@@ -13,7 +13,7 @@ import {
 } from './shared.js';
 
 const SESSION_KEY = 'dentfrucer.demo.session';
-const DB_KEY = 'dentfrucer.demo.db.v3'; // cambia la versión si cambian los datos de ejemplo
+const DB_KEY = 'dentfrucer.demo.db.v4'; // cambia la versión si cambian los datos de ejemplo
 const MB = 1024 * 1024;
 const PASSWORD = 'demo1234';
 
@@ -91,9 +91,13 @@ function seed() {
     const method = methods[i % methods.length];
     const items = list.map((x) => ({ serviceId: x.modality, label: labelOf(x.modality), price: DEMO_PRICES[x.modality] || 0 }));
     const total = items.reduce((n, it) => n + it.price, 0);
-    return { id: 'pay' + (i + 1), date: list[0].date, patientId: list[0].patientId, patientName: list[0].patientName, appointmentId: null, items, discount: 0, total, method, docType: docFor(method), docNumber: String(48210 + i), note: '' };
-  });
-  payments.push({ id: 'pay-today', date: day(0), patientId: 'p3', patientName: 'Sofía Herrera', appointmentId: 'demoa4', items: [{ serviceId: 'Periapical', label: 'Radiografías intraorales', price: 8000 }], discount: 0, total: 8000, method: 'Débito', docType: 'Voucher (boleta)', docNumber: '48290', note: '' });
+    // Las visitas cobradas quedan pagadas (también su informe del mismo día).
+    const all = studies.filter((x) => x.patientId === list[0].patientId && x.date === list[0].date);
+    all.forEach((x) => { x.paid = true; });
+    return { id: 'pay' + (i + 1), date: list[0].date, patientId: list[0].patientId, patientName: list[0].patientName, appointmentId: null, studyIds: all.map((x) => x.id), items, discount: 0, total, method, docType: docFor(method), docNumber: String(48210 + i), note: '' };
+  }).filter((x, i) => i % 6 !== 5); // algunas visitas quedan por cobrar
+  studies.forEach((x) => { if (!payments.some((p) => p.studyIds.includes(x.id))) x.paid = false; });
+  payments.push({ id: 'pay-today', date: day(0), patientId: 'p3', patientName: 'Sofía Herrera', appointmentId: 'demoa4', studyIds: [], items: [{ serviceId: 'Periapical', label: 'Radiografías intraorales', price: 8000 }], discount: 0, total: 8000, method: 'Débito', docType: 'Voucher (boleta)', docNumber: '48290', note: '' });
 
   // Cuentas de administración: la general, una secretaria y un tecnólogo con permisos limitados.
   const all = { resumen: true, agenda: true, examenes: true, pacientes: true, medicos: true, cobros: true, config: true };
@@ -250,6 +254,10 @@ export function createDemoBackend() {
       return id;
     },
     async setStudyDoctors(studyId, doctorIds) { Object.assign(edited(studyId), studyDoctors(doctorIds)); save(); },
+    async setStudiesPaid(ids, paid) {
+      studies.filter((s) => ids.includes(s.id)).forEach((s) => { s.paid = !!paid; });
+      save();
+    },
     async updateStudy(study, changes) { Object.assign(edited(study.id), studyEdits(changes)); save(); },
     // Archivos de demostración: solo nombre y tamaño (no hay nada que descargar).
     async addStudyFiles(study, files, onProgress) {
