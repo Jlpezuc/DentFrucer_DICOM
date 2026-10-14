@@ -2,13 +2,15 @@
 // abrir el visor y listar los archivos para descargar.
 
 import { backend, isDemo } from '../services/backend.js';
+import { studyServiceName } from '../services/settings.js';
 import { escapeHtml, modal, toast } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 
-// Abre el visor (se carga solo cuando se usa por primera vez).
+// Abre el visor (se carga solo cuando se usa por primera vez). El visor recibe
+// el nombre vigente del servicio del examen.
 export async function openStudy(study) {
   const { openViewer } = await import('../viewer/index.js');
-  openViewer(study, { backend, isDemo });
+  openViewer({ ...study, service: studyServiceName(study) }, { backend, isDemo });
 }
 
 export function initFilesModal() {

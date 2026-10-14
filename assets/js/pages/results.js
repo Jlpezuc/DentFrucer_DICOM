@@ -8,8 +8,8 @@
 
 import { agendaConfig } from '../config/agenda-config.js';
 import { patientAccess } from '../config/patient-access.js';
-import { examLabel } from '../services/agenda.js';
 import { isDemo } from '../services/mode.js';
+import { applySettings, studyServiceName } from '../services/settings.js';
 import { escapeHtml } from '../ui/dom.js';
 import { fmtDate } from '../ui/format.js';
 import { icon } from '../ui/icons.js';
@@ -38,6 +38,7 @@ export async function init() {
 
   // El backend se carga solo cuando el acceso está permitido.
   const { backend } = await import('../services/backend.js');
+  applySettings(await backend.getAgendaSettings());
   let shared;
   try {
     shared = await backend.getSharedStudy(token);
@@ -50,10 +51,10 @@ export async function init() {
   card.innerHTML = `
     <span class="results-icon ok">${icon('scan')}</span>
     <p class="kicker">Sus resultados</p>
-    <h1>${escapeHtml(examLabel(study.modality))}</h1>
+    <h1>${escapeHtml(studyServiceName(study))}</h1>
     <dl class="results-details">
       <dt>Paciente</dt><dd>${escapeHtml(study.patientName || '')}</dd>
-      <dt>Examen</dt><dd>${escapeHtml(study.description || study.modality)}</dd>
+      <dt>Examen</dt><dd>${escapeHtml(studyServiceName(study) + (study.description ? ' · ' + study.description : ''))}</dd>
       <dt>Fecha</dt><dd>${fmtDate(study.date)}</dd>
       <dt>Código</dt><dd class="mono">${escapeHtml(study.code || '')}</dd>
     </dl>
@@ -69,6 +70,6 @@ export async function init() {
     </div>`;
   card.querySelector('[data-open-viewer]').addEventListener('click', async () => {
     const { openViewer } = await import('../viewer/index.js');
-    openViewer(study, { backend, isDemo, viewOnly: true, fileUrls: async () => files });
+    openViewer({ ...study, service: studyServiceName(study) }, { backend, isDemo, viewOnly: true, fileUrls: async () => files });
   });
 }

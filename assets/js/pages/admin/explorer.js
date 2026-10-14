@@ -12,13 +12,14 @@
 // Sin el permiso "Exámenes" el explorador es de solo lectura.
 
 import { backend, isDemo } from '../../services/backend.js';
-import { doctorsOf, fileKind, groupKey, groupSearchText, groupStudies, modifiedAt, PAY_STATE, searchTerm, STUDY_MODALITIES } from '../../services/groups.js';
+import { doctorsOf, fileKind, groupKey, groupSearchText, groupStudies, isReportOnly, modifiedAt, PAY_STATE, searchTerm } from '../../services/groups.js';
 import { fmtCLP } from '../../services/payments.js';
+import { studyServiceId, studyServiceName } from '../../services/settings.js';
 import { escapeHtml, modal, toast } from '../../ui/dom.js';
 import { fmtDate, fmtSize, initials } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
 import { openStudy } from '../study-actions.js';
-import { bindDoctorPickers, contactOf, doctorNames, doctorPickerHtml, pickerValue } from './common.js';
+import { bindDoctorPickers, contactOf, doctorNames, doctorPickerHtml, pickerValue, serviceOptions } from './common.js';
 
 const LEVEL = { doctor: 'Médico', patient: 'Paciente', group: 'Visita' };
 const PAY_BADGE = { paid: 'green', partial: 'amber', unpaid: 'gray' };
@@ -75,7 +76,7 @@ export function createExplorer(ctx) {
   const reportsOf = (s) => (s.files || []).filter((f) => fileKind(f) === 'pdf');
   function examStatus(s) {
     const out = [];
-    if (s.modality !== 'Informe') out.push(reportsOf(s).length ? '<span class="st ok">Informe listo</span>' : '<span class="st warn">Falta el informe</span>');
+    if (!isReportOnly(s)) out.push(reportsOf(s).length ? '<span class="st ok">Informe listo</span>' : '<span class="st warn">Falta el informe</span>');
     return out.join('');
   }
 
@@ -99,8 +100,7 @@ export function createExplorer(ctx) {
         </div>
         <ul class="visit-item-exams"${open ? '' : ' hidden'}>${g.studies.map((s) => `
           <li data-study="${escapeHtml(s.id)}">
-            <span class="badge ${s.modality === 'Informe' ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span>
-            <span class="vi-name">${escapeHtml(s.description || s.modality)}</span>
+            <span class="vi-name"><strong>${escapeHtml(studyServiceName(s))}</strong>${s.description ? ` <span class="muted">· ${escapeHtml(s.description)}</span>` : ''}</span>
             <span class="vi-status">${examStatus(s)}</span>
             <button type="button" class="btn btn-ghost btn-sm" data-view>${icon('eye')} Ver</button>
           </li>`).join('')}</ul>
@@ -186,13 +186,13 @@ export function createExplorer(ctx) {
   }
 
   function examForm(s, g) {
-    const v = s || { modality: 'Panorámica', description: '', date: g.date, doctorIds: g.doctorIds };
+    const v = s || { description: '', date: g.date, doctorIds: g.doctorIds };
     return `
       <form class="exam-form" data-exam-form="${s ? escapeHtml(s.id) : ''}">
         <h4>${s ? 'Editar datos del examen' : 'Nuevo examen en esta visita'}</h4>
         <div class="form-row ${s ? 'three' : 'two'}">
-          <div class="field"><label>Modalidad <select class="input select" name="modality">${STUDY_MODALITIES.map((x) => `<option${x === v.modality ? ' selected' : ''}>${x}</option>`).join('')}</select></label></div>
-          <div class="field"><label>Descripción <input class="input" name="description" value="${escapeHtml(v.description || '')}" placeholder="Ej.: Cone Beam · maxilar completo"></label></div>
+          <div class="field"><label>Servicio <select class="input select" name="serviceId">${serviceOptions(s ? studyServiceId(s) : '', s ? studyServiceName(s) : '')}</select></label></div>
+          <div class="field"><label>Detalle <span class="opt">(opcional)</span> <input class="input" name="description" maxlength="120" value="${escapeHtml(v.description || '')}" placeholder="Ej.: maxilar completo, pieza 36"></label></div>
           ${s ? `<div class="field"><label>Fecha <input class="input" type="date" name="date" value="${escapeHtml(v.date)}"></label></div>` : ''}
         </div>
         ${s ? `<div class="field"><span class="field-label">Médicos de este examen</span>${doctorPickerHtml(state.doctors, doctorsOf(v))}</div>
@@ -231,27 +231,27 @@ export function createExplorer(ctx) {
     const files = s.files || [];
     const images = files.filter((f) => fileKind(f) !== 'pdf');
     const reports = reportsOf(s);
-    const isReportOnly = s.modality === 'Informe';
+    const reportOnly = isReportOnly(s);
     const changed = modifiedAt(s);
     return `
       <article class="exam-card" data-study="${id}">
         <header>
           <span class="exam-num" title="Examen ${n} de ${total}">${n}</span>
           <div class="exam-title">
-            <div><span class="badge ${isReportOnly ? 'green' : 'blue'}">${escapeHtml(s.modality)}</span> <strong>${escapeHtml(s.description || s.modality)}</strong></div>
+            <div><strong>${escapeHtml(studyServiceName(s))}</strong>${s.description ? ` <span class="muted">· ${escapeHtml(s.description)}</span>` : ''}</div>
             <small class="muted"><span class="mono">${escapeHtml(s.code || '')}</span>${changed ? ' · Modificado ' + fmtStamp(changed) : ''}</small>
             <div class="exam-status">${examStatus(s)}</div>
           </div>
           <div class="row-actions">
             <button type="button" class="btn btn-primary btn-sm" data-view title="Abrir en el visor">${icon('eye')} Ver</button>
-            <button type="button" class="btn btn-outline btn-sm edit-only" data-edit title="Editar modalidad, descripción, fecha o médicos">${icon('edit')} Editar</button>
+            <button type="button" class="btn btn-outline btn-sm edit-only" data-edit title="Editar servicio, detalle, fecha o médicos">${icon('edit')} Editar</button>
             <button type="button" class="icon-btn edit-only" data-delete-study title="Eliminar examen" aria-label="Eliminar examen">${icon('trash')}</button>
           </div>
         </header>
         ${ui.editing === s.id ? examForm(s) : ''}
         <div class="progress" data-progress hidden><span></span></div>
-        <div class="exam-columns${isReportOnly ? ' single' : ''}">
-          ${isReportOnly ? '' : `<section>
+        <div class="exam-columns${reportOnly ? ' single' : ''}">
+          ${reportOnly ? '' : `<section>
             <div class="exam-sub"><h5>${icon('image')} Imágenes <small>${images.length}</small></h5><button type="button" class="btn btn-ghost btn-sm edit-only" data-add-files>${icon('upload')} Subir imágenes</button></div>
             ${images.length ? `<ul class="exam-files">${images.map(fileRow).join('')}</ul>` : '<p class="muted exam-empty">Sin imágenes.</p>'}
           </section>`}
@@ -343,7 +343,7 @@ export function createExplorer(ctx) {
       return fileInput.click();
     }
     if (t.hasAttribute('data-delete-study')) {
-      if (!confirm('¿Eliminar el examen «' + (study.description || study.modality) + '» (' + study.code + ') y todos sus archivos?')) return;
+      if (!confirm('¿Eliminar el examen «' + studyServiceName(study) + '» (' + study.code + ') y todos sus archivos?')) return;
       try { await backend.deleteStudy(study); await refresh('Examen eliminado.'); } catch (ex) { toast('No se pudo eliminar: ' + ex.message); }
       return;
     }
@@ -401,7 +401,8 @@ export function createExplorer(ctx) {
       if (id) {
         const before = groupKey(studyById(id));
         const doctorIds = pickerValue(f.querySelector('[data-doctor-picker]'));
-        await backend.updateStudy(studyById(id), { modality: data.modality, description: data.description, date: data.date, doctorIds });
+        const service = f.querySelector('[name=serviceId]').selectedOptions[0]?.textContent || '';
+        await backend.updateStudy(studyById(id), { serviceId: data.serviceId, service, description: data.description, date: data.date, doctorIds });
         ui = {};
         const moved = before !== groupKey({ ...studyById(id), date: data.date, doctorIds });
         await refresh(moved ? 'Examen actualizado: pasó a la visita del ' + fmtDate(data.date) + ' · ' + names(doctorIds) + '.' : 'Examen actualizado.');
@@ -414,7 +415,8 @@ export function createExplorer(ctx) {
         const bar = f.querySelector('.progress');
         bar.hidden = false;
         await backend.uploadStudy({
-          patient, doctorIds: g.doctorIds, date: g.date, modality: data.modality, description: data.description || data.modality, files,
+          patient, doctorIds: g.doctorIds, date: g.date, serviceId: data.serviceId, service: f.querySelector('[name=serviceId]').selectedOptions[0]?.textContent || '',
+          description: data.description, files,
           onProgress: (p) => { bar.querySelector('span').style.width = Math.round(p * 100) + '%'; }
         });
         ui = {};

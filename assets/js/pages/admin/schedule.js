@@ -1,5 +1,5 @@
-// Servicios y horarios: los servicios que se agendan y se cobran (nombre,
-// descripción, modalidad, precio y si aparecen en la agenda en línea) y el
+// Servicios y horarios: los servicios que se agendan, se cargan y se cobran
+// (nombre, descripción, precio y si aparecen en la agenda en línea) y el
 // horario en que los pacientes pueden reservar (días, rangos de horas, duración
 // del turno, anticipación y días cerrados). Todo se guarda junto en
 // settings/agenda (services/settings.js) y se aplica de inmediato.
@@ -7,7 +7,7 @@
 import { agendaConfig } from '../../config/agenda-config.js';
 import { backend } from '../../services/backend.js';
 import { fmtCLP } from '../../services/payments.js';
-import { applySettings, currentSettings, newServiceId, SERVICE_MODALITIES, SLOT_OPTIONS, toStored } from '../../services/settings.js';
+import { applySettings, currentSettings, newServiceId, SLOT_OPTIONS, toStored } from '../../services/settings.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { fmtDate } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -37,7 +37,6 @@ export function createSchedule(ctx) {
     servicesBody.innerHTML = agendaConfig.exams.map((e) => `
       <tr class="${e.active === false ? 'row-muted' : ''}">
         <td><strong>${escapeHtml(e.label)}</strong><small class="muted cell-note">${escapeHtml(e.detail || '')}</small></td>
-        <td><span class="badge blue">${escapeHtml(e.modality || e.id)}</span></td>
         <td class="num"><strong>${e.price ? fmtCLP(e.price) : '<span class="warn-text">Sin precio</span>'}</strong></td>
         <td>${e.active === false ? '<span class="badge gray">No se agenda</span>' : '<span class="badge green">Disponible</span>'}${used.has(e.id) ? ' <small class="muted">· con citas</small>' : ''}</td>
         <td><div class="row-actions"><button class="btn btn-outline btn-sm" type="button" data-edit-service="${escapeHtml(e.id)}">${icon('edit')} Editar</button></div></td>
@@ -48,7 +47,6 @@ export function createSchedule(ctx) {
   const form = $('service-form');
   const err = form.querySelector('.form-error');
   let editing = null;
-  $('sv-modality').innerHTML = SERVICE_MODALITIES.map((x) => `<option>${x}</option>`).join('');
 
   function openService(service) {
     editing = service || null;
@@ -57,7 +55,6 @@ export function createSchedule(ctx) {
     $('service-modal-title').textContent = service ? 'Editar servicio' : 'Nuevo servicio';
     $('sv-label').value = service ? service.label : '';
     $('sv-detail').value = service ? service.detail || '' : '';
-    $('sv-modality').value = service ? service.modality || service.id : 'Panorámica';
     $('sv-price').value = service && service.price ? service.price : '';
     $('sv-active').checked = service ? service.active !== false : true;
     $('sv-delete').hidden = !service;
@@ -76,7 +73,7 @@ export function createSchedule(ctx) {
     const cfg = currentSettings();
     const service = {
       id: editing ? editing.id : newServiceId(v.label, cfg.exams),
-      label: v.label, detail: v.detail, modality: v.modality,
+      label: v.label, detail: v.detail,
       price: Math.round(Number(String(v.price).replace(/[^\d]/g, '')) || 0),
       active: $('sv-active').checked
     };

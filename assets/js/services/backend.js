@@ -8,7 +8,7 @@
 //  patients/{id}      { name, firstName, lastName, email, phone, code, age, source: 'agenda' | 'panel', createdAt }
 //                     Solo identidad y contacto: los pacientes NO tienen médico.
 //  studies/{id}       { code, patientId, patientName, patientCode, patientAge, doctorIds, doctorId,
-//                       modality, description, date: 'YYYY-MM-DD', files: [{ name, path, size }],
+//                       serviceId, service, description, date: 'YYYY-MM-DD', files: [{ name, path, size }],
 //                       totalSize, status: 'Nuevo' | 'Visto', paid (visita pagada), createdAt, updatedAt }
 //                     Cada examen es de un paciente y de uno o varios médicos (doctorIds; doctorId = el primero).
 //                     updatedAt: último cambio hecho por la clínica (orden dentro de la visita).

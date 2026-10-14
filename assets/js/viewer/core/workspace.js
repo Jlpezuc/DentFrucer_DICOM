@@ -318,7 +318,7 @@ export class Workspace {
 
   async copySummary() {
     const s = this.study;
-    const text = [`${s.patientName || ''} · ${s.description || s.modality || ''} · ${s.date || ''}`, ...this.summaryLines().map((l, i) => `${i + 1}. ${l}`)].join('\n');
+    const text = [`${s.patientName || ''} · ${[s.service, s.description].filter(Boolean).join(' · ')} · ${s.date || ''}`, ...this.summaryLines().map((l, i) => `${i + 1}. ${l}`)].join('\n');
     try { await navigator.clipboard.writeText(text); this.shell.toast('Resumen copiado al portapapeles.'); }
     catch (e) { this.shell.toast('No se pudo copiar.'); }
   }
@@ -337,12 +337,12 @@ export class Workspace {
     const canvas = await composeExport(snap.canvas, {
       scale: snap.scale,
       title: s.patientName || 'Paciente',
-      lines: [s.patientCode, s.description || this.profile.title, label, s.date ? new Date(s.date + 'T12:00:00').toLocaleDateString('es') : ''].filter(Boolean),
+      lines: [s.patientCode, [s.service, s.description].filter(Boolean).join(' · ') || this.profile.title, label, s.date ? new Date(s.date + 'T12:00:00').toLocaleDateString('es') : ''].filter(Boolean),
       measurements: this.summaryLines(new Set(visible.map((v) => v.frame.key))),
       note: this.profile.densityNote && this.store.items.some((m) => m.type === 'roi' || m.type === 'probe') ? 'Valores de gris de CBCT: no son unidades Hounsfield calibradas.' : ''
     });
     if (a === 'export') {
-      const name = ['DentFrucer', s.patientCode || s.patientName, label || this.profile.title].filter(Boolean).join('_').replace(/[^\w.-]+/g, '_');
+      const name = ['DentFrucer', s.patientCode || s.patientName, label || s.service || this.profile.title].filter(Boolean).join('_').replace(/[^\w.-]+/g, '_');
       downloadCanvas(canvas, name + '.png');
       this.shell.toast('Imagen exportada.');
     } else if (!printCanvas(canvas, 'DentFrucer · ' + (s.patientName || ''), win)) {

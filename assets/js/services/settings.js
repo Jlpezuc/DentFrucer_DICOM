@@ -6,18 +6,16 @@
 //
 //  settings/agenda { slotMinutes, daysAhead, minNoticeMinutes, closedDates: ['AAAA-MM-DD'],
 //                    hours: { '1': ['09:00-13:00', '14:00-19:00'], … }   (0 = domingo)
-//                    services: [{ id, label, detail, price, modality, active }],
+//                    services: [{ id, label, detail, price, active }],
 //                    examIds: [ids de los servicios activos], updatedAt }
 // Firestore no guarda listas dentro de listas: por eso cada rango es un texto
 // "inicio-fin". examIds lo usan las reglas para validar la agenda pública.
 
 import { agendaConfig } from '../config/agenda-config.js';
-import { STUDY_MODALITIES } from './groups.js';
 
 const EDITABLE = ['slotMinutes', 'hours', 'daysAhead', 'minNoticeMinutes', 'closedDates', 'exams'];
 const copy = (v) => JSON.parse(JSON.stringify(v));
 export const SLOT_OPTIONS = [10, 15, 20, 30, 40, 45, 60];
-export const SERVICE_MODALITIES = STUDY_MODALITIES.filter((m) => m !== 'Informe');
 
 // Configuración editable actual (copia, para trabajar en un formulario).
 export function currentSettings() {
@@ -32,8 +30,16 @@ export function applySettings(stored) {
 
 export const activeServices = () => agendaConfig.exams.filter((e) => e.active !== false);
 export const serviceById = (id) => agendaConfig.exams.find((e) => e.id === id);
-// Servicio que corresponde a una modalidad (para proponer el precio de un examen ya cargado).
-export const serviceForModality = (modality) => activeServices().find((e) => (e.modality || e.id) === modality) || serviceById(modality);
+
+// Servicio de un examen. Los exámenes guardan serviceId y el nombre del
+// servicio al cargarlos (service); se muestra el nombre vigente del servicio.
+// Los exámenes anteriores guardaban "modality", que coincide con el id de los
+// servicios iniciales (CBCT, Panorámica…).
+export const studyServiceId = (s) => s.serviceId || s.modality || '';
+export function studyServiceName(s) {
+  const sv = serviceById(studyServiceId(s));
+  return sv ? sv.label : s.service || s.modality || 'Examen';
+}
 
 // --- Conversión para Firestore -----------------------------------------------------------
 export function toStored(cfg) {
@@ -56,7 +62,7 @@ function fromStored(s) {
     minNoticeMinutes: s.minNoticeMinutes,
     closedDates: s.closedDates || [],
     hours: Object.fromEntries(Object.entries(s.hours || {}).map(([d, ranges]) => [Number(d), ranges.map((r) => r.split('-'))])),
-    exams: s.services.map((e) => ({ ...e, price: Number(e.price) || 0, active: e.active !== false }))
+    exams: s.services.map(({ id, label, detail, price, active }) => ({ id, label, detail: detail || '', price: Number(price) || 0, active: active !== false }))
   };
 }
 
@@ -97,10 +103,9 @@ export function validateSettings(cfg) {
     if (label.length > 60) return { error: 'El nombre «' + label.slice(0, 20) + '…» es demasiado largo.' };
     const price = Number(e.price);
     if (!Number.isInteger(price) || price < 0 || price > 100000000) return { error: 'El precio de «' + label + '» no es válido.' };
-    if (!SERVICE_MODALITIES.includes(e.modality)) return { error: 'Elija la modalidad de «' + label + '».' };
     if (!e.id || ids.has(e.id)) return { error: 'Hay servicios repetidos.' };
     ids.add(e.id);
-    exams.push({ id: e.id, label, detail: String(e.detail || '').trim().slice(0, 160), modality: e.modality, price, active: e.active !== false });
+    exams.push({ id: e.id, label, detail: String(e.detail || '').trim().slice(0, 160), price, active: e.active !== false });
   }
   if (!exams.some((e) => e.active)) return { error: 'Deje al menos un servicio disponible para agendar.' };
 

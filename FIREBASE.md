@@ -117,7 +117,8 @@ users/{uid}      name, email, role ('admin' | 'doctor'), specialty (médicos),
 patients/{id}    name, firstName, lastName, email, phone, code, age, source ('agenda' | 'panel')
                  sin médico: solo la clínica lee esta colección
 studies/{id}     code, patientId, patientName, patientCode, patientAge, doctorIds[], doctorId (el primero),
-                 modality, description, date (YYYY-MM-DD), files[{name, path, size}],
+                 serviceId, service (nombre del servicio al cargarlo), description (detalle opcional),
+                 date (YYYY-MM-DD), files[{name, path, size}],
                  totalSize, status ('Nuevo' | 'Visto'), paid (visita pagada), createdAt, updatedAt
 appointments/{id}  code, firstName, lastName, name, email, phone, referrer, exam,
                  date (YYYY-MM-DD), time (HH:MM), slotId, patientId,
@@ -127,11 +128,11 @@ payments/{id}    date, patientId, patientName, appointmentId, studyIds[] (visita
                  items[{serviceId, label, price}],
                  discount, total, method, docType, docNumber, note, createdAt, createdBy
 settings/agenda  slotMinutes, daysAhead, minNoticeMinutes, closedDates[], hours{día: ['09:00-13:00']},
-                 services[{id, label, detail, modality, price, active}], examIds[] (lectura pública)
+                 services[{id, label, detail, price, active}], examIds[] (lectura pública)
 Storage          studies/{studyId}/{archivo}
 ```
 
-Si su base tiene pacientes anteriores con un campo `doctorId`, ya no se usa. Los exámenes anteriores, que solo tienen `studies.doctorId`, siguen funcionando: la página y las reglas los tratan como de un solo médico, y al editarlos se guarda también `doctorIds`.
+Si su base tiene pacientes anteriores con un campo `doctorId`, ya no se usa. Los exámenes anteriores con `modality` (CBCT, Panorámica…) se muestran con el servicio del mismo id; al editarlos se guarda `serviceId`. Los exámenes anteriores, que solo tienen `studies.doctorId`, siguen funcionando: la página y las reglas los tratan como de un solo médico, y al editarlos se guarda también `doctorIds`.
 
 ## Acceso de pacientes (pendiente)
 

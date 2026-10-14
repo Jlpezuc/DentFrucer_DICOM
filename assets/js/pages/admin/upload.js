@@ -1,20 +1,20 @@
 // Carga de exámenes: un paciente + los médicos que los reciben (uno o varios) +
-// la fecha, y uno o varios exámenes (cada uno con su modalidad y sus archivos,
-// incluidos los informes PDF). Los exámenes del mismo paciente, médicos y fecha
+// la fecha, y uno o varios exámenes (cada uno con su servicio, un detalle
+// opcional, sus imágenes y su informe PDF). Los exámenes del mismo paciente, médicos y fecha
 // quedan en la misma visita, aunque se suban en momentos distintos.
 //
-// Si el paciente tiene una cita pendiente (o se llega desde "Cargar examen"
-// en la agenda), se rellenan examen y fecha, se sugiere el médico que indicó
+// Si el paciente tiene una cita pendiente (o se llega desde "Cargar" en la
+// agenda), se rellenan el servicio de la cita y la fecha, se sugiere el médico que indicó
 // al agendar y, al subir, la cita queda como atendida.
 
 import { examLabel } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
-import { groupKey, STUDY_MODALITIES } from '../../services/groups.js';
-import { serviceById } from '../../services/settings.js';
+import { groupKey } from '../../services/groups.js';
+import { studyServiceName } from '../../services/settings.js';
 import { busy, escapeHtml, showError, toast } from '../../ui/dom.js';
 import { fmtDate, fmtSize, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
-import { bindDoctorPickers, doctorNames, doctorPickerHtml, matchDoctor, pickerValue } from './common.js';
+import { bindDoctorPickers, doctorNames, doctorPickerHtml, matchDoctor, pickerValue, serviceOptions } from './common.js';
 
 export function createUpload(ctx) {
   const { state } = ctx;
@@ -39,9 +39,9 @@ export function createUpload(ctx) {
   bindDoctorPickers(doctorBox, () => state.doctors, () => { doctorHint.textContent = DOCTOR_HINT; updateGroupHint(); });
 
   // --- Bloques de examen -------------------------------------------------------------
-  // Cada bloque tiene su modalidad, descripción, archivos (block.files: DICOM,
-  // ZIP, fotos…) y su informe PDF (block.report), que se guarda en el mismo examen.
-  function addExamBlock(modality = 'CBCT') {
+  // Cada bloque tiene su servicio, un detalle opcional, archivos (block.files:
+  // DICOM, ZIP, fotos…) y su informe PDF (block.report), que se guarda en el mismo examen.
+  function addExamBlock(serviceId = '') {
     const block = document.createElement('div');
     block.className = 'exam-block';
     block.files = [];
@@ -52,8 +52,8 @@ export function createUpload(ctx) {
         <button type="button" class="icon-btn" data-remove title="Quitar este examen" aria-label="Quitar este examen">${icon('x')}</button>
       </div>
       <div class="form-row">
-        <div class="field"><label>Modalidad <select class="input select" data-modality>${STUDY_MODALITIES.map((m) => `<option${m === modality ? ' selected' : ''}>${m}</option>`).join('')}</select></label></div>
-        <div class="field"><label>Descripción <input class="input" data-desc placeholder="Ej.: Cone Beam · maxilar completo"></label></div>
+        <div class="field"><label>Servicio <select class="input select" data-service>${serviceOptions(serviceId)}</select></label></div>
+        <div class="field"><label>Detalle <span class="opt">(opcional)</span> <input class="input" data-desc maxlength="120" placeholder="Ej.: maxilar completo, pieza 36"></label></div>
       </div>
       <div class="dropzone compact" data-dropzone>
         ${icon('cloud')}
@@ -107,11 +107,11 @@ export function createUpload(ctx) {
       b.querySelector('[data-remove]').hidden = blocks.length === 1;
     });
   }
-  function resetBlocks(modality) {
+  function resetBlocks() {
     examList.innerHTML = '';
-    addExamBlock(modality);
+    addExamBlock();
   }
-  $('add-exam').addEventListener('click', () => addExamBlock('Panorámica'));
+  $('add-exam').addEventListener('click', () => addExamBlock());
   resetBlocks();
 
   // --- Selectores ----------------------------------------------------------------------
@@ -129,6 +129,8 @@ export function createUpload(ctx) {
       state.patients.map((p) => option(p)).join('') + (todays ? '</optgroup>' : '');
     patientSel.value = curPatient;
     setDoctors(curDoctors);
+    // Los servicios pueden haber cambiado en «Servicios y horarios».
+    examList.querySelectorAll('[data-service]').forEach((sel) => { const v = sel.value; sel.innerHTML = serviceOptions(v); sel.value = v; });
   }
 
   // ¿Ya hay exámenes de este paciente, médicos y fecha? Entonces se suman a esa visita.
@@ -137,7 +139,7 @@ export function createUpload(ctx) {
     const key = groupKey({ patientId: patientSel.value, doctorIds: doctorIds(), date: dateInput.value });
     const existing = state.studies.filter((s) => groupKey(s) === key);
     groupHint.innerHTML = existing.length
-      ? icon('folder') + ' Se agregará a la visita del ' + fmtDate(dateInput.value) + ', que ya tiene ' + existing.length + ' examen(es): ' + escapeHtml(existing.map((s) => s.modality).join(', ')) + '.'
+      ? icon('folder') + ' Se agregará a la visita del ' + fmtDate(dateInput.value) + ', que ya tiene ' + existing.length + ' examen(es): ' + escapeHtml(existing.map(studyServiceName).join(', ')) + '.'
       : 'Se creará una visita nueva para el ' + fmtDate(dateInput.value) + '.';
   }
   [patientSel, dateInput].forEach((el) => el.addEventListener('change', updateGroupHint));
@@ -149,9 +151,9 @@ export function createUpload(ctx) {
     if (!appt) return;
     apptBox.innerHTML = icon('calendar') + '<span>Cita del ' + fmtDate(appt.date) + ' a las ' + escapeHtml(appt.time) + ' · ' + escapeHtml(examLabel(appt.exam)) +
       '. Al subir los exámenes se marcará como <strong>atendida</strong>.</span>';
-    const first = examList.querySelector('[data-modality]');
-    const service = serviceById(appt.exam);
-    if (first) first.value = (service && service.modality) || appt.exam;
+    // El primer examen es el servicio de la cita (aunque ya no se ofrezca en línea).
+    const first = examList.querySelector('[data-service]');
+    if (first) { first.innerHTML = serviceOptions(appt.exam); first.value = appt.exam; }
     dateInput.value = appt.date <= today() ? appt.date : today();
   }
 
@@ -199,7 +201,8 @@ export function createUpload(ctx) {
     const ids = doctorIds();
     const date = dateInput.value || today();
     const exams = [...examList.children].filter((b) => b.files.length || b.report.length).map((b) => ({
-      modality: b.querySelector('[data-modality]').value,
+      serviceId: b.querySelector('[data-service]').value,
+      service: b.querySelector('[data-service]').selectedOptions[0]?.textContent || '',
       description: b.querySelector('[data-desc]').value.trim(),
       files: [...b.files, ...b.report]
     }));
@@ -217,8 +220,8 @@ export function createUpload(ctx) {
       for (const x of exams) {
         const size = x.files.reduce((m, f) => m + f.size, 0);
         await backend.uploadStudy({
-          patient, doctorIds: ids, date, modality: x.modality,
-          description: x.description || x.modality,
+          patient, doctorIds: ids, date, serviceId: x.serviceId, service: x.service,
+          description: x.description,
           files: x.files,
           onProgress: (p) => { bar.style.width = Math.round(((sent + p * size) / total) * 100) + '%'; }
         });

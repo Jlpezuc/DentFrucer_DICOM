@@ -3,7 +3,8 @@
 // tienen médico; cada examen sí.
 
 import { backend } from '../services/backend.js';
-import { fileKind, groupSearchText, groupStudies, searchTerm } from '../services/groups.js';
+import { fileKind, groupSearchText, groupStudies, isReportOnly, searchTerm } from '../services/groups.js';
+import { applySettings, studyServiceName } from '../services/settings.js';
 import { escapeHtml, setText, toast } from '../ui/dom.js';
 import { fmtDate, fmtSize, initials } from '../ui/format.js';
 import { icon } from '../ui/icons.js';
@@ -15,12 +16,13 @@ export async function init() {
   const user = await requireRole('doctor');
   if (!user) return;
   const views = initViews({ fallback: 'examenes' });
+  applySettings(await backend.getAgendaSettings()); // nombres vigentes de los servicios
   const openFiles = initFilesModal();
   const $ = (id) => document.getElementById(id);
   const grid = $('study-grid');
   const search = $('portal-search');
   const dateInput = $('portal-date');
-  const mod = $('modality-filter');
+  const serviceSel = $('service-filter');
   const chip = $('patient-chip');
   let mine = [];       // exámenes del médico
   let visits = [];     // grupos (paciente + fecha)
@@ -44,11 +46,11 @@ export async function init() {
   // Cada examen: abrir en el visor y, si ya tiene informe PDF, leerlo directamente.
   function examItem(s) {
     const id = escapeHtml(s.id);
-    const isReport = s.modality === 'Informe';
+    const isReport = isReportOnly(s);
     const hasReport = !isReport && reportsOf(s).length > 0;
     return '<li>' +
-      '<span class="badge ' + (isReport ? 'green' : 'blue') + '">' + escapeHtml(s.modality) + '</span>' +
-      '<span class="visit-exam-name">' + escapeHtml(s.description || s.modality) + '<small>' + (s.files || []).length + ' archivo(s) · ' + fmtSize(s.totalSize) +
+      '<span class="visit-exam-name">' + escapeHtml(studyServiceName(s)) + (s.description ? ' <span class="muted">· ' + escapeHtml(s.description) + '</span>' : '') +
+        '<small>' + (s.files || []).length + ' archivo(s) · ' + fmtSize(s.totalSize) +
         (isReport ? '' : hasReport ? ' · con informe' : ' · informe pendiente') + '</small></span>' +
       (s.status === 'Nuevo' ? '<span class="dot-new" title="Sin revisar"></span>' : '') +
       (hasReport ? '<button class="btn btn-outline btn-sm" type="button" data-report="' + id + '">' + icon('file') + ' Informe</button>' : '') +
@@ -58,6 +60,11 @@ export async function init() {
 
   function render() {
     visits = groupStudies(mine, { byDoctor: false });
+    // Filtro por servicio: los servicios de sus exámenes.
+    const current = serviceSel.value;
+    const names = [...new Set(mine.map(studyServiceName))].sort((a, b) => a.localeCompare(b, 'es'));
+    serviceSel.innerHTML = '<option value="">Todos los servicios</option>' + names.map((n) => '<option>' + escapeHtml(n) + '</option>').join('');
+    serviceSel.value = names.includes(current) ? current : '';
     const patients = patientsOf(visits);
     setText('stat-my-patients', patients.length);
     setText('stat-my-studies', mine.length);
@@ -66,7 +73,7 @@ export async function init() {
     const q = searchTerm(search.value);
     const rows = visits.filter((g) => (!patientFilter || g.patientId === patientFilter) &&
       (!dateInput.value || g.date === dateInput.value) &&
-      (!mod.value || g.modalities.includes(mod.value)) &&
+      (!serviceSel.value || g.services.includes(serviceSel.value)) &&
       (!q || groupSearchText(g).includes(q)));
     chip.hidden = !patientFilter;
     if (patientFilter) {
@@ -86,7 +93,7 @@ export async function init() {
 
   search.addEventListener('input', render);
   dateInput.addEventListener('change', render);
-  mod.addEventListener('change', render);
+  serviceSel.addEventListener('change', render);
 
   // Abrir un examen lo marca como revisado; "Descargar todo" lista los archivos de la visita.
   grid.addEventListener('click', async (e) => {
@@ -117,7 +124,7 @@ export async function init() {
       window.open(url, '_blank', 'noopener');
     } catch (ex) { toast('No se pudo abrir el informe.'); }
   }
-  const reportTitle = (s) => s.patientName + ' · ' + (s.description || s.modality);
+  const reportTitle = (s) => s.patientName + ' · ' + studyServiceName(s);
 
   // "Ver exámenes" de un paciente: filtra las visitas y sube a la lista.
   $('patients-body').addEventListener('click', (e) => {

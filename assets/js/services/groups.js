@@ -6,6 +6,10 @@
 //
 // Un examen puede ser de varios médicos (doctorIds). Los exámenes antiguos solo
 // tienen doctorId: doctorsOf() los trata igual.
+//
+// Cada examen es de un servicio (el nombre que se ve: «Radiografía panorámica»…).
+
+import { studyServiceName } from './settings.js';
 
 export const doctorsOf = (s) => (Array.isArray(s.doctorIds) && s.doctorIds.length ? s.doctorIds : s.doctorId ? [s.doctorId] : []);
 // Médicos sin repetir ni vacíos, en el orden elegido.
@@ -15,6 +19,9 @@ export const groupKey = (s, { byDoctor = true } = {}) => [s.patientId, byDoctor 
 
 const isPdf = (f) => /\.pdf$/i.test(f.name || '');
 export const fileKind = (f) => (isPdf(f) ? 'pdf' : 'image');
+// Examen que solo trae PDF (un informe suelto): no le falta informe.
+export const isReportOnly = (s) => (s.files || []).length > 0 && s.files.every(isPdf);
+export const lacksReport = (s) => !isReportOnly(s) && !(s.files || []).some(isPdf);
 
 // Momento de la última modificación de un examen (subida, archivos agregados,
 // renombrados o borrados, o datos editados), en milisegundos. Firestore guarda
@@ -23,7 +30,7 @@ const millis = (t) => (!t ? 0 : typeof t === 'number' ? t : t.toMillis ? t.toMil
 export const modifiedAt = (s) => millis(s.updatedAt) || millis(s.createdAt);
 
 // [{ key, patientId, patientName, patientCode, patientAge, doctorIds, date,
-//    studies, fileCount, totalSize, hasNew, hasReport, missingReports, modalities,
+//    studies, fileCount, totalSize, hasNew, hasReport, missingReports, services (nombres),
 //    payState: 'paid' | 'partial' | 'unpaid' }] (más recientes primero).
 // payState: la visita está pagada si todos sus exámenes tienen paid: true (se
 // marcan al registrar un cobro de la visita o a mano desde el explorador).
@@ -49,9 +56,9 @@ export function groupStudies(studies, { byDoctor = true } = {}) {
       totalSize: g.studies.reduce((n, s) => n + (s.totalSize || 0), 0),
       hasNew: g.studies.some((s) => s.status === 'Nuevo'),
       hasReport: files.some(isPdf),
-      missingReports: g.studies.filter((s) => s.modality !== 'Informe' && !(s.files || []).some(isPdf)).length,
+      missingReports: g.studies.filter(lacksReport).length,
       payState: payStateOf(g.studies),
-      modalities: [...new Set(g.studies.map((s) => s.modality))]
+      services: [...new Set(g.studies.map(studyServiceName))]
     };
   }).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (a.patientName || '').localeCompare(b.patientName || '', 'es'));
 }
@@ -63,7 +70,7 @@ export function payStateOf(studies) {
 export const PAY_STATE = { paid: 'Pagada', partial: 'Pago parcial', unpaid: 'Por cobrar' };
 
 // Texto con el que se puede buscar una visita: paciente, expediente, médicos,
-// códigos y modalidades, y la fecha en varios formatos (2026-10-08, 08/10/2026, 8 oct 2026).
+// códigos y servicios, y la fecha en varios formatos (2026-10-08, 08/10/2026, 8 oct 2026).
 export function groupSearchText(g, doctorName = '') {
   const d = g.date ? new Date(g.date + 'T12:00:00') : null;
   const dates = d ? [
@@ -72,11 +79,8 @@ export function groupSearchText(g, doctorName = '') {
     d.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' }),
     d.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })
   ] : [];
-  return [g.patientName, g.patientCode, doctorName, ...g.studies.map((s) => s.code + ' ' + s.modality + ' ' + (s.description || '')), ...dates]
+  return [g.patientName, g.patientCode, doctorName, ...g.studies.map((s) => s.code + ' ' + studyServiceName(s) + ' ' + (s.description || '')), ...dates]
     .join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
 export const searchTerm = (q) => String(q || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-
-// Modalidades de un examen al cargarlo o editarlo. "Informe" es el PDF del informe.
-export const STUDY_MODALITIES = ['CBCT', 'Panorámica', 'Cefalometría', 'Periapical', 'Informe', 'Otro'];

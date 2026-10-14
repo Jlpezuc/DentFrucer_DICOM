@@ -34,7 +34,7 @@ export function startDocumentMode(shell, { study, data }) {
     const b = e.target.closest('[data-doc]');
     if (b) wrap.innerHTML = viewerFrame(docs[Number(b.dataset.doc)]);
   });
-  shell.setHint(study.description || '');
+  shell.setHint([study.service, study.description].filter(Boolean).join(' · '));
 }
 
 // Informes junto a las imágenes: pestaña "Informes" y botón "Informe" del encabezado.
