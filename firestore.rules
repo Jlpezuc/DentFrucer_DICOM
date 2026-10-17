@@ -1,12 +1,15 @@
 rules_version = '2';
 
 // DentFrucer — reglas de Firestore.
-// - Administradores (users/{uid}.role == 'admin', no desactivados): leen los
-//   datos de la clínica; para modificar cada parte necesitan su permiso
-//   (users/{uid}.permissions: agenda, examenes, pacientes, medicos, cobros,
-//   resumen, config). El administrador general (superadmin, o una cuenta sin
-//   mapa de permisos, como el primer administrador) puede todo y es el único
-//   que crea y edita cuentas de administración.
+// - Administradores (users/{uid}.role == 'admin', no desactivados): cada
+//   permiso (users/{uid}.permissions: agenda, examenes, pacientes, medicos,
+//   cobros, resumen, config) da acceso solo a los datos que necesita su
+//   sección: por ejemplo, una cuenta con solo "Agenda" no lee exámenes ni
+//   cobros, y las imágenes e informes solo los abre "Exámenes" (lo mismo en
+//   services/permissions.js → DATA_ACCESS). El administrador general
+//   (superadmin, o una cuenta sin mapa de permisos, como el primer
+//   administrador) puede todo y es el único que crea y edita cuentas de
+//   administración y lee el registro de accesos.
 // - Médicos: solo leen sus exámenes (su uid en studies.doctorIds, o en
 //   studies.doctorId en exámenes anteriores) y solo pueden marcarlos como
 //   'Visto'. Los datos del paciente que necesitan van copiados en el examen; la
@@ -40,6 +43,16 @@ service cloud.firestore {
     function changes() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
+    // Quién lee qué (mínimo necesario para cada sección del panel).
+    function readsPatients() {
+      return can('pacientes') || can('agenda') || can('examenes') || can('cobros');
+    }
+    function readsStudies() {
+      return can('examenes') || can('pacientes') || can('cobros') || can('resumen');
+    }
+    function readsAppointments() {
+      return can('agenda') || can('examenes') || can('cobros') || can('resumen');
+    }
     // Servicios que el público puede agendar: los activos guardados desde el panel
     // o, si todavía no se guardó nada, los de config/agenda-config.js.
     function bookableExam(exam) {
@@ -62,6 +75,14 @@ service cloud.firestore {
     function validSlotKey(d) {
       return d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && d.time is string && d.time.matches('^[0-9]{2}:[0-9]{2}$');
+    }
+    // Reserva pública: desde hoy (con un día de margen por la zona horaria)
+    // hasta un año, en horario de 06:00 a 22:00.
+    function bookableWhen(d) {
+      let day = timestamp.date(int(d.date[0:4]), int(d.date[5:7]), int(d.date[8:10]));
+      return day >= request.time - duration.value(1, 'd')
+        && day <= request.time + duration.value(366, 'd')
+        && d.time >= '06:00' && d.time <= '22:00';
     }
     function slotPath(id) {
       return /databases/$(database)/documents/slots/$(id);
@@ -115,7 +136,7 @@ service cloud.firestore {
     // Pacientes: solo identidad y contacto. No tienen médico: el médico se
     // asigna a cada examen.
     match /patients/{patientId} {
-      allow read: if isAdmin();
+      allow read: if readsPatients();
       allow update, delete: if can('pacientes');
       // Paciente creado al agendar: sin expediente ni edad (los completa la clínica).
       allow create: if can('pacientes') || can('agenda') || (
@@ -129,7 +150,7 @@ service cloud.firestore {
     }
 
     match /studies/{studyId} {
-      allow read: if isAdmin() || ownsRecord(resource.data);
+      allow read: if readsStudies() || ownsRecord(resource.data);
       allow create, delete: if can('examenes');
       allow update: if can('examenes')
         // Al editar un paciente se actualizan sus datos copiados en los exámenes.
@@ -141,7 +162,7 @@ service cloud.firestore {
 
     // Citas: datos personales, solo los ve la clínica.
     match /appointments/{appointmentId} {
-      allow read: if isAdmin();
+      allow read: if readsAppointments();
       allow delete: if can('agenda');
       // Quien carga exámenes marca la cita como atendida.
       allow update: if can('agenda') || (can('examenes') && changes().hasOnly(['status']));
@@ -150,6 +171,7 @@ service cloud.firestore {
         && validPerson(request.resource.data)
         && text(request.resource.data.referrer, 0, 80)
         && validSlotKey(request.resource.data)
+        && bookableWhen(request.resource.data)
         && text(request.resource.data.code, 1, 12)
         && bookableExam(request.resource.data.exam)
         && request.resource.data.status == 'Pendiente'
@@ -162,6 +184,21 @@ service cloud.firestore {
       );
     }
 
+    // Registro de accesos a exámenes: cada cuenta anota cuándo abre o descarga
+    // un examen; solo el administrador general lo lee. Nadie lo cambia ni lo borra.
+    match /accessLogs/{logId} {
+      allow read: if isSuper();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'studyId', 'action', 'at', 'patientName', 'serviceName', 'files'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.action in ['ver', 'descargar']
+        && text(request.resource.data.studyId, 1, 64)
+        && text(request.resource.data.patientName, 0, 121)
+        && text(request.resource.data.serviceName, 0, 80)
+        && request.resource.data.files is int;
+    }
+
     // Turnos ocupados: el ID es "fecha_hora", así que un turno no se puede
     // reservar dos veces (crear sobre uno existente no está permitido).
     match /slots/{slotKey} {
@@ -170,6 +207,7 @@ service cloud.firestore {
       allow create: if can('agenda') || (
         request.resource.data.keys().hasOnly(['date', 'time', 'appointmentId'])
         && validSlotKey(request.resource.data)
+        && bookableWhen(request.resource.data)
         && slotKey == request.resource.data.date + '_' + request.resource.data.time.replace(':', '')
         && request.resource.data.appointmentId is string
         && getAfter(appointmentPath(request.resource.data.appointmentId)).data.slotId == slotKey

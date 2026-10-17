@@ -3,8 +3,9 @@
 // administrador general o tiene una lista de permisos (services/permissions.js).
 // Una cuenta no se borra: se desactiva (no puede entrar) y se puede reactivar.
 // Nadie puede quitarse a sí mismo los permisos ni desactivarse.
+// Abajo, el registro de accesos: quién abrió o descargó cada examen.
 
-import { backend } from '../../services/backend.js';
+import { backend, passwordProblem } from '../../services/backend.js';
 import { isSuperAdmin, PERMISSIONS } from '../../services/permissions.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { initials } from '../../ui/format.js';
@@ -84,7 +85,8 @@ export function createUsers(ctx) {
       : { name: $('ad-name').value, description: $('ad-description').value, superadmin: superBox.checked, permissions };
     showError(err, '');
     if (!editing) {
-      if (!$('ad-email').value.trim() || $('ad-pass').value.length < 6) { showError(err, 'Escriba el correo y una contraseña de al menos 6 caracteres.'); return; }
+      if (!$('ad-email').value.trim()) { showError(err, 'Escriba el correo de la cuenta.'); return; }
+      if (passwordProblem($('ad-pass').value)) { showError(err, passwordProblem($('ad-pass').value)); return; }
       if (!data.superadmin && !Object.values(permissions).some(Boolean)) { showError(err, 'Elija al menos un permiso o márquela como administrador general.'); return; }
     }
     busy(btn, true, 'Guardando…');
@@ -110,5 +112,45 @@ export function createUsers(ctx) {
     } catch (ex) { showError(err, ex.message); }
   });
 
-  return { render: () => { if (ctx.can('*')) render(); } };
+  // --- Registro de accesos -------------------------------------------------------------
+  const logsBody = $('logs-body');
+  const logSearch = $('log-search');
+  let logs = null;
+  const ACTION = { ver: 'Abrió', descargar: 'Descargó' };
+  const accountName = (uid) => {
+    const a = state.admins.find((x) => x.id === uid) || state.doctors.find((x) => x.id === uid);
+    return a ? a.name || a.email : 'Cuenta eliminada';
+  };
+  const accountRole = (uid) => (state.doctors.some((x) => x.id === uid) ? 'Médico' : 'Administración');
+  async function loadLogs() {
+    logsBody.innerHTML = '<tr><td colspan="5"><div class="empty">Cargando…</div></td></tr>';
+    try { logs = await backend.listAccessLogs(300); } catch (e) { logs = []; toast('No se pudo leer el registro: ' + e.message); }
+    renderLogs();
+  }
+  function renderLogs() {
+    if (!logs) return;
+    const q = logSearch.value.trim().toLowerCase();
+    const rows = logs.filter((l) => !q || [accountName(l.uid), l.patientName, l.serviceName].join(' ').toLowerCase().includes(q));
+    logsBody.innerHTML = rows.length ? rows.map((l) => `<tr>
+        <td class="mono">${new Date(l.at).toLocaleString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+        <td><strong>${escapeHtml(accountName(l.uid))}</strong><small class="muted cell-note">${accountRole(l.uid)}</small></td>
+        <td><span class="badge ${l.action === 'descargar' ? 'amber' : 'gray'}">${ACTION[l.action] || escapeHtml(l.action)}</span></td>
+        <td>${escapeHtml(l.patientName || '—')}</td>
+        <td>${escapeHtml(l.serviceName || '—')}${l.files ? ` <small class="muted">· ${l.files} ${l.files === 1 ? 'archivo' : 'archivos'}</small>` : ''}</td>
+      </tr>`).join('') : `<tr><td colspan="5"><div class="empty">${logs.length ? 'Sin resultados.' : 'Aún no hay accesos registrados.'}</div></td></tr>`;
+  }
+  if (logSearch) {
+    logSearch.addEventListener('input', renderLogs);
+    $('log-refresh').addEventListener('click', loadLogs);
+    // Al entrar a Usuarios se lee el registro al día.
+    window.addEventListener('hashchange', () => { if (location.hash === '#usuarios' && ctx.can('*')) loadLogs(); });
+  }
+
+  return {
+    render: () => {
+      if (!ctx.can('*')) return;
+      render();
+      if (logs) renderLogs(); else loadLogs();
+    }
+  };
 }

@@ -1,15 +1,15 @@
 // Backend con Firebase: Authentication + Firestore + Storage.
 // Modelo de datos: ver services/backend.js.
 
-import { firebaseConfig, functionsRegion } from '../../config/firebase-config.js';
+import { appCheckSiteKey, firebaseConfig, functionsRegion } from '../../config/firebase-config.js';
 import { patientAccess } from '../../config/patient-access.js';
 import { agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
 import { normalizePayment } from '../payments.js';
 import { normalizeAccountName, normalizePatient } from '../people.js';
-import { toStored, validateSettings } from '../settings.js';
+import { studyServiceName, toStored, validateSettings } from '../settings.js';
 import {
   AccessDisabledError, agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, friendlyAuthError, normalizeAdmin,
-  sizeOf, studyCode, studyDoctors, studyEdits, studyPatientFields, studyServiceFields, withDoctors
+  passwordProblem, sizeOf, studyCode, studyDoctors, studyEdits, studyPatientFields, studyServiceFields, TwoFactorRequiredError, withDoctors
 } from './shared.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
@@ -24,16 +24,26 @@ export async function createFirebaseBackend() {
   const { initializeApp } = appMod;
   const {
     getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
-    sendPasswordResetEmail, createUserWithEmailAndPassword
+    sendPasswordResetEmail, createUserWithEmailAndPassword, setPersistence, browserSessionPersistence,
+    reauthenticateWithCredential, EmailAuthProvider, sendEmailVerification,
+    multiFactor, getMultiFactorResolver, TotpMultiFactorGenerator
   } = authMod;
   const {
-    getFirestore, collection, doc, getDoc, getDocs, query, where,
+    getFirestore, collection, doc, getDoc, getDocs, query, where, orderBy, limit,
     setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, runTransaction, onSnapshot
   } = fsMod;
   const { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } = stMod;
 
   const app = initializeApp(firebaseConfig);
+  // App Check: va antes que los demás servicios para que todos lo usen.
+  if (appCheckSiteKey) {
+    const { initializeAppCheck, ReCaptchaEnterpriseProvider } = await import(SDK + 'firebase-app-check.js');
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey), isTokenAutoRefreshEnabled: true });
+  }
   const auth = getAuth(app);
+  // La sesión dura lo que la pestaña o el navegador abiertos: al cerrarlo hay
+  // que volver a ingresar (importante en computadores compartidos).
+  const persistence = setPersistence(auth, browserSessionPersistence).catch(() => {});
   const db = getFirestore(app);
   const storage = getStorage(app);
 
@@ -50,7 +60,11 @@ export async function createFirebaseBackend() {
       return (await fns.mod.httpsCallable(fns.instance, name)(data)).data;
     } catch (e) {
       // Sin funciones publicadas la llamada falla con "internal" y sin detalle.
-      if (e.code === 'functions/internal' && e.message === 'internal') throw new Error('No se pudo conectar con el servidor de cobros. Revise que las funciones estén publicadas (ver FIREBASE.md).');
+      if (e.code === 'functions/internal' && e.message === 'internal') {
+        const err = new Error('No se pudo conectar con las funciones del servidor. Revise que estén publicadas (ver FIREBASE.md).');
+        err.unreachable = true;
+        throw err;
+      }
       throw new Error(e.message || 'No se pudo completar la operación.');
     }
   }
@@ -110,19 +124,51 @@ export async function createFirebaseBackend() {
     };
   }
 
-  // Crea una cuenta con una segunda instancia de la app, para no cerrar la
-  // sesión de quien la crea, y guarda su perfil en users/{uid}.
+  // Crea una cuenta y guarda su perfil en users/{uid}. La cuenta la crea el
+  // servidor (función createAccount), así el registro abierto de Firebase
+  // puede quedar desactivado. Si las funciones aún no están publicadas, se crea
+  // desde el navegador con una segunda instancia de la app (sin cerrar la
+  // sesión de quien la crea).
   async function createAccount(email, password, profile) {
-    const secondary = initializeApp(firebaseConfig, 'secondary-' + Date.now());
-    const secAuth = getAuth(secondary);
+    const problem = passwordProblem(password);
+    if (problem) throw new Error(problem);
+    let uid;
     try {
-      const cred = await createUserWithEmailAndPassword(secAuth, email, password);
-      await setDoc(doc(db, 'users', cred.user.uid), { ...profile, email, createdAt: serverTimestamp() });
-      await signOut(secAuth);
-      return cred.user.uid;
+      ({ uid } = await callFunction('createAccount', { email, password, role: profile.role }));
     } catch (e) {
-      throw new Error(friendlyAuthError(e));
+      if (!e.unreachable) throw e;
+      const secondary = initializeApp(firebaseConfig, 'secondary-' + Date.now());
+      const secAuth = getAuth(secondary);
+      try {
+        uid = (await createUserWithEmailAndPassword(secAuth, email, password)).user.uid;
+        await signOut(secAuth);
+      } catch (err) { throw new Error(friendlyAuthError(err)); }
     }
+    await setDoc(doc(db, 'users', uid), { ...profile, email, createdAt: serverTimestamp() });
+    return uid;
+  }
+
+  // Perfil de quien acaba de ingresar; sin perfil o desactivada, se cierra la sesión.
+  async function checkedProfile(user) {
+    const profile = await profileOf(user);
+    if (!profile) {
+      await signOut(auth);
+      throw new Error('Su cuenta no tiene acceso (sin perfil o desactivada). Contacte al administrador de DentFrucer.');
+    }
+    return profile;
+  }
+
+  // Verificación en dos pasos (app de autenticación, TOTP).
+  let mfaResolver = null;   // ingreso pendiente del código
+  let totpSecret = null;    // clave en preparación al activarla
+  const totpError = (e) => new Error((e && e.code || '').includes('operation-not-allowed')
+    ? 'La verificación en dos pasos no está habilitada en el proyecto de Firebase (ver FIREBASE.md).'
+    : friendlyAuthError(e));
+  // Un ingreso o confirmación de contraseña que pide el segundo paso.
+  function needsSecondFactor(e) {
+    if (!e || e.code !== 'auth/multi-factor-auth-required') return false;
+    mfaResolver = getMultiFactorResolver(auth, e);
+    return true;
   }
 
   return {
@@ -134,18 +180,73 @@ export async function createFirebaseBackend() {
       return profileOf(auth.currentUser);
     },
 
+    // Si la cuenta tiene verificación en dos pasos, lanza TwoFactorRequiredError
+    // y el ingreso se termina con completeTwoFactor(código).
     async signIn(email, password) {
+      await persistence;
+      let cred;
       try {
-        const cred = await signInWithEmailAndPassword(auth, email, password);
-        const profile = await profileOf(cred.user);
-        if (!profile) {
-          await signOut(auth);
-          throw new Error('Su cuenta no tiene acceso (sin perfil o desactivada). Contacte al administrador de DentFrucer.');
-        }
-        return profile;
+        cred = await signInWithEmailAndPassword(auth, email, password);
       } catch (e) {
+        if (needsSecondFactor(e)) throw new TwoFactorRequiredError();
         throw new Error(friendlyAuthError(e));
       }
+      return checkedProfile(cred.user);
+    },
+
+    async completeTwoFactor(code) {
+      if (!mfaResolver) throw new Error('Vuelva a ingresar su correo y contraseña.');
+      const hint = mfaResolver.hints.find((h) => h.factorId === TotpMultiFactorGenerator.FACTOR_ID) || mfaResolver.hints[0];
+      let cred;
+      try {
+        cred = await mfaResolver.resolveSignIn(TotpMultiFactorGenerator.assertionForSignIn(hint.uid, String(code || '').replace(/\s/g, '')));
+      } catch (e) { throw new Error(friendlyAuthError(e)); }
+      mfaResolver = null;
+      return checkedProfile(cred.user);
+    },
+
+    // --- Verificación en dos pasos de la cuenta en sesión ---------------------------
+    async twoFactorStatus() {
+      const u = auth.currentUser;
+      if (!u) throw new Error('La sesión expiró. Vuelva a ingresar.');
+      return { enrolled: multiFactor(u).enrolledFactors.length > 0, emailVerified: u.emailVerified, email: u.email };
+    },
+    // Firebase pide haber ingresado hace poco para activar o desactivar el segundo paso.
+    async confirmPassword(password) {
+      const u = auth.currentUser;
+      try {
+        await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, password));
+      } catch (e) {
+        if (needsSecondFactor(e)) throw new TwoFactorRequiredError();
+        throw new Error(friendlyAuthError(e));
+      }
+    },
+    async sendVerificationEmail() {
+      try { await sendEmailVerification(auth.currentUser); } catch (e) { throw new Error(friendlyAuthError(e)); }
+    },
+    async emailVerifiedNow() {
+      await auth.currentUser.reload();
+      return auth.currentUser.emailVerified;
+    },
+    async startTwoFactor() {
+      try {
+        const session = await multiFactor(auth.currentUser).getSession();
+        totpSecret = await TotpMultiFactorGenerator.generateSecret(session);
+      } catch (e) { throw totpError(e); }
+      return { secretKey: totpSecret.secretKey, uri: totpSecret.generateQrCodeUrl(auth.currentUser.email, 'DentFrucer') };
+    },
+    async finishTwoFactor(code) {
+      if (!totpSecret) throw new Error('Vuelva a empezar la activación.');
+      try {
+        await multiFactor(auth.currentUser).enroll(TotpMultiFactorGenerator.assertionForEnrollment(totpSecret, String(code || '').replace(/\s/g, '')), 'App de autenticación');
+      } catch (e) { throw totpError(e); }
+      totpSecret = null;
+    },
+    async disableTwoFactor() {
+      const mf = multiFactor(auth.currentUser);
+      try {
+        for (const f of [...mf.enrolledFactors]) await mf.unenroll(f);
+      } catch (e) { throw new Error(friendlyAuthError(e)); }
     },
 
     signOut: () => signOut(auth),
@@ -323,6 +424,20 @@ export async function createFirebaseBackend() {
     },
 
     deletePayment: (id) => deleteDoc(doc(db, 'payments', id)),
+
+    // --- Registro de accesos a exámenes -------------------------------------------------
+    // Quién abrió o descargó cada examen. Si no se puede anotar, no se impide el acceso.
+    logAccess(study, action) {
+      if (!auth.currentUser || !study || !study.id) return;
+      setDoc(doc(collection(db, 'accessLogs')), {
+        uid: auth.currentUser.uid, studyId: study.id, action, at: serverTimestamp(),
+        patientName: String(study.patientName || '').slice(0, 121), serviceName: studyServiceName(study).slice(0, 80), files: (study.files || []).length
+      }).catch(() => {});
+    },
+    async listAccessLogs(max = 300) {
+      const rows = await list(query(collection(db, 'accessLogs'), orderBy('at', 'desc'), limit(max)));
+      return rows.map((r) => ({ ...r, at: r.at && r.at.toMillis ? r.at.toMillis() : Date.now() }));
+    },
 
     // --- Maquinita de Mercado Pago (Point) ------------------------------------------------
     // Las llamadas a Mercado Pago las hace el servidor (functions/): el token es secreto.

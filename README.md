@@ -122,6 +122,18 @@ Se abre con **Abrir** en el portal (o el ojo en el panel de administración) y e
 - En CBCT los valores de gris no son unidades Hounsfield calibradas: el visor lo indica en las herramientas de densidad.
 - Atajos de teclado: pulse `?` dentro del visor.
 
+## Seguridad
+
+- **Permisos**: cada cuenta lee solo los datos de su sección. Las imágenes e informes los abren *Exámenes*, el administrador general y el médico asignado.
+- **Sesión**: se cierra al cerrar el navegador o tras 30 minutos sin actividad.
+- **Contraseñas** de al menos 10 caracteres, con letras y números.
+- **Verificación en dos pasos**: código de una app de autenticación, para médicos y administración.
+- **Registro de accesos**: quién abre o descarga cada examen; lo ve el administrador general en *Usuarios*.
+- **Reservas públicas** solo en fechas y horas válidas.
+- **Cabeceras de seguridad** (CSP y anti-clickjacking) en Hosting.
+
+Lo que hay que activar en la consola de Firebase o Google Cloud (Identity Platform, App Check, respaldos, restricción de la clave): [FIREBASE.md → Seguridad](FIREBASE.md#7-seguridad-antes-de-usar-el-portal-con-pacientes-reales).
+
 ## Probar en local
 
 ```bash
@@ -140,6 +152,7 @@ resultados.html
 assets/css/styles.css                    estilos del sitio (paleta de marca)
 assets/css/viewer.css                    estilos del visor (tema oscuro)
 assets/img/                              logotipos
+assets/vendor/qrcode.mjs                 generador de códigos QR (qrcode-generator, MIT)
 assets/js/
   app.js                 punto de entrada: carga el módulo de cada página
   config/                Firebase, agenda (horario y servicios iniciales) y acceso de pacientes
@@ -154,10 +167,11 @@ assets/js/
     groups.js            visitas: exámenes del mismo paciente, médicos y fecha
     permissions.js       permisos de las cuentas de administración
     payments.js          cobros: medios de pago, documentos, estados de la maquinita y validación
+    backend/totp.js      códigos de la app de autenticación (verificación en dos pasos del modo demostración)
     settings.js          servicios y horario guardados (settings/agenda)
   ui/                    utilidades compartidas: iconos, modales, formatos
   pages/                 lógica de cada página: landing, login, portal, agenda, results
-                         + session, views y study-actions (compartidos)
+                         + session (sesión e inactividad), views, study-actions y two-factor (compartidos)
     admin/               panel: index (estado y permisos) + dashboard, agenda, calendar, studies, explorer,
                          upload, people, payments, schedule, users, account
   viewer/
@@ -167,12 +181,15 @@ assets/js/
     core/                viewport, herramientas, mediciones, 3D, exportación
     modes/               visor CBCT, visor 2D, informes PDF
     demo/                datos sintéticos para el modo demostración
-functions/                               servidor (Cloud Functions): maquinita de Mercado Pago
-  index.js               funciones publicadas: pointCharge, pointRefresh, pointCancel, pointTerminals,
-                         pointUseTerminal y mpWebhook
+functions/                               servidor (Cloud Functions): maquinita de Mercado Pago y cuentas
+  index.js               funciones publicadas: createAccount, pointCharge, pointRefresh, pointCancel,
+                         pointTerminals, pointUseTerminal y mpWebhook
+  src/accounts.js        creación de cuentas (médicos y administración) con su política de contraseñas
   src/mercadopago.js     cliente de la API de Órdenes de Mercado Pago (Point)
   src/point.js           cobros con la maquinita en Firestore (estado, visita pagada)
+  src/errors.js          errores con mensaje para la página
   src/signature.js       firma de los avisos (webhooks)
+  scripts/configure-auth.mjs  activa dos pasos, política de contraseñas y privacidad de correos
   test/                  pruebas (npm --prefix functions test)
 firestore.rules, storage.rules           reglas de seguridad
 cors.json                                acceso del visor a Storage (ver FIREBASE.md)

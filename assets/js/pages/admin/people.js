@@ -4,7 +4,7 @@
 // Clic en la fila (o "Ver exámenes") abre el explorador: todas las visitas del
 // paciente con sus exámenes, o los pacientes del médico.
 
-import { backend } from '../../services/backend.js';
+import { backend, passwordProblem } from '../../services/backend.js';
 import { groupStudies } from '../../services/groups.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { initials } from '../../ui/format.js';
@@ -105,11 +105,14 @@ function createDoctors(ctx) {
 
   function render() {
     if (!state.doctors.length) { body.innerHTML = '<tr><td colspan="4"><div class="empty">Aún no hay médicos registrados.</div></td></tr>'; return; }
+    // Sin acceso a exámenes (por ejemplo, solo "Médicos") no se muestran sus exámenes.
+    const exams = ctx.canRead('studies');
     body.innerHTML = state.doctors.map((d) => {
-      const n = state.studies.filter((s) => s.doctorIds.includes(d.id)).length;
-      return '<tr class="patient-row" data-browse="' + escapeHtml(d.id) + '" title="Ver sus pacientes y exámenes"><td><div class="cell-patient"><span class="avatar" style="background:var(--green-600)">' + initials(d.name) + '</span><div><strong>' + escapeHtml(d.name) + '</strong><small>' + escapeHtml(d.email) + '</small></div></div></td>' +
+      const n = exams ? state.studies.filter((s) => s.doctorIds.includes(d.id)).length : '—';
+      const browse = exams ? ' data-browse="' + escapeHtml(d.id) + '" title="Ver sus pacientes y exámenes"' : '';
+      return '<tr class="patient-row"' + browse + '><td><div class="cell-patient"><span class="avatar" style="background:var(--green-600)">' + initials(d.name) + '</span><div><strong>' + escapeHtml(d.name) + '</strong><small>' + escapeHtml(d.email) + '</small></div></div></td>' +
         '<td>' + escapeHtml(d.specialty || '—') + '</td><td>' + n + '</td>' +
-        '<td><div class="row-actions"><button class="btn btn-outline btn-sm" type="button" data-browse="' + escapeHtml(d.id) + '">' + icon('folder') + ' Ver exámenes</button></div></td></tr>';
+        '<td><div class="row-actions">' + (exams ? '<button class="btn btn-outline btn-sm" type="button" data-browse="' + escapeHtml(d.id) + '">' + icon('folder') + ' Ver exámenes</button>' : '') + '</div></td></tr>';
     }).join('');
   }
   body.addEventListener('click', (e) => {
@@ -126,7 +129,8 @@ function createDoctors(ctx) {
     const btn = form.querySelector('button[type=submit]');
     const data = formValues(form);
     showError(err, '');
-    if (!data.name.trim() || !data.email.trim() || data.password.length < 6) { showError(err, 'Complete nombre, correo y una contraseña de al menos 6 caracteres.'); return; }
+    if (!data.name.trim() || !data.email.trim()) { showError(err, 'Complete el nombre y el correo.'); return; }
+    if (passwordProblem(data.password)) { showError(err, passwordProblem(data.password)); return; }
     busy(btn, true, 'Creando…');
     try {
       await backend.createDoctor(data);

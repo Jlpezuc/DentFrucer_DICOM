@@ -1,10 +1,10 @@
 rules_version = '2';
 
 // DentFrucer — reglas de Storage.
-// Archivos en studies/{studyId}/...: los sube y borra un administrador con el
-// permiso "Exámenes" (o el administrador general); los lee cualquier
-// administrador activo o un médico asignado al examen en Firestore (doctorIds,
-// o doctorId en exámenes anteriores).
+// Archivos en studies/{studyId}/...: los sube, borra y lee un administrador con
+// el permiso "Exámenes" (o el administrador general); también los lee el médico
+// asignado al examen en Firestore (doctorIds, o doctorId en exámenes anteriores).
+// Las demás cuentas de administración no abren imágenes ni informes.
 service firebase.storage {
   match /b/{bucket}/o {
     function user() {
@@ -23,7 +23,7 @@ service firebase.storage {
     }
 
     match /studies/{studyId}/{allPaths=**} {
-      allow read: if request.auth != null && (isAdmin() || isStudyDoctor(studyId));
+      allow read: if request.auth != null && (canExams() || isStudyDoctor(studyId));
       allow write: if canExams();
     }
   }

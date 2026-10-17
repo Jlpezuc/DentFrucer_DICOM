@@ -17,11 +17,12 @@
 // los mismos permisos.
 
 import { backend } from '../../services/backend.js';
-import { can, SECTION_PERMISSION } from '../../services/permissions.js';
+import { can, canRead, SECTION_PERMISSION } from '../../services/permissions.js';
 import { applySettings } from '../../services/settings.js';
 import { setText, toast } from '../../ui/dom.js';
 import { today } from '../../ui/format.js';
 import { requireRole } from '../session.js';
+import { initTwoFactor } from '../two-factor.js';
 import { initViews } from '../views.js';
 import { createAccount } from './account.js';
 import { createAgenda } from './agenda.js';
@@ -38,6 +39,7 @@ export async function init() {
   const user = await requireRole('admin');
   if (!user) return;
   createAccount(user);
+  initTwoFactor({ banner: document.getElementById('mfa-banner') });
   applySettings(await backend.getAgendaSettings());
 
   const allowed = (p) => can(user, p);
@@ -46,6 +48,7 @@ export async function init() {
     state,
     user,
     can: allowed,
+    canRead: (data) => canRead(user, data),
     reload: load,
     go: (view) => views.go(view),
     doctorName: (id) => (state.doctors.find((d) => d.id === id) || {}).name,
@@ -77,11 +80,13 @@ export async function init() {
   }
   const views = initViews({ fallback: allowed('agenda') ? 'agenda' : first, title: document.getElementById('view-title'), subtitle: document.getElementById('view-desc') });
 
+  // Solo se cargan los datos que la cuenta puede leer (DATA_ACCESS).
   async function load() {
+    const when = (data, fn) => (ctx.canRead(data) ? fn() : []);
     try {
       const [studies, patients, doctors, appointments, pays, admins] = await Promise.all([
-        backend.listStudies(), backend.listPatients(), backend.listDoctors(), backend.listAppointments(),
-        allowed('cobros') || allowed('resumen') ? backend.listPayments() : [],
+        when('studies', backend.listStudies), when('patients', backend.listPatients), backend.listDoctors(),
+        when('appointments', backend.listAppointments), when('payments', backend.listPayments),
         allowed('*') ? backend.listAdmins() : []
       ]);
       Object.assign(state, { studies, patients, doctors, appointments, payments: pays, admins });
@@ -97,7 +102,8 @@ export async function init() {
     setText('stat-patients', state.patients.length);
     setText('stat-doctors', state.doctors.length);
     setText('stat-unassigned', state.studies.filter((s) => !s.doctorIds.length).length);
-    sections.forEach((s) => s.render());
+    // Un error en una sección no impide dibujar las demás.
+    sections.forEach((s) => { try { s.render(); } catch (e) { console.error(e); } });
     ctx.explorer.refresh();
   }
 

@@ -1,7 +1,8 @@
 // Inicio de sesión. La misma página sirve a médicos y administradores según
-// <body data-role="doctor|admin">.
+// <body data-role="doctor|admin">. Si la cuenta tiene verificación en dos
+// pasos, después de la contraseña se pide el código de la app de autenticación.
 
-import { backend, isDemo } from '../services/backend.js';
+import { backend, isDemo, TwoFactorRequiredError } from '../services/backend.js';
 import { busy, showError, toast } from '../ui/dom.js';
 import { ROUTES } from './session.js';
 
@@ -29,21 +30,47 @@ export async function init() {
     });
   }
 
+  if (new URLSearchParams(location.search).get('inactividad') === '1') {
+    showError(err, 'Por seguridad, la sesión se cerró tras 30 minutos sin actividad. Vuelva a ingresar.');
+  }
+
+  // Segundo paso: el código de 6 dígitos (se agrega al formulario cuando hace falta).
+  let codeInput = null;
+  function askCode() {
+    form.querySelectorAll('.field, .auth-meta').forEach((el) => { el.hidden = true; });
+    form.insertAdjacentHTML('afterbegin', `<div class="mfa-login"><p><strong>Verificación en dos pasos</strong><br>Escriba el código de 6 dígitos que muestra su app de autenticación.</p>
+      <div class="field"><label for="mfa-login-code">Código</label><input class="input mfa-code" id="mfa-login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" required></div></div>`);
+    form.prepend(err);
+    codeInput = document.getElementById('mfa-login-code');
+    submit.textContent = 'Verificar';
+    codeInput.focus();
+  }
+
+  async function enter(user) {
+    if (user.role !== role) {
+      await backend.signOut();
+      throw new Error(role === 'admin' ? 'Esta cuenta no tiene permisos de administración.' : 'Esta cuenta no tiene acceso al portal de médicos.');
+    }
+    location.href = ROUTES[role].home;
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     showError(err, '');
+    if (codeInput) {
+      if (!codeInput.value.trim()) { showError(err, 'Escriba el código de su app.'); return; }
+      busy(submit, true, 'Verificando…');
+      try { await enter(await backend.completeTwoFactor(codeInput.value)); } catch (ex) { showError(err, ex.message); busy(submit, false); codeInput.select(); }
+      return;
+    }
     if (!email.value.trim() || !pass.value) { showError(err, 'Ingrese su correo y contraseña.'); return; }
     busy(submit, true, 'Ingresando…');
     try {
-      const user = await backend.signIn(email.value.trim(), pass.value);
-      if (user.role !== role) {
-        await backend.signOut();
-        throw new Error(role === 'admin' ? 'Esta cuenta no tiene permisos de administración.' : 'Esta cuenta no tiene acceso al portal de médicos.');
-      }
-      location.href = ROUTES[role].home;
+      await enter(await backend.signIn(email.value.trim(), pass.value));
     } catch (ex) {
-      showError(err, ex.message);
       busy(submit, false);
+      if (ex instanceof TwoFactorRequiredError) { askCode(); return; }
+      showError(err, ex.message);
     }
   });
 

@@ -15,6 +15,7 @@
 //  4. La página escucha el cobro en vivo y muestra el resultado.
 
 import { FieldValue } from 'firebase-admin/firestore';
+import { FriendlyError } from './errors.js';
 import { MercadoPagoError } from './mercadopago.js';
 
 // Estado del cobro según el estado de la orden en Mercado Pago.
@@ -25,13 +26,6 @@ export const ORDER_TO_STATUS = {
 const RETRYABLE = ['canceled', 'expired', 'failed'];
 const METHOD_FOR_TYPE = { debit_card: 'Débito', prepaid_card: 'Débito', credit_card: 'Crédito' };
 
-// Error con un código de HttpsError (lo traduce index.js).
-export class PointError extends Error {
-  constructor(code, message) {
-    super(message);
-    this.code = code;
-  }
-}
 
 // ¿La cuenta es administrador con ese permiso? (igual que can() en firestore.rules)
 export async function adminCan(db, uid, permission) {
@@ -64,8 +58,8 @@ export async function listTerminals(db, mp) {
 // Elige la maquinita de la clínica y la deja en modo integrado (PDV).
 export async function useTerminal(db, mp, terminalId, uid) {
   const id = String(terminalId || '').trim();
-  if (!id) throw new PointError('invalid-argument', 'Elija una maquinita.');
-  try { await mp.setIntegratedMode(id); } catch (e) { throw new PointError('failed-precondition', friendly(e)); }
+  if (!id) throw new FriendlyError('invalid-argument', 'Elija una maquinita.');
+  try { await mp.setIntegratedMode(id); } catch (e) { throw new FriendlyError('failed-precondition', friendly(e)); }
   await db.doc('settings/mercadopago').set({ terminalId: id, updatedAt: FieldValue.serverTimestamp(), updatedBy: uid || null });
   return { terminalId: id };
 }
@@ -74,18 +68,18 @@ export async function useTerminal(db, mp, terminalId, uid) {
 export async function charge(db, mp, paymentId) {
   const settings = await db.doc('settings/mercadopago').get();
   const terminalId = settings.exists ? settings.data().terminalId : '';
-  if (!terminalId) throw new PointError('failed-precondition', 'Primero elija la maquinita en Cobros → Maquinita.');
+  if (!terminalId) throw new FriendlyError('failed-precondition', 'Primero elija la maquinita en Cobros → Maquinita.');
   const ref = db.doc('payments/' + paymentId);
 
   // Reserva el intento en una transacción: dos clics no crean dos órdenes.
   const { p, attempt } = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (!snap.exists) throw new PointError('not-found', 'El cobro ya no existe.');
+    if (!snap.exists) throw new FriendlyError('not-found', 'El cobro ya no existe.');
     const p = snap.data();
-    if (p.channel !== 'point') throw new PointError('failed-precondition', 'Este cobro no es con la maquinita.');
-    if (p.status === 'paid') throw new PointError('failed-precondition', 'Este cobro ya está pagado.');
-    if (!(p.status === 'pending' && !p.mp) && !RETRYABLE.includes(p.status)) throw new PointError('failed-precondition', 'Este cobro ya está en la maquinita.');
-    if (!(Number(p.total) > 0)) throw new PointError('invalid-argument', 'El total a cobrar debe ser mayor que $0.');
+    if (p.channel !== 'point') throw new FriendlyError('failed-precondition', 'Este cobro no es con la maquinita.');
+    if (p.status === 'paid') throw new FriendlyError('failed-precondition', 'Este cobro ya está pagado.');
+    if (!(p.status === 'pending' && !p.mp) && !RETRYABLE.includes(p.status)) throw new FriendlyError('failed-precondition', 'Este cobro ya está en la maquinita.');
+    if (!(Number(p.total) > 0)) throw new FriendlyError('invalid-argument', 'El total a cobrar debe ser mayor que $0.');
     const attempt = ((p.mp && p.mp.attempt) || 0) + 1;
     tx.update(ref, {
       status: 'pending',
@@ -107,14 +101,14 @@ export async function charge(db, mp, paymentId) {
   } catch (e) {
     const message = friendly(e);
     await ref.update({ status: 'failed', 'mp.status': 'error', 'mp.error': message, 'mp.updatedAt': FieldValue.serverTimestamp() });
-    throw new PointError('failed-precondition', message);
+    throw new FriendlyError('failed-precondition', message);
   }
 }
 
 // Consulta la orden en Mercado Pago y actualiza el cobro.
 export async function refresh(db, mp, paymentId) {
   const snap = await db.doc('payments/' + paymentId).get();
-  if (!snap.exists) throw new PointError('not-found', 'El cobro ya no existe.');
+  if (!snap.exists) throw new FriendlyError('not-found', 'El cobro ya no existe.');
   const p = snap.data();
   if (p.channel !== 'point' || !p.mp || !p.mp.orderId) return { status: p.status || 'paid' };
   return { status: await applyOrder(db, await mp.getOrder(p.mp.orderId)) };
@@ -124,7 +118,7 @@ export async function refresh(db, mp, paymentId) {
 export async function cancel(db, mp, paymentId) {
   const ref = db.doc('payments/' + paymentId);
   const snap = await ref.get();
-  if (!snap.exists) throw new PointError('not-found', 'El cobro ya no existe.');
+  if (!snap.exists) throw new FriendlyError('not-found', 'El cobro ya no existe.');
   const p = snap.data();
   if (p.channel !== 'point' || p.status !== 'pending') return { status: p.status };
   if (!p.mp || !p.mp.orderId) {
@@ -137,9 +131,9 @@ export async function cancel(db, mp, paymentId) {
   } catch (e) {
     if (e instanceof MercadoPagoError && (e.status === 409 || e.status === 400)) {
       await applyOrder(db, await mp.getOrder(p.mp.orderId)).catch(() => {});
-      throw new PointError('failed-precondition', 'La maquinita ya tomó el cobro: cancélelo en la maquinita.');
+      throw new FriendlyError('failed-precondition', 'La maquinita ya tomó el cobro: cancélelo en la maquinita.');
     }
-    throw new PointError('unavailable', friendly(e));
+    throw new FriendlyError('unavailable', friendly(e));
   }
 }
 

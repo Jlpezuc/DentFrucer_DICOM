@@ -8,9 +8,11 @@ import { icon } from '../ui/icons.js';
 
 // Abre el visor (se carga solo cuando se usa por primera vez). El visor recibe
 // el nombre vigente del servicio del examen.
+// Cada apertura queda en el registro de accesos (backend.logAccess).
 export async function openStudy(study) {
   const { openViewer } = await import('../viewer/index.js');
   openViewer({ ...study, service: studyServiceName(study) }, { backend, isDemo });
+  backend.logAccess(study, 'ver');
 }
 
 export function initFilesModal() {
@@ -23,6 +25,7 @@ export function initFilesModal() {
     m.open();
     try {
       const files = await backend.fileUrls(study);
+      backend.logAccess(study, 'descargar');
       list.innerHTML = files.length
         ? files.map((f) => '<li><a href="' + escapeHtml(f.url) + '" target="_blank" rel="noopener" download>' + icon('download') + ' ' + escapeHtml(f.name) + '</a></li>').join('')
         : '<li class="muted">Este examen no tiene archivos.</li>';

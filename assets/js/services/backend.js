@@ -26,6 +26,6 @@ import { createFirebaseBackend } from './backend/firebase.js';
 import { isDemo } from './mode.js';
 
 export { isDemo };
-export { AccessDisabledError } from './backend/shared.js';
+export { AccessDisabledError, MIN_PASSWORD, passwordProblem, TwoFactorRequiredError } from './backend/shared.js';
 
 export const backend = isDemo ? createDemoBackend() : await createFirebaseBackend();

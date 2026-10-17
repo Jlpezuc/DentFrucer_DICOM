@@ -9,12 +9,14 @@ import { escapeHtml, setText, toast } from '../ui/dom.js';
 import { fmtDate, fmtSize, initials } from '../ui/format.js';
 import { icon } from '../ui/icons.js';
 import { requireRole } from './session.js';
+import { initTwoFactor } from './two-factor.js';
 import { initViews } from './views.js';
 import { initFilesModal, openStudy } from './study-actions.js';
 
 export async function init() {
   const user = await requireRole('doctor');
   if (!user) return;
+  initTwoFactor({ banner: document.getElementById('mfa-banner') });
   const views = initViews({ fallback: 'examenes' });
   applySettings(await backend.getAgendaSettings()); // nombres vigentes de los servicios
   const openFiles = initFilesModal();

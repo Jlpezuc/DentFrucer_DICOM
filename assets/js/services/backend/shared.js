@@ -71,12 +71,33 @@ export class AccessDisabledError extends Error {
   constructor() { super('El acceso a resultados en línea todavía no está disponible.'); }
 }
 
+// Contraseñas de las cuentas (médicos y administración): mínimo 10 caracteres,
+// con letras y números. Devuelve el error o ''.
+export const MIN_PASSWORD = 10;
+export function passwordProblem(password) {
+  const p = String(password || '');
+  if (p.length < MIN_PASSWORD) return 'La contraseña debe tener al menos ' + MIN_PASSWORD + ' caracteres.';
+  if (!/[a-zA-ZñÑáéíóúÁÉÍÓÚ]/.test(p) || !/\d/.test(p)) return 'La contraseña debe tener letras y números.';
+  return '';
+}
+
+// La cuenta tiene verificación en dos pasos: falta el código de la app de
+// autenticación (backend.completeTwoFactor).
+export class TwoFactorRequiredError extends Error {
+  constructor() { super('Ingrese el código de 6 dígitos de su app de autenticación.'); this.name = 'TwoFactorRequiredError'; }
+}
+
 export function friendlyAuthError(err) {
   const code = (err && err.code) || '';
+  if (code.includes('invalid-verification-code') || code.includes('invalid-totp')) return 'El código no es correcto o ya venció. Use el código que muestra ahora su app.';
+  if (code.includes('unverified-email')) return 'Primero verifique su correo (le enviamos un enlace).';
+  if (code.includes('requires-recent-login')) return 'Por seguridad, vuelva a escribir su contraseña.';
+  if (code.includes('admin-restricted-operation')) return 'La creación de cuentas desde el navegador está desactivada: publique las funciones del servidor (ver FIREBASE.md).';
+  if (code.includes('password-does-not-meet-requirements')) return 'La contraseña no cumple la política de seguridad (al menos ' + MIN_PASSWORD + ' caracteres, con letras y números).';
   if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Correo o contraseña incorrectos.';
   if (code.includes('too-many-requests')) return 'Demasiados intentos. Espere unos minutos e intente de nuevo.';
   if (code.includes('email-already-in-use')) return 'Ya existe una cuenta con ese correo.';
-  if (code.includes('weak-password')) return 'La contraseña debe tener al menos 6 caracteres.';
+  if (code.includes('weak-password')) return 'La contraseña es muy débil: use al menos ' + MIN_PASSWORD + ' caracteres, con letras y números.';
   if (code.includes('invalid-email')) return 'El correo no es válido.';
   if (code.includes('permission-denied')) return 'No tiene permiso para esta acción.';
   if (code.includes('api-key-not-valid') || code.includes('invalid-api-key')) return 'La configuración de Firebase no es válida (revise firebase-config.js).';

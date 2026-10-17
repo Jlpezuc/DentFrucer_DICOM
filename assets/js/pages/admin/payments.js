@@ -71,6 +71,7 @@ export function createPayments(ctx) {
   }
 
   function render() {
+    if (!ctx.can('cobros')) return; // la sección no existe para esta cuenta
     const rows = filtered();
     const paidRows = rows.filter(isPaid);
     const total = paidRows.reduce((n, x) => n + x.total, 0);
