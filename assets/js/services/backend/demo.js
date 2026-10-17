@@ -7,11 +7,12 @@ import { isoDate, agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActi
 import { doctorsOf } from '../groups.js';
 import { normalizePayment } from '../payments.js';
 import { normalizeAccountName, normalizePatient } from '../people.js';
-import { currentSettings, toStored, validateSettings } from '../settings.js';
+import { currentSettings, studyServiceName, toStored, validateSettings } from '../settings.js';
 import {
-  agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, normalizeAdmin, sizeOf, studyDoctors, studyEdits, studyPatientFields,
-  studyServiceFields, withDoctors
+  agendaPatient, appointmentFields, byDateDesc, byDateTime, byName, cleanFileName, normalizeAdmin, passwordProblem, sizeOf, studyDoctors, studyEdits,
+  studyPatientFields, studyServiceFields, TwoFactorRequiredError, withDoctors
 } from './shared.js';
+import { otpauthUri, randomSecret, verifyTotp } from './totp.js';
 
 const SESSION_KEY = 'dentfrucer.demo.session';
 const DB_KEY = 'dentfrucer.demo.db.v6'; // cambia la versión si cambian los datos de ejemplo
@@ -148,6 +149,9 @@ export function createDemoBackend() {
   const newId = (prefix) => prefix + Math.random().toString(36).slice(2, 12);
   const fail = (result) => { if (result.error) throw new Error(result.error); return result.data; };
 
+  let pendingLogin = null;   // ingreso que espera el código de dos pasos
+  let pendingSecret = null;  // clave en preparación al activar los dos pasos
+
   // Maquinita simulada: el estado del cobro sigue al de la "orden" como en functions/src/point.js.
   const watchers = new Map();
   const notify = (id) => {
@@ -214,10 +218,49 @@ export function createDemoBackend() {
       if (!known || password !== PASSWORD) throw new Error('Correo o contraseña incorrectos.');
       const profile = profileOf(key);
       if (!profile) throw new Error('Su cuenta no tiene acceso (sin perfil o desactivada). Contacte al administrador de DentFrucer.');
+      if ((store.mfa || {})[key]) { pendingLogin = key; throw new TwoFactorRequiredError(); }
       session.write({ email: key });
       return profile;
     },
+    async completeTwoFactor(code) {
+      await wait(200);
+      const key = pendingLogin || (session.read() || {}).email;
+      if (!key) throw new Error('Vuelva a ingresar su correo y contraseña.');
+      if (!(await verifyTotp(store.mfa[key], code))) throw new Error('El código no es correcto o ya venció. Use el código que muestra ahora su app.');
+      pendingLogin = null;
+      session.write({ email: key });
+      return profileOf(key);
+    },
     async signOut() { session.write(null); },
+
+    // --- Verificación en dos pasos (simulada con una app de autenticación real) ----------
+    async twoFactorStatus() {
+      const me = session.read();
+      if (!me) throw new Error('La sesión expiró. Vuelva a ingresar.');
+      return { enrolled: !!(store.mfa || {})[me.email], emailVerified: true, email: me.email };
+    },
+    async confirmPassword(password) {
+      await wait(200);
+      if (password !== PASSWORD) throw new Error('Correo o contraseña incorrectos.');
+    },
+    async sendVerificationEmail() {},
+    async emailVerifiedNow() { return true; },
+    async startTwoFactor() {
+      pendingSecret = randomSecret();
+      return { secretKey: pendingSecret, uri: otpauthUri(pendingSecret, session.read().email) };
+    },
+    async finishTwoFactor(code) {
+      if (!pendingSecret || !(await verifyTotp(pendingSecret, code))) throw new Error('El código no es correcto o ya venció. Use el código que muestra ahora su app.');
+      store.mfa = { ...store.mfa, [session.read().email]: pendingSecret };
+      pendingSecret = null;
+      save();
+    },
+    async disableTwoFactor() {
+      const mfa = { ...store.mfa };
+      delete mfa[session.read().email];
+      store.mfa = mfa;
+      save();
+    },
     async updateMyName(input) {
       const { data: name, error } = normalizeAccountName(input);
       if (error) throw new Error(error);
@@ -237,7 +280,7 @@ export function createDemoBackend() {
       const email = String(input.email || '').trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('El correo no es válido.');
       if (admins.some((a) => a.email === email) || DOCTOR_LOGIN[email]) throw new Error('Ya existe una cuenta con ese correo.');
-      if (String(input.password || '').length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+      if (passwordProblem(input.password)) throw new Error(passwordProblem(input.password));
       const uid = newId('adm-');
       admins.push({ uid, email, ...data });
       save();
@@ -256,7 +299,8 @@ export function createDemoBackend() {
 
     // --- Médicos ----------------------------------------------------------------
     async listDoctors() { return doctors.slice().sort(byName); },
-    async createDoctor({ name, email, specialty }) {
+    async createDoctor({ name, email, specialty, password }) {
+      if (passwordProblem(password)) throw new Error(passwordProblem(password));
       const id = 'D-' + String(doctors.length + 1).padStart(2, '0');
       doctors.push({ id, name, email, specialty });
       save();
@@ -346,6 +390,18 @@ export function createDemoBackend() {
       return id;
     },
     async deletePayment(id) { payments.splice(payments.findIndex((x) => x.id === id), 1); save(); },
+
+    // --- Registro de accesos a exámenes ---------------------------------------------------
+    logAccess(study, action) {
+      const me = session.read();
+      if (!me || !study) return;
+      const uid = (profileOf(me.email) || {}).uid;
+      if (!store.accessLogs) store.accessLogs = [];
+      store.accessLogs.unshift({ id: newId('log'), uid, studyId: study.id, action, at: Date.now(), patientName: study.patientName || '', serviceName: studyServiceName(study), files: (study.files || []).length });
+      store.accessLogs.length = Math.min(store.accessLogs.length, 300);
+      save();
+    },
+    async listAccessLogs(max = 300) { return (store.accessLogs || []).slice(0, max).map((x) => ({ ...x })); },
 
     // --- Maquinita (simulada) -------------------------------------------------------------
     // La orden llega a la maquinita, a los 2 s el "paciente" está pagando y a

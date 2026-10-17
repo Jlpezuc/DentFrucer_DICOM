@@ -1,7 +1,9 @@
 // Funciones del servidor (Firebase Cloud Functions): cobros con la maquinita de
-// Mercado Pago (Point). El token de Mercado Pago es secreto y no puede ir en la
-// página, por eso estas llamadas se hacen aquí. Configuración: ver FIREBASE.md.
+// Mercado Pago (Point) y creación de cuentas. El token de Mercado Pago es
+// secreto y no puede ir en la página, por eso estas llamadas se hacen aquí.
+// Configuración: ver FIREBASE.md.
 //
+//   createAccount      crea la cuenta de un médico o administrador (src/accounts.js)
 //   pointTerminals     lista las maquinitas de la cuenta y cuál está elegida
 //   pointUseTerminal   elige la maquinita y la deja en modo integrado (PDV)
 //   pointCharge        envía un cobro a la maquinita (o lo reintenta)
@@ -9,14 +11,17 @@
 //   pointCancel        cancela un cobro que la maquinita aún no tomó
 //   mpWebhook          recibe los avisos de Mercado Pago (tema "Order")
 //
-// Las llamadas desde la página exigen una cuenta de administración con el
+// Las llamadas de la maquinita exigen una cuenta de administración con el
 // permiso "cobros". La lógica está en src/point.js.
 
 import { initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { HttpsError, onCall, onRequest } from 'firebase-functions/v2/https';
 import { defineSecret, defineString } from 'firebase-functions/params';
+import * as accounts from './src/accounts.js';
+import { FriendlyError } from './src/errors.js';
 import { createMercadoPago } from './src/mercadopago.js';
 import * as point from './src/point.js';
 import { validSignature } from './src/signature.js';
@@ -33,21 +38,21 @@ const MP_API_BASE = defineString('MP_API_BASE', { default: 'https://api.mercadop
 
 const mercadoPago = () => createMercadoPago({ accessToken: MP_ACCESS_TOKEN.value(), baseUrl: MP_API_BASE.value() });
 
-// Llamada desde la página: comprueba el permiso y traduce los errores.
-const callable = (fn) => onCall({ secrets: [MP_ACCESS_TOKEN] }, async (req) => {
+// Llamada desde la página: exige sesión (y el permiso, si se indica) y traduce los errores.
+const callable = (fn, { permission = 'cobros', secrets = [MP_ACCESS_TOKEN] } = {}) => onCall({ secrets }, async (req) => {
   const uid = req.auth && req.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Inicie sesión.');
-  if (!(await point.adminCan(db, uid, 'cobros'))) throw new HttpsError('permission-denied', 'Su cuenta no tiene el permiso de cobros.');
+  if (permission && !(await point.adminCan(db, uid, permission))) throw new HttpsError('permission-denied', 'Su cuenta no tiene el permiso para esta acción.');
   try {
     return await fn(req.data || {}, uid);
   } catch (e) {
-    if (e instanceof point.PointError) throw new HttpsError(e.code, e.message);
+    if (e instanceof FriendlyError) throw new HttpsError(e.code, e.message);
     console.error(e);
-    throw new HttpsError('internal', 'No se pudo completar la operación con Mercado Pago.');
+    throw new HttpsError('internal', 'No se pudo completar la operación en el servidor.');
   }
 });
 const paymentId = (data) => {
-  if (typeof data.paymentId !== 'string' || !/^[A-Za-z0-9_]{1,64}$/.test(data.paymentId)) throw new point.PointError('invalid-argument', 'Cobro no válido.');
+  if (typeof data.paymentId !== 'string' || !/^[A-Za-z0-9_]{1,64}$/.test(data.paymentId)) throw new FriendlyError('invalid-argument', 'Cobro no válido.');
   return data.paymentId;
 };
 
@@ -56,6 +61,9 @@ export const pointUseTerminal = callable((data, uid) => point.useTerminal(db, me
 export const pointCharge = callable((data) => point.charge(db, mercadoPago(), paymentId(data)));
 export const pointRefresh = callable((data) => point.refresh(db, mercadoPago(), paymentId(data)));
 export const pointCancel = callable((data) => point.cancel(db, mercadoPago(), paymentId(data)));
+
+// El permiso depende del tipo de cuenta: lo revisa accounts.createAccount.
+export const createAccount = callable((data, uid) => accounts.createAccount(db, getAuth(), uid, data), { permission: null, secrets: [] });
 
 // URL para "Webhooks" en Mercado Pago (Tus integraciones), evento "Order (Mercado Pago)":
 //   https://southamerica-west1-<proyecto>.cloudfunctions.net/mpWebhook

@@ -22,6 +22,18 @@ export const SECTION_PERMISSION = {
   pacientes: 'pacientes', medicos: 'medicos', cobros: 'cobros', servicios: 'config', usuarios: '*'
 };
 
+// Datos que lee cada permiso: lo mínimo que necesita su sección. Las reglas de
+// Firestore y Storage aplican lo mismo (readsPatients, readsStudies…).
+// files = imágenes e informes de los exámenes.
+export const DATA_ACCESS = {
+  patients: ['pacientes', 'agenda', 'examenes', 'cobros'],
+  studies: ['examenes', 'pacientes', 'cobros', 'resumen'],
+  appointments: ['agenda', 'examenes', 'cobros', 'resumen'],
+  payments: ['cobros', 'resumen'],
+  files: ['examenes']
+};
+export const canRead = (u, data) => DATA_ACCESS[data].some((p) => can(u, p));
+
 export const isSuperAdmin = (u) => !!u && u.role === 'admin' && (u.superadmin === true || !u.permissions);
 
 export function can(u, permission) {

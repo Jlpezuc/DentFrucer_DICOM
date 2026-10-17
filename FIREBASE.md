@@ -125,6 +125,52 @@ Solo las cuentas con el permiso *Cobros* pueden usarlas, y las reglas impiden qu
 - **Pruebas** del servidor: `npm --prefix functions test` comprueba la firma de los avisos y las llamadas a Mercado Pago. Con el emulador de Firestore se prueba además el flujo completo:
   `firebase emulators:exec --only firestore "npm --prefix functions test"`.
 
+## 7. Seguridad (antes de usar el portal con pacientes reales)
+
+### Lo que ya hace la página
+
+- **Cada permiso ve solo lo suyo.** Las reglas de Firestore y Storage aplican lo mismo que el menú. Por ejemplo, una cuenta con solo *Agenda* lee citas y pacientes, pero no exámenes ni cobros. Las **imágenes e informes** solo los abren *Exámenes*, el administrador general y el médico asignado. Una cuenta sin permisos no lee nada clínico.
+- **Reservas públicas**: solo para fechas desde hoy hasta un año, entre 06:00 y 22:00, con los servicios activos y sin poder leer nada.
+- **Sesión**: se cierra al cerrar el navegador y tras **30 minutos sin actividad**, con un aviso un minuto antes (`IDLE_MINUTES` en `assets/js/pages/session.js`).
+- **Contraseñas** de al menos **10 caracteres, con letras y números**.
+- **Verificación en dos pasos** con app de autenticación (Google Authenticator, Microsoft Authenticator, Authy), para médicos y administración. Se activa en *Mi cuenta → Verificación en dos pasos* (en el portal, con el ícono del escudo). Hasta activarla, la página muestra un aviso.
+- **Registro de accesos**: queda anotado quién abre o descarga cada examen. Lo ve el administrador general en *Usuarios*, y nadie puede cambiarlo ni borrarlo.
+- **Cuentas creadas por el servidor** (función `createAccount`), así se puede cerrar el registro abierto de Firebase.
+- **Cabeceras de seguridad** en Hosting (`firebase.json`):
+  - política de contenido (CSP), que solo permite scripts de la página y de Google/Firebase;
+  - prohibición de mostrar el sitio dentro de otro (*clickjacking*);
+  - HTTPS obligatorio.
+- **Protección contra código malicioso**: todo texto escrito por usuarios o pacientes se muestra como texto y nunca se ejecuta.
+
+### Pasos en la consola (los hace usted)
+
+1. **Publicar** reglas, funciones y página:
+   ```bash
+   npm --prefix functions install
+   firebase deploy
+   ```
+   Sin plan Blaze (sin funciones): `firebase deploy --only hosting,firestore,storage`.
+2. **Identity Platform**: en *Authentication → Configuración*, actualice a *Firebase Authentication with Identity Platform*. Es gratis hasta 50.000 usuarios activos al mes y es necesario para los dos pasos y la política de contraseñas. Luego, con credenciales de Google:
+   ```bash
+   gcloud auth application-default login
+   cd functions && node scripts/configure-auth.mjs SU-PROYECTO
+   ```
+   El script activa la verificación en dos pasos (TOTP), exige contraseñas de 10 caracteres con números y oculta si un correo tiene cuenta. Para activar los dos pasos, Firebase pide que el correo esté **verificado**: la página envía el enlace automáticamente.
+3. **Cerrar el registro abierto**: en *Authentication → Configuración → Acciones del usuario*, desmarque **Habilitar creación (registro)**. Hágalo después de publicar las funciones: las cuentas nuevas las crea `createAccount`.
+4. **App Check** (frena programas automáticos, por ejemplo reservas falsas masivas):
+   - En *App Check*, registre la app web con **reCAPTCHA Enterprise**.
+   - Copie la **clave de sitio** en `appCheckSiteKey` (`assets/js/config/firebase-config.js`) y publique.
+   - Cuando las métricas de *App Check* muestren solo solicitudes verificadas, pulse **Aplicar** en Firestore y Storage.
+5. **Restringir la clave de la página**: en [Google Cloud Console](https://console.cloud.google.com) → *APIs y servicios → Credenciales* → la clave *Browser key*, agregue en *Restricciones de aplicaciones → Sitios web* sus dominios: `https://SU-PROYECTO.web.app/*`, `https://SU-PROYECTO.firebaseapp.com/*` y su dominio propio.
+6. **Respaldos**: en *Firestore → Recuperación ante desastres*, active la **recuperación de un momento dado** (7 días) y un **respaldo diario**. Con la CLI de Google Cloud:
+   ```bash
+   gcloud firestore databases update --database='(default)' --enable-pitr
+   gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=14w
+   ```
+   Los archivos de Storage no tienen respaldo automático. Si los necesita, active el *control de versiones de objetos* del bucket.
+7. **Registro a prueba de todo** (opcional): el registro de accesos de la página lo escribe el navegador. Para un registro que nadie pueda evitar, active en Google Cloud *IAM → Registros de auditoría* los registros de **acceso a datos** de *Cloud Firestore* y *Cloud Storage*.
+8. **Exigir dos pasos a todas las cuentas** (opcional, cuando todos la tengan activada): en `firestore.rules`, agregue al final de `isAdmin()` la condición `&& request.auth.token.firebase.sign_in_second_factor != null` y publique las reglas.
+
 ## El visor
 
 Al abrir un examen, el visor elige el modo según su contenido:
@@ -183,6 +229,8 @@ payments/{id}    date, patientId, patientName, appointmentId, studyIds[] (visita
 settings/agenda  slotMinutes, daysAhead, minNoticeMinutes, closedDates[], hours{día: ['09:00-13:00']},
                  services[{id, label, detail, price, active}], examIds[] (lectura pública)
 settings/mercadopago  terminalId (maquinita elegida; la escribe el servidor, la leen los de cobros)
+accessLogs/{id}  uid, studyId, action ('ver' | 'descargar'), at, patientName, serviceName, files
+                 (registro de accesos: cada cuenta solo agrega los suyos; lo lee el administrador general)
 Storage          studies/{studyId}/{archivo}
 ```
 
@@ -200,6 +248,8 @@ Para activarlo falta, en este orden:
 4. **Implementar `getSharedStudy(token)`** en `assets/js/services/backend/firebase.js` (leer `shares/{token}` y devolver `{ study, files }`) y poner `enabled: true`.
 
 ## Notas de seguridad
+
+Ver también la sección **7. Seguridad**.
 
 - Los enlaces de descarga de Storage (`getDownloadURL`) llevan un token: quien tenga el enlace puede descargar el archivo. El portal solo los genera para el médico asignado, pero el médico no debería compartirlos.
 - Los datos de salud están sujetos a la normativa de protección de datos de su país. Revise el aviso de privacidad y el consentimiento de los pacientes antes de usar el portal con datos reales.

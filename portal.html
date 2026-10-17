@@ -23,11 +23,13 @@
       <div class="side-user">
         <span class="avatar" data-user-initials>LM</span>
         <div class="who"><strong data-user-name>Médico</strong><span data-user-title>Odontólogo</span></div>
+        <button type="button" data-open="mfa" title="Verificación en dos pasos" aria-label="Verificación en dos pasos"><i data-icon="shield"></i></button>
         <button type="button" data-logout title="Cerrar sesión" aria-label="Cerrar sesión"><i data-icon="logout"></i></button>
       </div>
     </aside>
 
     <main class="main">
+      <div class="mfa-banner" id="mfa-banner" hidden></div>
       <div class="topbar">
         <div>
           <h1>Hola, <span data-user-name>doctor</span></h1>

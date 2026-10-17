@@ -664,7 +664,8 @@ body[data-guard] .app { visibility: hidden; }
 .add-exam-card { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; border: 2px dashed #c9d6e0; border-radius: var(--radius-md); background: transparent; font: inherit; font-weight: 600; color: var(--blue-700); cursor: pointer; }
 .add-exam-card:hover { border-color: var(--blue-500); background: #fff; }
 .add-exam-card svg { width: 18px; height: 18px; }
-.explorer-body.readonly .edit-only { display: none; }
+.explorer-body.readonly .edit-only, .explorer-body.no-files .files-only { display: none; }
+.log-head { border-top: 1px solid var(--line); }
 @media (max-width: 860px) {
   .visit-item-head { flex-wrap: wrap; padding-bottom: 10px; }
   .visit-toggle { flex-basis: 100%; grid-template-columns: 18px 1fr; padding-bottom: 4px; }
@@ -951,3 +952,19 @@ table.data.compact th, table.data.compact td { padding: 8px 10px; }
 }
 
 .pay-actions { display: inline-flex; gap: 14px; flex-wrap: wrap; }
+
+/* ---------- Verificación en dos pasos ---------- */
+.mfa-banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 18px; border-radius: var(--radius-md); background: var(--blue-50); border: 1px solid #bfe3f4; color: var(--blue-700); font-size: 14px; }
+.mfa-banner > svg { width: 20px; height: 20px; flex: none; }
+.mfa-banner span { flex: 1; }
+.mfa-state { display: flex; gap: 14px; align-items: flex-start; padding: 14px; border-radius: var(--radius-md); background: var(--surface-2); margin-bottom: 8px; }
+.mfa-state > svg { width: 28px; height: 28px; flex: none; color: var(--muted); }
+.mfa-state.on > svg { color: var(--green-600); }
+.mfa-state p { margin: 4px 0 0; font-size: 14px; color: var(--ink-soft); }
+.mfa-steps { margin: 0 0 14px; padding-left: 20px; display: grid; gap: 10px; font-size: 14px; }
+.mfa-qr { width: 180px; margin: 10px 0 6px; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; }
+.mfa-qr svg { display: block; width: 100%; height: auto; }
+.mfa-key { letter-spacing: .04em; color: var(--ink); word-break: break-all; }
+.mfa-code { font-size: 22px; letter-spacing: .3em; font-variant-numeric: tabular-nums; max-width: 220px; }
+.mfa-login p { margin: 0 0 14px; font-size: 14px; color: var(--ink-soft); }
+.mfa-open { margin-top: 4px; }

@@ -62,6 +62,7 @@ export function createExplorer(ctx) {
       ? `<button type="button" data-crumb="${i}"><small>${LEVEL[c.type]}</small>${escapeHtml(crumbLabel(c))}</button><span class="crumb-sep" aria-hidden="true">›</span>`
       : `<h3 id="explorer-title"><small>${LEVEL[c.type]}</small>${escapeHtml(crumbLabel(c))}</h3>`)).join('');
     body.classList.toggle('readonly', !canEdit());
+    body.classList.toggle('no-files', !ctx.canRead('files')); // sin "Exámenes" no se abren imágenes ni informes
     const cur = stack[stack.length - 1];
     if (!cur) return;
     if (cur.type === 'doctor') renderDoctor(cur.id);
@@ -102,7 +103,7 @@ export function createExplorer(ctx) {
           <li data-study="${escapeHtml(s.id)}">
             <span class="vi-name"><strong>${escapeHtml(studyServiceName(s))}</strong>${s.description ? ` <span class="muted">· ${escapeHtml(s.description)}</span>` : ''}</span>
             <span class="vi-status">${examStatus(s)}</span>
-            <button type="button" class="btn btn-ghost btn-sm" data-view>${icon('eye')} Ver</button>
+            <button type="button" class="btn btn-ghost btn-sm files-only" data-view>${icon('eye')} Ver</button>
           </li>`).join('')}</ul>
       </article>`;
   }
@@ -217,8 +218,8 @@ export function createExplorer(ctx) {
             <span class="file-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
             <span class="mono">${fmtSize(f.size)}</span>
             <span class="row-actions">
-              ${pdf ? `<button type="button" class="icon-btn" data-open-file title="Abrir PDF" aria-label="Abrir PDF">${icon('eye')}</button>` : ''}
-              <button type="button" class="icon-btn" data-download title="Descargar" aria-label="Descargar">${icon('download')}</button>
+              ${pdf ? `<button type="button" class="icon-btn files-only" data-open-file title="Abrir PDF" aria-label="Abrir PDF">${icon('eye')}</button>` : ''}
+              <button type="button" class="icon-btn files-only" data-download title="Descargar" aria-label="Descargar">${icon('download')}</button>
               <button type="button" class="icon-btn edit-only" data-rename title="Renombrar" aria-label="Renombrar">${icon('edit')}</button>
               <button type="button" class="icon-btn edit-only" data-delete-file title="Eliminar archivo" aria-label="Eliminar archivo">${icon('trash')}</button>
             </span>
@@ -246,7 +247,7 @@ export function createExplorer(ctx) {
             <div class="exam-status">${examStatus(s)}</div>
           </div>
           <div class="row-actions">
-            <button type="button" class="btn btn-primary btn-sm" data-view title="Abrir en el visor">${icon('eye')} Ver</button>
+            <button type="button" class="btn btn-primary btn-sm files-only" data-view title="Abrir en el visor">${icon('eye')} Ver</button>
             <button type="button" class="btn btn-outline btn-sm edit-only" data-edit title="Editar servicio, detalle, fecha o médicos">${icon('edit')} Editar</button>
             <button type="button" class="icon-btn edit-only" data-delete-study title="Eliminar examen" aria-label="Eliminar examen">${icon('trash')}</button>
           </div>
@@ -334,6 +335,7 @@ export function createExplorer(ctx) {
     const study = card && studyById(card.dataset.study);
     if (!study) return;
     if (t.hasAttribute('data-view')) {
+      if (!ctx.canRead('files')) return;
       if (isDemo && (study.files || []).every((f) => fileKind(f) === 'pdf')) { toast('En modo demostración los PDF no se pueden abrir.'); return; }
       return openStudy(study);
     }
@@ -363,6 +365,7 @@ export function createExplorer(ctx) {
       a.rel = 'noopener';
       if (t.hasAttribute('data-download')) a.download = file.name;
       a.click();
+      backend.logAccess(study, 'descargar');
       return;
     }
     if (t.hasAttribute('data-rename')) {

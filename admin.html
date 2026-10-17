@@ -32,12 +32,13 @@
       <div class="side-user">
         <span class="avatar" data-user-initials>AD</span>
         <div class="who"><strong data-user-name>Administración</strong><span data-user-email>Administrador</span></div>
-        <button type="button" data-open="account" title="Mi cuenta: cambiar el nombre" aria-label="Mi cuenta"><i data-icon="edit"></i></button>
+        <button type="button" data-open="account" title="Mi cuenta: nombre y verificación en dos pasos" aria-label="Mi cuenta"><i data-icon="edit"></i></button>
         <button type="button" data-logout title="Cerrar sesión" aria-label="Cerrar sesión"><i data-icon="logout"></i></button>
       </div>
     </aside>
 
     <main class="main">
+      <div class="mfa-banner" id="mfa-banner" hidden></div>
       <div class="topbar">
         <div>
           <h1 id="view-title">Panel de administración</h1>
@@ -245,6 +246,20 @@
             <tbody id="admins-body"></tbody>
           </table>
         </div>
+        <div class="panel-head log-head">
+          <h2>Registro de accesos</h2>
+          <div class="panel-actions">
+            <label class="search search-sm"><span class="sr-only">Buscar en el registro</span><i data-icon="search"></i><input class="input" id="log-search" type="search" placeholder="Cuenta, paciente o examen"></label>
+            <button class="btn btn-ghost btn-sm" type="button" id="log-refresh"><i data-icon="rotate"></i> Actualizar</button>
+          </div>
+        </div>
+        <p class="panel-note">Quién abrió o descargó cada examen (últimos 300 registros). Solo lo ve el administrador general y nadie puede cambiarlo ni borrarlo.</p>
+        <div class="table-wrap">
+          <table class="data compact">
+            <thead><tr><th>Fecha y hora</th><th>Cuenta</th><th>Acción</th><th>Paciente</th><th>Examen</th></tr></thead>
+            <tbody id="logs-body"></tbody>
+          </table>
+        </div>
       </section>
 
       <!-- Médicos -->
@@ -332,6 +347,7 @@
         <div class="field"><label for="ac-email">Correo de ingreso</label><input class="input" id="ac-email" readonly></div>
         <div class="field"><label for="ac-name">Nombre de la cuenta</label><input class="input" id="ac-name" name="name" required maxlength="60" autocomplete="name"></div>
         <p class="hint">Es el nombre que se ve en el panel. El correo no se puede cambiar desde aquí.</p>
+        <button class="btn btn-outline btn-sm mfa-open" type="button" data-open="mfa"><i data-icon="shield"></i> Verificación en dos pasos</button>
         <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Guardar</button></div>
       </form>
     </div>
@@ -437,7 +453,7 @@
         <div class="field"><label for="ad-description">Descripción <span class="opt">(cargo o rol: secretaria, tecnólogo…)</span></label><input class="input" id="ad-description" name="description" maxlength="80"></div>
         <div data-new-only>
           <div class="field"><label for="ad-email">Correo (usuario)</label><input class="input" id="ad-email" name="email" type="email" autocomplete="off"></div>
-          <div class="field"><label for="ad-pass">Contraseña inicial</label><input class="input" id="ad-pass" name="password" type="text" minlength="6" autocomplete="new-password"><span class="hint">Mínimo 6 caracteres. Puede cambiarla con «¿Olvidó su contraseña?».</span></div>
+          <div class="field"><label for="ad-pass">Contraseña inicial</label><input class="input" id="ad-pass" name="password" type="text" minlength="10" autocomplete="new-password"><span class="hint">Mínimo 10 caracteres, con letras y números. Puede cambiarla con «¿Olvidó su contraseña?».</span></div>
         </div>
         <label class="check check-strong"><input type="checkbox" name="superadmin" id="ad-super"> <span><strong>Administrador general</strong><small>Puede hacer todo, incluso administrar estas cuentas.</small></span></label>
         <fieldset class="perm-list" id="ad-perms"><legend>Permisos</legend></fieldset>
@@ -460,7 +476,7 @@
         <div class="field"><label for="nd-name">Nombre completo</label><input class="input" id="nd-name" name="name" required placeholder="Dra. Laura Méndez"></div>
         <div class="field"><label for="nd-specialty">Especialidad</label><input class="input" id="nd-specialty" name="specialty" placeholder="Ortodoncia"></div>
         <div class="field"><label for="nd-email">Correo (usuario)</label><input class="input" id="nd-email" name="email" type="email" required autocomplete="off"></div>
-        <div class="field"><label for="nd-pass">Contraseña inicial</label><input class="input" id="nd-pass" name="password" type="text" minlength="6" required autocomplete="new-password"><span class="hint">Mínimo 6 caracteres. El médico puede cambiarla con “¿Olvidó su contraseña?”.</span></div>
+        <div class="field"><label for="nd-pass">Contraseña inicial</label><input class="input" id="nd-pass" name="password" type="text" minlength="10" required autocomplete="new-password"><span class="hint">Mínimo 10 caracteres, con letras y números. El médico puede cambiarla con “¿Olvidó su contraseña?”.</span></div>
         <div class="modal-foot"><button class="btn btn-ghost" type="button" data-close>Cancelar</button><button class="btn btn-primary" type="submit">Crear cuenta</button></div>
       </form>
     </div>

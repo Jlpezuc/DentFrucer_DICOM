@@ -15,6 +15,12 @@ export const firebaseConfig = {
   measurementId: 'G-426TXLH7YV'
 };
 
+// App Check (opcional, recomendado): clave de sitio de reCAPTCHA Enterprise.
+// Con ella, Firebase solo acepta pedidos que vienen de esta página y no de un
+// programa automático (por ejemplo, reservas falsas masivas). Vacío = sin App
+// Check. Cómo obtenerla y activarla: FIREBASE.md → Seguridad.
+export const appCheckSiteKey = '';
+
 // Región de las funciones del servidor (functions/index.js): cobros con la
 // maquinita de Mercado Pago. Santiago de Chile.
 export const functionsRegion = 'southamerica-west1';
