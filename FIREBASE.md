@@ -50,8 +50,10 @@ Con la [CLI de Firebase](https://firebase.google.com/docs/cli) (necesita Node.js
 npm install -g firebase-tools
 firebase login
 firebase use --add          # elija su proyecto
-firebase deploy             # publica reglas + la página en Hosting
+firebase deploy --only hosting,firestore,storage   # publica reglas + la página en Hosting
 ```
+
+`firebase deploy` sin `--only` publica además las funciones del servidor (`functions/`), que solo hacen falta para cobrar con la maquinita de Mercado Pago (paso 6) y requieren el plan Blaze.
 
 La página quedará en `https://SU-PROYECTO.web.app`. Firebase Hosting es gratis y funciona aunque el repositorio de GitHub sea privado.
 
@@ -74,6 +76,54 @@ El visor descarga los archivos DICOM directamente desde Storage para mostrarlos.
 3. Listo. Si más adelante usa un dominio propio, agréguelo a la lista y repita el paso 2. El archivo `cors.json` del repositorio tiene la misma configuración.
 
 Si falta este paso, el visor muestra: *"No se pudieron descargar las imágenes… revise la configuración CORS"*.
+
+## 6. Cobros con la maquinita de Mercado Pago (opcional)
+
+Con esto, al registrar un cobro se puede elegir **Tarjeta en la maquinita**: el monto aparece solo en la maquinita (Mercado Pago **Point**), el paciente paga con débito o crédito y la página queda atenta hasta que se aprueba. Entonces el cobro queda **pagado**, con el medio de pago real, y la visita queda pagada. Solo los cobros aprobados suman en Cobros y en el Resumen.
+
+Cómo funciona: el token de Mercado Pago es secreto y no puede ir en la página, así que las llamadas a Mercado Pago las hacen **funciones del servidor** (`functions/`, Firebase Cloud Functions) con la **API de Órdenes** de Point:
+
+- `pointCharge` crea la orden en Mercado Pago (aparece en la maquinita) y la asocia al cobro.
+- `mpWebhook` recibe el aviso de Mercado Pago cuando el pago se aprueba, se rechaza, se cancela, expira o se devuelve. Comprueba la **firma** del aviso y vuelve a leer la orden desde Mercado Pago antes de cambiar nada.
+- `pointRefresh` consulta la orden. La página la llama cada 8 segundos mientras espera, por si el aviso tarda o no está configurado.
+- `pointCancel` cancela un cobro que la maquinita aún no tomó; si ya lo tomó, se cancela en la maquinita.
+- `pointTerminals` y `pointUseTerminal` listan las maquinitas de la cuenta y dejan la elegida en **modo integrado (PDV)**.
+
+Solo las cuentas con el permiso *Cobros* pueden usarlas, y las reglas impiden que la página marque pagado un cobro con la maquinita: eso lo hace solo el servidor.
+
+### Pasos
+
+1. **Plan Blaze**: las Cloud Functions requieren el plan de pago por uso de Firebase (*Firebase Console → Uso y facturación*). El uso de una clínica queda normalmente dentro de la cuota gratuita.
+2. **Aplicación en Mercado Pago**: en [Mercado Pago Developers](https://www.mercadopago.cl/developers) → *Tus integraciones* → *Crear aplicación*, con el producto de pagos presenciales (**Point**). Copie el **Access Token de producción** (`APP_USR-…`). Para probar sin cobrar de verdad use las **credenciales de prueba**, que traen una maquinita virtual.
+3. **Maquinita**: en la app de Mercado Pago, vincúlela a una **tienda** y a una **caja**.
+4. **Secretos** (desde la carpeta del proyecto):
+   ```bash
+   firebase functions:secrets:set MP_ACCESS_TOKEN      # pegue el Access Token
+   firebase functions:secrets:set MP_WEBHOOK_SECRET    # por ahora cualquier texto; se reemplaza en el paso 6
+   ```
+5. **Publicar las funciones**:
+   ```bash
+   npm --prefix functions install
+   firebase deploy --only functions,firestore
+   ```
+   Las funciones quedan en la región `southamerica-west1` (Santiago). Si la cambia en `functions/index.js`, cambie también `functionsRegion` en `assets/js/config/firebase-config.js`.
+6. **Aviso de pagos (webhook)**: en *Tus integraciones → su aplicación → Webhooks*, configure la URL de producción
+   `https://southamerica-west1-SU-PROYECTO.cloudfunctions.net/mpWebhook` y marque el evento **Order (Mercado Pago)**. Guarde y copie la **clave secreta** que muestra Mercado Pago. Luego:
+   ```bash
+   firebase functions:secrets:set MP_WEBHOOK_SECRET    # pegue la clave secreta
+   firebase deploy --only functions
+   ```
+7. **Elegir la maquinita**: en el panel, *Cobros → Maquinita*. Elija la suya y pulse **Usar esta maquinita**: queda en modo integrado y lista para recibir los cobros.
+
+### Uso y notas
+
+- **Devoluciones**: se hacen en la app de Mercado Pago. El aviso marca el cobro como *Devuelto* y la visita vuelve a *Por cobrar*. Eliminar un cobro en la página **no** devuelve el dinero.
+- **Cancelar**: desde la página, mientras la maquinita no haya tomado el cobro; después, en la maquinita. Una orden sin pagar expira a los 15 minutos.
+- **Si la maquinita está ocupada** con otro cobro, Mercado Pago lo rechaza y la página ofrece *Reintentar* o *Cobrar de otra forma*.
+- **Montos**: se envían en pesos chilenos, sin decimales.
+- **Sin la maquinita** (o sin publicar las funciones) todo lo demás funciona igual: efectivo y *Otro medio* no usan Mercado Pago.
+- **Pruebas** del servidor: `npm --prefix functions test` comprueba la firma de los avisos y las llamadas a Mercado Pago. Con el emulador de Firestore se prueba además el flujo completo:
+  `firebase emulators:exec --only firestore "npm --prefix functions test"`.
 
 ## El visor
 
@@ -127,8 +177,12 @@ slots/{fecha_hora} date, time, appointmentId      (turnos ocupados, lectura púb
 payments/{id}    date, patientId, patientName, appointmentId, studyIds[] (visita cobrada; vacío = servicio suelto),
                  items[{serviceId, label, price}],
                  discount, total, method, docType, docNumber, note, createdAt, createdBy
+                 con la maquinita: channel 'point', status ('pending' | 'paid' | 'canceled' | 'expired' |
+                 'failed' | 'refunded'), paidAt, mp{orderId, terminalId, status, paymentId, paymentType…}
+                 (los escribe el servidor; solo suman los pagados)
 settings/agenda  slotMinutes, daysAhead, minNoticeMinutes, closedDates[], hours{día: ['09:00-13:00']},
                  services[{id, label, detail, price, active}], examIds[] (lectura pública)
+settings/mercadopago  terminalId (maquinita elegida; la escribe el servidor, la leen los de cobros)
 Storage          studies/{studyId}/{archivo}
 ```
 

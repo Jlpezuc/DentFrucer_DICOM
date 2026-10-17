@@ -84,7 +84,13 @@ La sección **Cobros** registra lo cobrado en cada atención: paciente, fecha, *
 - Se registra desde el botón *Registrar cobro* de arriba o de la sección, desde una cita de la agenda (**Cobrar**; la columna *Cobro* muestra lo pagado) o desde una visita.
 - **Visita (opcional)**: al elegir una visita del paciente se cargan sus exámenes como servicios, con su precio, y al guardar la visita queda **pagada**. Con *Sin visita* se cobra un **servicio suelto** (por ejemplo una copia de CD o un servicio sin examen).
 - **Estado de pago de las visitas**: *Pagada*, *Por cobrar* o *Pago parcial* (si se agregó un examen después del cobro). Se ve en la tabla *Exámenes* (con el filtro *Por cobrar*), en las visitas del paciente y en el resumen de la visita, donde también se puede **marcar a mano** como pagada o no pagada (por ejemplo, una visita pagada por convenio). Al eliminar un cobro, su visita vuelve a *Por cobrar* si ningún otro cobro la cubre.
+- **Forma de pago** al registrar un cobro:
+  - **Efectivo**: queda pagado al registrarlo.
+  - **Tarjeta en la maquinita**: el monto se envía a la maquinita de **Mercado Pago (Point)**. Una ventana muestra en vivo *Esperando el pago*; cuando el paciente paga, el cobro queda pagado con el medio real (débito o crédito) y la visita queda pagada. Se puede cancelar mientras la maquinita no lo tome. Si se rechaza o expira, se puede reintentar o cobrar de otra forma. Si se cierra la ventana, la página sigue atenta y avisa al aprobarse. Configuración: *Cobros → Maquinita* y [FIREBASE.md](FIREBASE.md#6-cobros-con-la-maquinita-de-mercado-pago-opcional).
+  - **Otro medio**: transferencia, convenio, tarjeta en otra máquina…
+- **Solo suman los cobros pagados**: un cobro con la maquinita pendiente, rechazado o cancelado aparece en la lista, pero no cuenta en el total, en el Resumen ni en la agenda.
 - La lista se filtra por fechas, medio de pago y búsqueda, con el total del período y por medio de pago.
+- En el modo demostración la maquinita está simulada: el pago se aprueba solo a los pocos segundos (o se puede simular un rechazo).
 
 ## Resumen
 
@@ -147,7 +153,7 @@ assets/js/
     people.js            validación de nombres y contacto de pacientes
     groups.js            visitas: exámenes del mismo paciente, médicos y fecha
     permissions.js       permisos de las cuentas de administración
-    payments.js          cobros: medios de pago, documentos y validación
+    payments.js          cobros: medios de pago, documentos, estados de la maquinita y validación
     settings.js          servicios y horario guardados (settings/agenda)
   ui/                    utilidades compartidas: iconos, modales, formatos
   pages/                 lógica de cada página: landing, login, portal, agenda, results
@@ -161,9 +167,16 @@ assets/js/
     core/                viewport, herramientas, mediciones, 3D, exportación
     modes/               visor CBCT, visor 2D, informes PDF
     demo/                datos sintéticos para el modo demostración
+functions/                               servidor (Cloud Functions): maquinita de Mercado Pago
+  index.js               funciones publicadas: pointCharge, pointRefresh, pointCancel, pointTerminals,
+                         pointUseTerminal y mpWebhook
+  src/mercadopago.js     cliente de la API de Órdenes de Mercado Pago (Point)
+  src/point.js           cobros con la maquinita en Firestore (estado, visita pagada)
+  src/signature.js       firma de los avisos (webhooks)
+  test/                  pruebas (npm --prefix functions test)
 firestore.rules, storage.rules           reglas de seguridad
 cors.json                                acceso del visor a Storage (ver FIREBASE.md)
-firebase.json                            Hosting + reglas para `firebase deploy`
+firebase.json                            Hosting + reglas + funciones para `firebase deploy`
 ```
 
 ## Paleta

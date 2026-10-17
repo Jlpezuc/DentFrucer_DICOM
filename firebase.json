@@ -9,6 +9,7 @@
       "FIREBASE.md",
       "cors.json",
       "**/.*",
+      "functions/**",
       "**/node_modules/**"
     ],
     "cleanUrls": true
@@ -18,5 +19,17 @@
   },
   "storage": {
     "rules": "storage.rules"
-  }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "test",
+        "*.local"
+      ]
+    }
+  ]
 }

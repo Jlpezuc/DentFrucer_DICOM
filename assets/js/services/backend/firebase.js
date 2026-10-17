@@ -1,7 +1,7 @@
 // Backend con Firebase: Authentication + Firestore + Storage.
 // Modelo de datos: ver services/backend.js.
 
-import { firebaseConfig } from '../../config/firebase-config.js';
+import { firebaseConfig, functionsRegion } from '../../config/firebase-config.js';
 import { patientAccess } from '../../config/patient-access.js';
 import { agendaPatientId, APPOINTMENT_STATUSES, appointmentCode, isActive, normalizeBooking, slotId, SlotTakenError } from '../agenda.js';
 import { normalizePayment } from '../payments.js';
@@ -28,7 +28,7 @@ export async function createFirebaseBackend() {
   } = authMod;
   const {
     getFirestore, collection, doc, getDoc, getDocs, query, where,
-    setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, runTransaction
+    setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, runTransaction, onSnapshot
   } = fsMod;
   const { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } = stMod;
 
@@ -38,6 +38,22 @@ export async function createFirebaseBackend() {
   const storage = getStorage(app);
 
   const list = async (q) => (await getDocs(q)).docs.map((s) => ({ id: s.id, ...s.data() }));
+
+  // Funciones del servidor (functions/). El SDK se carga recién al usarlas.
+  let fns = null;
+  async function callFunction(name, data = {}) {
+    if (!fns) {
+      const mod = await import(SDK + 'firebase-functions.js');
+      fns = { mod, instance: mod.getFunctions(app, functionsRegion) };
+    }
+    try {
+      return (await fns.mod.httpsCallable(fns.instance, name)(data)).data;
+    } catch (e) {
+      // Sin funciones publicadas la llamada falla con "internal" y sin detalle.
+      if (e.code === 'functions/internal' && e.message === 'internal') throw new Error('No se pudo conectar con el servidor de cobros. Revise que las funciones estén publicadas (ver FIREBASE.md).');
+      throw new Error(e.message || 'No se pudo completar la operación.');
+    }
+  }
   const isDenied = (e) => String((e && e.code) || '').includes('permission-denied');
   const fail = (result) => { if (result.error) throw new Error(result.error); return result.data; };
 
@@ -307,6 +323,44 @@ export async function createFirebaseBackend() {
     },
 
     deletePayment: (id) => deleteDoc(doc(db, 'payments', id)),
+
+    // --- Maquinita de Mercado Pago (Point) ------------------------------------------------
+    // Las llamadas a Mercado Pago las hace el servidor (functions/): el token es secreto.
+    async pointSettings() {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'mercadopago'));
+        return snap.exists() ? snap.data() : null;
+      } catch (e) { return null; }
+    },
+    pointTerminals: () => callFunction('pointTerminals'),
+    pointUseTerminal: (terminalId) => callFunction('pointUseTerminal', { terminalId }),
+
+    // Crea el cobro pendiente y lo envía a la maquinita. Devuelve el id del cobro.
+    // Si Mercado Pago lo rechaza (por ejemplo, la maquinita está ocupada), el
+    // cobro queda "failed" con el motivo y se puede reintentar. Si el servidor
+    // no responde, el cobro (que no llegó a Mercado Pago) se borra.
+    async startPointPayment(input) {
+      const data = fail(normalizePayment(input, { terminal: true }));
+      const r = doc(collection(db, 'payments'));
+      await setDoc(r, { ...data, channel: 'point', status: 'pending', createdBy: auth.currentUser ? auth.currentUser.uid : null, createdAt: serverTimestamp() });
+      try {
+        await callFunction('pointCharge', { paymentId: r.id });
+      } catch (e) {
+        const snap = await getDoc(r).catch(() => null);
+        if (snap && snap.exists() && snap.data().mp) return r.id;
+        if (snap && snap.exists()) await deleteDoc(r).catch(() => {});
+        throw e;
+      }
+      return r.id;
+    },
+    retryPointPayment: (id) => callFunction('pointCharge', { paymentId: id }),
+    refreshPointPayment: (id) => callFunction('pointRefresh', { paymentId: id }),
+    cancelPointPayment: (id) => callFunction('pointCancel', { paymentId: id }),
+
+    // Escucha un cobro en vivo. Devuelve la función para dejar de escuchar.
+    watchPayment(id, onChange) {
+      return onSnapshot(doc(db, 'payments', id), (snap) => onChange(snap.exists() ? { id: snap.id, ...snap.data() } : null), () => {});
+    },
 
     // --- Agenda: público -----------------------------------------------------------
     // Turnos ocupados entre dos fechas (públicos: no contienen datos personales).

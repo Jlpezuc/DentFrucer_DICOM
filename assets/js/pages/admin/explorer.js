@@ -13,7 +13,7 @@
 
 import { backend, isDemo } from '../../services/backend.js';
 import { doctorsOf, fileKind, groupKey, groupSearchText, groupStudies, isReportOnly, modifiedAt, PAY_STATE, searchTerm } from '../../services/groups.js';
-import { fmtCLP } from '../../services/payments.js';
+import { fmtCLP, isPaid } from '../../services/payments.js';
 import { studyServiceId, studyServiceName } from '../../services/settings.js';
 import { escapeHtml, modal, toast } from '../../ui/dom.js';
 import { fmtDate, fmtSize, initials } from '../../ui/format.js';
@@ -156,12 +156,15 @@ export function createExplorer(ctx) {
     const sub = [g.patientCode, g.patientAge ? g.patientAge + ' años' : ''].filter(Boolean).map(escapeHtml).join(' · ');
     // Cobros de la visita: los asociados a sus exámenes o, si no, los del mismo paciente y día.
     const ids = new Set(g.studies.map((x) => x.id));
+    // Solo cuentan los pagados; un cobro con la maquinita en curso se avisa aparte.
     const linked = (state.payments || []).filter((x) => (x.studyIds || []).some((id) => ids.has(id)));
-    const pays = linked.length ? linked : (state.payments || []).filter((x) => x.patientId === g.patientId && x.date === g.date && !(x.studyIds || []).length);
+    const related = linked.length ? linked : (state.payments || []).filter((x) => x.patientId === g.patientId && x.date === g.date && !(x.studyIds || []).length);
+    const pays = related.filter(isPaid);
+    const waiting = related.some((x) => x.status === 'pending');
     const paid = pays.reduce((n, x) => n + (x.total || 0), 0);
     const payInfo = payBadge(g) + (pays.length
       ? ` <strong>${fmtCLP(paid)}</strong> <span class="muted">· ${escapeHtml(pays.map((x) => x.method + (x.docNumber ? ' · ' + x.docType + ' ' + x.docNumber : '')).join(' / '))}</span>`
-      : ' <span class="muted">Sin cobro registrado</span>');
+      : waiting ? '' : ' <span class="muted">Sin cobro registrado</span>') + (waiting ? ' <span class="badge amber">Esperando la maquinita</span>' : '');
     const payActions = ctx.can('cobros') ? `<br><span class="pay-actions">
       <button type="button" class="link-btn" data-pay>${pays.length ? 'Registrar otro cobro' : 'Registrar cobro'}</button>
       <button type="button" class="link-btn" data-mark-paid="${g.payState === 'paid' ? '0' : '1'}">${g.payState === 'paid' ? 'Marcar como no pagada' : 'Marcar como pagada'}</button></span>` : '';

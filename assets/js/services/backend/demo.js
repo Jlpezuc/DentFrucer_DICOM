@@ -14,7 +14,7 @@ import {
 } from './shared.js';
 
 const SESSION_KEY = 'dentfrucer.demo.session';
-const DB_KEY = 'dentfrucer.demo.db.v5'; // cambia la versión si cambian los datos de ejemplo
+const DB_KEY = 'dentfrucer.demo.db.v6'; // cambia la versión si cambian los datos de ejemplo
 const MB = 1024 * 1024;
 const PASSWORD = 'demo1234';
 
@@ -22,6 +22,11 @@ const PASSWORD = 'demo1234';
 const DOCTOR_LOGIN = { 'doctor@dentfrucer.com': { uid: 'D-01', name: 'Dra. Laura Méndez', role: 'doctor', specialty: 'Ortodoncia' } };
 // Precios de ejemplo de los servicios.
 const DEMO_PRICES = { CBCT: 65000, 'Panorámica': 18000, 'Cefalometría': 15000, Periapical: 8000, Otro: 10000 };
+// Maquinitas de ejemplo (Mercado Pago Point simulado).
+const DEMO_TERMINALS = [
+  { id: 'NEWLAND_N950__DEMO0001', operatingMode: 'PDV' },
+  { id: 'NEWLAND_N950__DEMO0002', operatingMode: 'STANDALONE' }
+];
 
 // --- Datos de ejemplo ---------------------------------------------------------------
 function seed() {
@@ -117,6 +122,7 @@ function seed() {
     payments,
     admins,
     settings: toStored(settings),
+    point: { terminalId: DEMO_TERMINALS[0].id },
     appointments: [
       appointment('demoa1', 'ag_demo1', 'Panorámica', day(0), '10:20', 'Dra. Laura Méndez'),
       appointment('demoa2', 'ag_demo2', 'CBCT', day(0), '11:00', 'Dr. Carlos Rivas'),
@@ -141,6 +147,39 @@ export function createDemoBackend() {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const newId = (prefix) => prefix + Math.random().toString(36).slice(2, 12);
   const fail = (result) => { if (result.error) throw new Error(result.error); return result.data; };
+
+  // Maquinita simulada: el estado del cobro sigue al de la "orden" como en functions/src/point.js.
+  const watchers = new Map();
+  const notify = (id) => {
+    const p = payments.find((x) => x.id === id);
+    (watchers.get(id) || []).forEach((cb) => cb(p ? JSON.parse(JSON.stringify(p)) : null));
+  };
+  function setOrder(p, orderStatus, type = 'debit_card') {
+    p.mp = { ...p.mp, status: orderStatus };
+    if (orderStatus === 'processed') {
+      Object.assign(p, { status: 'paid', method: type === 'credit_card' ? 'Crédito' : 'Débito' });
+      Object.assign(p.mp, { paymentType: type, paymentMethod: type === 'credit_card' ? 'visa' : 'debvisa', paymentId: newId('PAY') });
+      studies.filter((s) => p.studyIds.includes(s.id)).forEach((s) => { s.paid = true; });
+    } else if (['canceled', 'expired', 'failed'].includes(orderStatus)) {
+      p.status = orderStatus;
+      if (orderStatus === 'failed') p.mp.error = 'Pago rechazado por el banco (simulación).';
+    }
+    save();
+    notify(p.id);
+  }
+  function tick(p) {
+    if (p.status !== 'pending' || !p.mp) return;
+    const t = Date.now() - p.mp.sentAt;
+    if (t >= 8000) setOrder(p, 'processed');
+    else if (t >= 2000 && p.mp.status === 'created') setOrder(p, 'at_terminal');
+  }
+  function sendToTerminal(p) {
+    p.status = 'pending';
+    p.mp = { orderId: newId('ORD'), attempt: ((p.mp && p.mp.attempt) || 0) + 1, terminalId: store.point.terminalId, status: 'created', sentAt: Date.now() };
+    save();
+    notify(p.id);
+    [2050, 8050].forEach((ms) => setTimeout(() => tick(p), ms));
+  }
   const slotTaken = (sid, exceptId) => appointments.some((a) => a.slotId === sid && isActive(a) && a.id !== exceptId);
   const session = {
     read: () => { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; } },
@@ -307,6 +346,62 @@ export function createDemoBackend() {
       return id;
     },
     async deletePayment(id) { payments.splice(payments.findIndex((x) => x.id === id), 1); save(); },
+
+    // --- Maquinita (simulada) -------------------------------------------------------------
+    // La orden llega a la maquinita, a los 2 s el "paciente" está pagando y a
+    // los 8 s queda pagada con débito. demoPointResult() fuerza el resultado.
+    async pointSettings() { return store.point || null; },
+    async pointTerminals() {
+      await wait(300);
+      return { terminals: DEMO_TERMINALS.map((t) => ({ ...t })), current: (store.point || {}).terminalId || '' };
+    },
+    async pointUseTerminal(terminalId) {
+      await wait(300);
+      const t = DEMO_TERMINALS.find((x) => x.id === terminalId);
+      if (!t) throw new Error('Mercado Pago no encuentra la maquinita.');
+      t.operatingMode = 'PDV';
+      store.point = { terminalId };
+      save();
+      return { terminalId };
+    },
+    async startPointPayment(input) {
+      const data = fail(normalizePayment(input, { terminal: true }));
+      if (!store.point) throw new Error('Primero elija la maquinita en Cobros → Maquinita.');
+      await wait(400);
+      const p = { id: newId('pay'), ...data, channel: 'point', status: 'pending', createdBy: (session.read() || {}).email || null };
+      payments.push(p);
+      sendToTerminal(p);
+      return p.id;
+    },
+    async retryPointPayment(id) {
+      const p = payments.find((x) => x.id === id);
+      if (!p || !['canceled', 'expired', 'failed'].includes(p.status)) throw new Error('Este cobro ya está en la maquinita.');
+      await wait(300);
+      sendToTerminal(p);
+      return { status: 'pending' };
+    },
+    async refreshPointPayment(id) {
+      const p = payments.find((x) => x.id === id);
+      if (p) tick(p);
+      return { status: p ? p.status : null };
+    },
+    async cancelPointPayment(id) {
+      const p = payments.find((x) => x.id === id);
+      if (!p || p.status !== 'pending') return { status: p && p.status };
+      if (p.mp.status !== 'created') throw new Error('La maquinita ya tomó el cobro: cancélelo en la maquinita.');
+      setOrder(p, 'canceled');
+      return { status: 'canceled' };
+    },
+    watchPayment(id, onChange) {
+      if (!watchers.has(id)) watchers.set(id, new Set());
+      watchers.get(id).add(onChange);
+      setTimeout(() => notify(id), 0);
+      return () => watchers.get(id).delete(onChange);
+    },
+    demoPointResult(id, result) {
+      const p = payments.find((x) => x.id === id);
+      if (p && p.status === 'pending') setOrder(p, result === 'paid' ? 'processed' : 'failed', 'credit_card');
+    },
 
     // --- Agenda: público -----------------------------------------------------------
     async listBusySlots(from, to) {
