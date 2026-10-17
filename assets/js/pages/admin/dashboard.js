@@ -17,7 +17,7 @@
 
 import { addDays, examLabel, isoDate, parseIso } from '../../services/agenda.js';
 import { groupStudies, isReportOnly, PAY_STATE } from '../../services/groups.js';
-import { fmtCLP, PAYMENT_METHODS } from '../../services/payments.js';
+import { fmtCLP, isPaid, PAYMENT_METHODS } from '../../services/payments.js';
 import { activeServices, studyServiceName } from '../../services/settings.js';
 import { escapeHtml } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
@@ -239,8 +239,10 @@ export function createDashboard(ctx) {
     const prevFrom = addDays(from, -len);
     const prevTo = addDays(from, -1);
 
-    const pays = state.payments.filter((x) => inRange(x.date));
-    const prevPays = state.payments.filter((x) => x.date >= prevFrom && x.date <= prevTo);
+    // Solo los cobros pagados (un cobro con la maquinita cuenta cuando se aprueba).
+    const paidPayments = state.payments.filter(isPaid);
+    const pays = paidPayments.filter((x) => inRange(x.date));
+    const prevPays = paidPayments.filter((x) => x.date >= prevFrom && x.date <= prevTo);
     const income = pays.reduce((n, x) => n + x.total, 0);
     const prevIncome = prevPays.reduce((n, x) => n + x.total, 0);
     const exams = state.studies.filter((s) => inRange(s.date) && !isReportOnly(s));
@@ -248,8 +250,8 @@ export function createDashboard(ctx) {
     const byStatus = (st) => appts.filter((a) => a.status === st).length;
     // Por cobrar: visitas no pagadas y citas atendidas que no tienen visita ni cobro.
     const unpaidVisits = groupStudies(state.studies).filter((g) => inRange(g.date) && g.payState !== 'paid');
-    const paidAppts = new Set(state.payments.map((x) => x.appointmentId).filter(Boolean));
-    const paidDays = new Set(state.payments.map((x) => x.patientId + '|' + x.date));
+    const paidAppts = new Set(paidPayments.map((x) => x.appointmentId).filter(Boolean));
+    const paidDays = new Set(paidPayments.map((x) => x.patientId + '|' + x.date));
     const visitDays = new Set(state.studies.map((x) => x.patientId + '|' + x.date));
     const unpaidAppts = appts.filter((a) => a.status === 'Atendida' && !paidAppts.has(a.id) && !paidDays.has(a.patientId + '|' + a.date) && !visitDays.has(a.patientId + '|' + a.date));
     const pending = unpaidVisits.length + unpaidAppts.length;

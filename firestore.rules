@@ -84,15 +84,32 @@ service cloud.firestore {
     }
 
     // Servicios y horario de la agenda: públicos (los usa agendar.html).
+    // settings/mercadopago (la maquinita elegida) solo la ven los de cobros y
+    // solo la escriben las funciones del servidor (functions/).
     match /settings/{id} {
-      allow read: if true;
-      allow write: if can('config') && request.resource.data.examIds is list;
+      allow read: if id != 'mercadopago' || can('cobros');
+      allow write: if id != 'mercadopago' && can('config') && request.resource.data.examIds is list;
     }
 
     // Cobros: los ve quien tiene "cobros" o "resumen"; los modifica "cobros".
+    // Los cobros con la maquinita (channel 'point') la página solo los crea
+    // pendientes: el estado, el medio de pago y lo que se cobró los fija el
+    // servidor (functions/), el único que puede marcarlos pagados. Un cobro
+    // pendiente que ya llegó a Mercado Pago (tiene "mp") no se borra: primero
+    // se cancela.
+    function manualPayment(d) {
+      return !('channel' in d) && !('status' in d) && !('mp' in d) && !('paidAt' in d);
+    }
+    function newPointPayment(d) {
+      return d.channel == 'point' && d.status == 'pending' && d.method == '' && !('mp' in d) && !('paidAt' in d);
+    }
     match /payments/{paymentId} {
       allow read: if can('cobros') || can('resumen');
-      allow create, update, delete: if can('cobros');
+      allow create: if can('cobros') && (manualPayment(request.resource.data) || newPointPayment(request.resource.data));
+      allow update: if can('cobros') && (manualPayment(resource.data)
+        ? manualPayment(request.resource.data)
+        : !changes().hasAny(['channel', 'status', 'mp', 'paidAt', 'method', 'total', 'items', 'discount', 'studyIds', 'patientId', 'appointmentId']));
+      allow delete: if can('cobros') && (resource.data.get('status', 'paid') != 'pending' || !('mp' in resource.data));
     }
 
     // Pacientes: solo identidad y contacto. No tienen médico: el médico se

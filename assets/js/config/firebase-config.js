@@ -14,3 +14,7 @@ export const firebaseConfig = {
   appId: '1:1015219486315:web:02321e259e20fa9112fb2e',
   measurementId: 'G-426TXLH7YV'
 };
+
+// Región de las funciones del servidor (functions/index.js): cobros con la
+// maquinita de Mercado Pago. Santiago de Chile.
+export const functionsRegion = 'southamerica-west1';

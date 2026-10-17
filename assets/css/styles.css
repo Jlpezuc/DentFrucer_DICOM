@@ -826,6 +826,45 @@ table.data .num, table.data th.num { text-align: right; white-space: nowrap; }
 .pay-item { display: grid; grid-template-columns: minmax(0, 1fr) 130px 34px; gap: 8px; align-items: center; }
 .pay-item [data-item-label]:not([hidden]) { grid-column: 1; }
 .pay-item:has([data-item-label]:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 130px 34px; }
+/* Forma de pago y cobro con la maquinita */
+.pay-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pay-mode { position: relative; cursor: pointer; }
+.pay-mode input { position: absolute; opacity: 0; pointer-events: none; }
+.pay-mode > span { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 10px; align-items: center; height: 100%; padding: 12px; border: 1.5px solid var(--line); border-radius: var(--radius-md); background: #fff; transition: border-color .15s, background .15s; }
+.pay-mode svg { grid-row: span 2; width: 22px; height: 22px; color: var(--muted); }
+.pay-mode strong { font-size: 14px; }
+.pay-mode small { font-size: 12px; color: var(--muted); }
+.pay-mode:hover > span { border-color: var(--blue-500); }
+.pay-mode input:checked + span { border-color: var(--blue-600); background: var(--blue-50); box-shadow: 0 0 0 1px var(--blue-600); }
+.pay-mode input:checked + span svg { color: var(--blue-700); }
+.pay-mode input:focus-visible + span { outline: 2px solid var(--blue-500); outline-offset: 2px; }
+.pay-locked { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; margin-bottom: 16px; border-radius: var(--radius-md); background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; }
+.pay-locked svg { width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--blue-700); }
+.pos-wait { display: grid; justify-items: center; text-align: center; gap: 4px; padding: 28px 24px 22px; }
+.pos-wait h4 { margin: 10px 0 0; font-size: 19px; }
+.pos-wait .form-error { width: 100%; text-align: left; margin: 8px 0 0; }
+.pos-state { display: grid; place-items: center; width: 76px; height: 76px; border-radius: 50%; }
+.pos-state svg { width: 36px; height: 36px; }
+.pos-state.waiting { background: var(--blue-50); color: var(--blue-700); position: relative; }
+.pos-state.waiting::after { content: ''; position: absolute; inset: -5px; border-radius: 50%; border: 3px solid transparent; border-top-color: var(--blue-600); animation: pos-spin 1.1s linear infinite; }
+.pos-state.ok { background: #e7f6ec; color: var(--green-600); }
+.pos-state.bad { background: #fdecea; color: var(--danger); }
+@keyframes pos-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pos-state.waiting::after { animation-duration: 4s; } }
+.pos-amount { margin: 2px 0; font-size: 30px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pos-step { margin: 0; color: var(--ink-soft); max-width: 420px; }
+.pos-meta { margin: 4px 0 0; font-size: 13px; }
+.pos-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 18px; }
+.pos-note { max-width: 420px; margin: 14px 0 0; font-size: 12.5px; }
+.pos-demo { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+.point-intro { margin: 0 0 14px; font-size: 14px; }
+.point-list { display: grid; gap: 8px; margin-bottom: 4px; }
+.point-option { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; }
+.point-option:has(input:checked) { border-color: var(--blue-600); background: var(--blue-50); }
+.point-option span { display: grid; min-width: 0; }
+.point-option small { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.cell-note svg { width: 12px; height: 12px; vertical-align: -1px; }
+@media (max-width: 640px) { .pay-modes { grid-template-columns: 1fr; } }
 .pay-total { align-content: center; }
 .pay-total strong { font-size: 24px; color: var(--blue-700); font-family: var(--font-sans); }
 .pay-context { display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 14px; border-radius: var(--radius-md); background: var(--blue-50); color: var(--blue-700); font-size: 14px; }

@@ -16,8 +16,9 @@
 //                       date: 'YYYY-MM-DD', time: 'HH:MM', slotId, patientId,
 //                       status: 'Pendiente' | 'Atendida' | 'No asistió' | 'Cancelada', createdAt }
 //  slots/{fecha_hora} { date, time, appointmentId }   turnos ocupados, sin datos personales
-//  payments/{id}      cobros (services/payments.js)
+//  payments/{id}      cobros (services/payments.js); los de la maquinita los confirma el servidor
 //  settings/agenda    servicios y horario de la agenda (services/settings.js)
+//  settings/mercadopago { terminalId }  maquinita de Mercado Pago elegida (la escribe functions/)
 // Archivos en Storage: studies/{studyId}/{nombre de archivo}
 
 import { createDemoBackend } from './backend/demo.js';

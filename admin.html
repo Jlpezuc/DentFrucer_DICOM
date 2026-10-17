@@ -206,6 +206,7 @@
           </div>
           <div class="panel-actions">
             <label class="search search-sm"><span class="sr-only">Buscar cobros</span><i data-icon="search"></i><input class="input" id="pay-search" type="search" placeholder="Paciente o N° de documento"></label>
+            <button class="btn btn-outline btn-sm" type="button" id="point-config"><i data-icon="pos"></i> Maquinita</button>
             <button class="btn btn-primary btn-sm" type="button" data-open="payment"><i data-icon="plus"></i> Registrar cobro</button>
           </div>
         </div>
@@ -216,7 +217,7 @@
             <tbody id="payments-body"><tr><td colspan="7"><div class="empty">Cargando…</div></td></tr></tbody>
           </table>
         </div>
-        <p class="panel-note">La página no emite boletas ni facturas: registre aquí el número del documento entregado (voucher del terminal, boleta o factura del SII).</p>
+        <p class="panel-note">La página no emite boletas ni facturas: registre aquí el número del documento entregado (voucher del terminal, boleta o factura del SII). Los cobros con la maquinita de Mercado Pago se confirman solos al aprobarse el pago; solo los pagados suman en el total y en el Resumen.</p>
       </section>
 
       <!-- Servicios y horarios -->
@@ -361,19 +362,48 @@
           <div class="field"><label for="py-discount">Descuento <span class="opt">($)</span></label><input class="input" id="py-discount" name="discount" inputmode="numeric" placeholder="0"></div>
           <div class="field pay-total"><span class="field-label">Total a cobrar</span><strong id="py-total">$0</strong></div>
         </div>
-        <div class="form-row three">
-          <div class="field"><label for="py-method">Medio de pago</label><select class="input select" id="py-method" name="method" required></select></div>
+        <div class="field" id="py-mode-field">
+          <span class="field-label" id="py-mode-label">Forma de pago</span>
+          <div class="pay-modes" role="radiogroup" aria-labelledby="py-mode-label">
+            <label class="pay-mode"><input type="radio" name="mode" value="cash"><span><i data-icon="cash"></i><strong>Efectivo</strong><small>Queda pagado al registrarlo</small></span></label>
+            <label class="pay-mode"><input type="radio" name="mode" value="point"><span><i data-icon="pos"></i><strong>Tarjeta en la maquinita</strong><small>Mercado Pago · débito o crédito</small></span></label>
+            <label class="pay-mode"><input type="radio" name="mode" value="other"><span><i data-icon="transfer"></i><strong>Otro medio</strong><small>Transferencia, convenio…</small></span></label>
+          </div>
+          <span class="hint warn-text" id="py-point-hint" hidden></span>
+        </div>
+        <div class="pay-locked" id="py-locked" hidden></div>
+        <div class="form-row three" id="py-doc-row">
+          <div class="field" id="py-method-field"><label for="py-method">Medio de pago</label><select class="input select" id="py-method" name="method"></select></div>
           <div class="field"><label for="py-doctype">Documento entregado</label><select class="input select" id="py-doctype" name="docType"></select></div>
-          <div class="field"><label for="py-docnumber">N° de documento <span class="opt">(opcional)</span></label><input class="input" id="py-docnumber" name="docNumber" maxlength="30"></div>
+          <div class="field" id="py-docnumber-field"><label for="py-docnumber">N° de documento <span class="opt">(opcional)</span></label><input class="input" id="py-docnumber" name="docNumber" maxlength="30"></div>
         </div>
         <div class="field"><label for="py-note">Nota <span class="opt">(opcional)</span></label><input class="input" id="py-note" name="note" maxlength="300" placeholder="Ej.: convenio, abono, pago en dos partes…"></div>
         <div class="modal-foot">
           <button class="btn btn-ghost danger-text" type="button" id="py-delete" hidden><i data-icon="trash"></i> Eliminar</button>
           <span class="spacer"></span>
           <button class="btn btn-ghost" type="button" data-close>Cancelar</button>
-          <button class="btn btn-primary" type="submit">Guardar cobro</button>
+          <button class="btn btn-primary" type="submit" id="py-submit">Guardar cobro</button>
         </div>
       </form>
+      <!-- Cobro con la maquinita: espera en vivo y resultado -->
+      <div class="modal-body pos-wait" id="py-wait" hidden aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- Maquinita de Mercado Pago -->
+  <div class="modal-backdrop" id="point-modal" role="dialog" aria-modal="true" aria-labelledby="point-modal-title">
+    <div class="modal sm">
+      <div class="modal-head"><h3 id="point-modal-title">Maquinita de Mercado Pago</h3><button class="icon-btn" type="button" data-close aria-label="Cerrar"><i data-icon="x"></i></button></div>
+      <div class="modal-body">
+        <div class="form-error" role="alert"></div>
+        <p class="muted point-intro">Elija la maquinita (Point) a la que se envían los cobros con tarjeta. Al elegirla queda en <strong>modo integrado</strong>: recibe los cobros desde esta página.</p>
+        <div class="point-list" id="point-list"><div class="empty">Cargando…</div></div>
+        <div class="modal-foot">
+          <span class="spacer"></span>
+          <button class="btn btn-ghost" type="button" data-close>Cerrar</button>
+          <button class="btn btn-primary" type="button" id="point-use" disabled>Usar esta maquinita</button>
+        </div>
+      </div>
     </div>
   </div>
 

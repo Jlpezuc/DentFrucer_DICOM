@@ -7,7 +7,7 @@ import { agendaConfig } from '../../config/agenda-config.js';
 import { addDays, adminDayTimes, APPOINTMENT_STATUSES, examLabel, isActive, parseIso, slotId } from '../../services/agenda.js';
 import { backend } from '../../services/backend.js';
 import { groupStudies } from '../../services/groups.js';
-import { fmtCLP } from '../../services/payments.js';
+import { fmtCLP, isPaid } from '../../services/payments.js';
 import { busy, escapeHtml, modal, showError, toast } from '../../ui/dom.js';
 import { fmtDate, today } from '../../ui/format.js';
 import { icon } from '../../ui/icons.js';
@@ -63,7 +63,7 @@ export function createAgenda(ctx) {
     }
     // Cobros de cada cita (los que la mencionan) para mostrar si ya se pagó.
     const paidBy = new Map();
-    state.payments.forEach((x) => { if (x.appointmentId) paidBy.set(x.appointmentId, (paidBy.get(x.appointmentId) || 0) + (x.total || 0)); });
+    state.payments.filter(isPaid).forEach((x) => { if (x.appointmentId) paidBy.set(x.appointmentId, (paidBy.get(x.appointmentId) || 0) + (x.total || 0)); });
     // Visitas pagadas (paciente + día): la cita cuenta como cobrada aunque el cobro no la mencione.
     const paidDays = new Set(groupStudies(state.studies).filter((g) => g.payState === 'paid').map((g) => g.patientId + '|' + g.date));
     body.innerHTML = rows.map((a) => {
